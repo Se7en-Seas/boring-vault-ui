@@ -1,6 +1,10 @@
 // webpack.config.js
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const path = require("path");
+const webpack = require("webpack");
+const dotenv = require("dotenv");
+
+dotenv.config({ path: path.resolve(__dirname, ".env") });
 
 module.exports = {
   entry: "./src/examples/v1.tsx", // Entry point for your React app
@@ -8,6 +12,14 @@ module.exports = {
     path: path.resolve(__dirname, "dist"), // Output directory
     filename: "v1.js", // Output file
   },
+  plugins: [
+    new HtmlWebpackPlugin({
+      template: "./src/examples/v1.html", // Path to your HTML template
+    }),
+    new webpack.DefinePlugin({
+      "process.env": JSON.stringify(process.env), // Defines it on process.env
+    }),
+  ],
   module: {
     rules: [
       {
@@ -17,18 +29,11 @@ module.exports = {
       },
     ],
   },
-  plugins: [
-    new HtmlWebpackPlugin({
-      template: "./src/examples/v1.html", // Path to your HTML template
-    }),
-  ],
   resolve: {
     extensions: [".tsx", ".ts", ".js"], // Resolve these extensions
   },
   devServer: {
-    static: {
-      directory: path.resolve(__dirname, "public"), // Directory to serve static files from
-    },
+    static: path.resolve(__dirname, "dist"), // Serve files from 'dist' directory
     compress: true,
     port: 9000, // Port to run the dev server
   },
