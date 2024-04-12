@@ -18,6 +18,7 @@ import { ContractConfig, Token } from "../../types";
 import BoringVaultABI from "../../abis/v1/BoringVaultABI";
 import BoringTellerABI from "../../abis/v1/BoringTellerABI";
 import BoringAccountantABI from "../../abis/v1/BoringAccountantABI";
+import { Provider } from 'ethers'; 
 
 interface BoringVaultV1ContextProps {
   vaultContractConfig: ContractConfig | null;
@@ -25,6 +26,9 @@ interface BoringVaultV1ContextProps {
   accountantContractConfig: ContractConfig | null;
   depositTokens: Token[];
   isConnected: boolean;
+  userAddress: string | null;
+  // Any ethers provider
+  ethersProvider: Provider; // Accept any Ethers provider
   // Add other states and functions that consumers can read and use
   children: ReactNode;
 }
@@ -38,13 +42,14 @@ export const BoringVaultV1Provider: React.FC<{
   tellerContract: string;
   accountantContract: string;
   depositTokens: Token[];
-
+  ethersProvider: Provider;
   children: ReactNode;
 }> = ({
   children,
   depositTokens,
   vaultContract,
   tellerContract,
+  ethersProvider,
   accountantContract,
 }) => {
   const { address } = useAccount();
@@ -58,15 +63,9 @@ export const BoringVaultV1Provider: React.FC<{
     useState<ContractConfig | null>(null);
 
   const [tokens, setTokens] = useState<Token[]>(depositTokens);
+  const [userAddress, setUserAddress] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isConnected) {
-      console.log("Connected to wallet: ", address);
-    } else {
-      console.warn("Not connected to a wallet");
-      return;
-    }
-
     if (
       vaultContract &&
       tellerContract &&
@@ -88,7 +87,17 @@ export const BoringVaultV1Provider: React.FC<{
     } else {
       console.warn("Boring vault contracts not initialized");
     }
-  }, [null, vaultContract, tellerContract, accountantContract, depositTokens]);
+  }, [vaultContract, tellerContract, accountantContract, depositTokens]);
+
+  // Effect to handle updates on user address if needed
+  useEffect(() => {
+    if (isConnected) {
+      console.log("Connected to wallet: ", address);
+      setUserAddress(address);
+    } else {
+      console.warn("Not connected to a wallet");
+    }
+  }, [isConnected, address]);
 
   // Effect to handle updates on acceptedTokens if needed
   useEffect(() => {
@@ -103,6 +112,8 @@ export const BoringVaultV1Provider: React.FC<{
         accountantContractConfig,
         depositTokens: tokens,
         isConnected,
+        userAddress,
+        ethersProvider: ethersProvider,
         children,
       }}
     >

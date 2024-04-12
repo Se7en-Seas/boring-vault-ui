@@ -8,7 +8,12 @@ import WETHABI from "../abis/tokens/wethABI";
 import { WagmiProvider, createConfig, http } from "wagmi";
 import { mainnet } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ConnectKitButton, ConnectKitProvider, getDefaultConfig } from "connectkit";
+import {
+  ConnectKitButton,
+  ConnectKitProvider,
+  getDefaultConfig,
+} from "connectkit";
+import { ethers } from "ethers";
 
 const config = createConfig(
   getDefaultConfig({
@@ -32,6 +37,10 @@ const config = createConfig(
     appDescription: "An example app for the Boring Vault V1",
     appUrl: "http://localhost:9000", // your app's url
   })
+);
+const ethersInfuraProvider = new ethers.InfuraProvider(
+  "mainnet",
+  process.env.INFURA_API_KEY
 );
 
 const queryClient = new QueryClient();
@@ -65,6 +74,7 @@ const App = () => (
             vaultContract="0xc79cC44DC8A91330872D7815aE9CFB04405952ea"
             tellerContract="0xbBe07e335235b5be21d9Ef413fc52aA250a6C125"
             accountantContract="0xc6f89cc0551c944CEae872997A4060DC95622D8F"
+            ethersProvider={ethersInfuraProvider}
             depositTokens={[
               {
                 address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
@@ -73,6 +83,14 @@ const App = () => (
                 image:
                   "https://logowik.com/content/uploads/images/ethereum-eth7803.logowik.com.webp",
                 displayName: "WETH",
+              },
+              {
+                displayName: "USDC",
+                image:
+                  "https://cryptologos.cc/logos/usd-coin-usdc-logo.png?v=031",
+                address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+                abi: WETHABI,
+                decimals: 6,
               },
             ]}
           >
@@ -84,6 +102,10 @@ const App = () => (
               bg="gray.100"
             >
               <DepositButton
+                title="Example Vault"
+                bottomText="
+                  All vaults contain smart contract risk and various degrees of economic risk. This includes, but is not limited to, liquidity provisioning which can result in impermanent loss and use of leverage, meaning there is liquidation risk
+                "
                 buttonText="Deposit Funds"
                 popupText="Welcome to the deposit interface!"
                 buttonProps={{
