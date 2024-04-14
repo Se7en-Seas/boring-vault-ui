@@ -1,9 +1,9 @@
 {
   "compilerOptions": {
-    "moduleResolution": "node", // Change this from 'classic' to 'node'
+    "moduleResolution": "node",
     "resolveJsonModule": true,
     "module": "CommonJS", // For tsconfig.cjs.json
-    "target": "es5",
+    "target": "ES2015",
     "outDir": "./dist/cjs",
     "declaration": true,
     "esModuleInterop": true,
