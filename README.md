@@ -1,7 +1,7 @@
-# boring-vault-ui
+# Boring Vault UI
 A reusable package to quickly integrate boring vaults onto a UI.
 
-# Development Setup
+# Local Pkg Development Setup
 1. Clone the repository
 2. Run `npm install` to install the dependencies
 3. Run `npm run test` to run the tests
