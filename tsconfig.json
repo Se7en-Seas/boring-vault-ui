@@ -1,18 +1,20 @@
 {
   "compilerOptions": {
+    "outDir": "./dist",
     "target": "es5",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
+    "declaration": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "module": "esnext",
     "moduleResolution": "node",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true, // keep as true if you're only using TypeScript for type-checking
+    "noEmit": false, // Change this line to false to enable file emission
     "jsx": "react-jsx"
   },
   "include": ["src/**/*"], // include all files in src
