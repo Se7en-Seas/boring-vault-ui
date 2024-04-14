@@ -1,6 +1,6 @@
 {
   "name": "boring-vault-ui",
-  "version": "1.1.1",
+  "version": "1.2.1",
   "description": "A reusable package to quickly integrate boring vaults onto a UI.",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",

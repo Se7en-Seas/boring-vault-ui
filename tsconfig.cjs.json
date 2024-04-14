@@ -1,8 +1,14 @@
 {
-  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "module": "CommonJS",
-    "outDir": "./dist/cjs"
+    "moduleResolution": "node", // Change this from 'classic' to 'node'
+    "resolveJsonModule": true,
+    "module": "CommonJS", // For tsconfig.cjs.json
+    "target": "es5",
+    "outDir": "./dist/cjs",
+    "declaration": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
   },
-  "include": ["src"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "**/*.spec.ts"]
 }
