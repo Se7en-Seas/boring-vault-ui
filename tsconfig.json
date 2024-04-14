@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "outDir": "./dist", // Output directory for all emitted files
+    "target": "es5", // Compile down to ES5 for wide compatibility
+    "allowJs": true, // Allow JavaScript files to be compiled
+    "skipLibCheck": true, // Skip type checking of all the declaration files (*.d.ts)
+    "esModuleInterop": true, // Enable ES6-style imports for CommonJS/AMD/UMD modules
+    "allowSyntheticDefaultImports": true, // Allow default imports from modules with no default export
+    "declaration": true, // Generate corresponding .d.ts file
+    "strict": true, // Enable all strict type checking options
+    "forceConsistentCasingInFileNames": true, // Disallow inconsistently-cased references to the same file
+    "module": "CommonJS", // Set the module system for the project. Use "ESNext" if you want to emit ES6+ modules
+    "moduleResolution": "node", // Use Node.js-style module resolution
+    "resolveJsonModule": true, // Include modules imported with .json extension
+    "isolatedModules": true, // Transpile each file as a separate module
+    "noEmit": false, // Set to false to emit files (required for building)
+    "jsx": "react-jsx" // Support JSX in .tsx files
+  },
+  "include": ["src/**/*"], // Include all files for compilation in the src directory
+  "exclude": ["node_modules"] // Exclude the node_modules directory
+}
