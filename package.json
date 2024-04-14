@@ -2,17 +2,34 @@
   "name": "boring-vault-ui",
   "version": "1.1.1",
   "description": "A reusable package to quickly integrate boring vaults onto a UI.",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/cjs/index.d.ts",
   "exports": {
-    ".": "./dist/index.js",
-    "./types": "./dist/types/index.d.ts"
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    },
+    "./components/*": {
+      "import": "./dist/esm/components/*.js",
+      "require": "./dist/cjs/components/*.js"
+    },
+    "./contexts/*": {
+      "import": "./dist/esm/contexts/*.js",
+      "require": "./dist/cjs/contexts/*.js"
+    },
+    "./types/*": {
+      "import": "./dist/esm/types/*.js",
+      "require": "./dist/cjs/types/*.js"
+    }
   },
   "files": [
     "dist/**/*"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "npm run build:cjs && npm run build:esm",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:esm": "tsc -p tsconfig.esm.json",
     "prepublish": "npm run build",
     "test": "jest",
     "dev": "webpack --mode production && webpack serve --mode development --open"
