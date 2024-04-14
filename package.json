@@ -4,14 +4,15 @@
   "description": "A reusable package to quickly integrate boring vaults onto a UI.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./types": "./dist/types/index.d.ts"
+  },
   "files": [
-    "dist",
-    "types"
+    "dist/**/*"
   ],
   "scripts": {
-    "build": "npm run build:cjs && npm run build:esm",
-    "build:cjs": "tsc -p tsconfig.cjs.json",
-    "build:esm": "tsc -p tsconfig.esm.json",
+    "build": "tsc",
     "prepublish": "npm run build",
     "test": "jest",
     "dev": "webpack --mode production && webpack serve --mode development --open"
