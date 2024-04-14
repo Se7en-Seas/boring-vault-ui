@@ -1,30 +1,12 @@
 {
   "name": "boring-vault-ui",
-  "version": "1.2.1",
+  "version": "1.1.0",
   "description": "A reusable package to quickly integrate boring vaults onto a UI.",
-  "main": "dist/cjs/index.js",
-  "module": "dist/esm/index.js",
-  "types": "dist/cjs/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/esm/index.js",
-      "require": "./dist/cjs/index.js"
-    },
-    "./components/*": {
-      "import": "./dist/esm/components/*.js",
-      "require": "./dist/cjs/components/*.js"
-    },
-    "./contexts/*": {
-      "import": "./dist/esm/contexts/*.js",
-      "require": "./dist/cjs/contexts/*.js"
-    },
-    "./types/*": {
-      "import": "./dist/esm/types/*.js",
-      "require": "./dist/cjs/types/*.js"
-    }
-  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "files": [
-    "dist/**/*"
+    "dist",
+    "types"
   ],
   "scripts": {
     "build": "npm run build:cjs && npm run build:esm",
