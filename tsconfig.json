@@ -12,10 +12,9 @@
     "moduleResolution": "node",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
+    "noEmit": true, // keep as true if you're only using TypeScript for type-checking
     "jsx": "react-jsx"
   },
-  "include": ["src/**/*", "tests/**/*"],
-  "exclude": ["node_modules"],
-  "files": ["dist/**/*"],
+  "include": ["src/**/*"], // include all files in src
+  "exclude": ["node_modules"] // standard exclude
 }
