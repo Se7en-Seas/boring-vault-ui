@@ -1,12 +1,16 @@
 {
   "name": "boring-vault-ui",
-  "version": "1.0.6",
+  "version": "1.1.0",
   "description": "A reusable package to quickly integrate boring vaults onto a UI.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "types"
+  ],
   "scripts": {
     "build": "tsc",
-    "prepublish": "npm run build" ,
+    "prepublish": "npm run build",
     "test": "jest",
     "dev": "webpack --mode production && webpack serve --mode development --open"
   },
