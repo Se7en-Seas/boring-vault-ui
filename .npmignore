@@ -2,9 +2,6 @@
 node_modules
 node_modules/
 
-# Source files
-src
-
 # Various configuration files
 *.json
 *.config.js
