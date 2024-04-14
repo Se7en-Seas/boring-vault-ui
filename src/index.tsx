@@ -1,4 +1,4 @@
-// src/index.ts
+// src/index.tsx
 
 // UI Components
 export { default as DepositButton } from "./components/v1/DepositButton";
