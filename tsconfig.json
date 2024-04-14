@@ -15,5 +15,7 @@
     "noEmit": true,
     "jsx": "react-jsx"
   },
-  "include": ["src/**/*", "tests/**/*"]
+  "include": ["src/**/*", "tests/**/*"],
+  "exclude": ["node_modules"],
+  "files": ["dist/**/*"],
 }

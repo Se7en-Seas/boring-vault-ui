@@ -1,8 +1,8 @@
 {
   "name": "boring-vault-ui",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A reusable package to quickly integrate boring vaults onto a UI.",
-  "main": "index.tsx",
+  "main": "dist/index.js",
   "scripts": {
     "build": "tsup",
     "test": "jest",
