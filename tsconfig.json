@@ -18,5 +18,8 @@
     "jsx": "react-jsx"
   },
   "include": ["src/**/*"], // include all files in src
-  "exclude": ["node_modules"] // standard exclude
+  "exclude": ["node_modules"], // standard exclude
+  "files": [
+    "dist/**/*"
+  ],
 }
