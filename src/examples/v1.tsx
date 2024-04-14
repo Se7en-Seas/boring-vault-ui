@@ -13,7 +13,7 @@ import {
   BoringVaultV1Provider,
   useBoringVaultV1,
 } from "../contexts/v1/BoringVaultContextV1";
-import WETHABI from "../abis/tokens/wethABI";
+import WETHABI from "../abis/tokens/WETHABI";
 import { WagmiProvider, createConfig, http } from "wagmi";
 import { mainnet } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
