@@ -8,13 +8,12 @@ import React, {
   useCallback,
 } from "react";
 import { useAccount } from "wagmi";
-import { ContractConfig, Token } from "../../types";
+import { Token } from "../../types";
 import BoringVaultABI from "../../abis/v1/BoringVaultABI";
 import BoringTellerABI from "../../abis/v1/BoringTellerABI";
 import BoringAccountantABI from "../../abis/v1/BoringAccountantABI";
 import BoringLensABI from "../../abis/v1/BoringLensABI";
 import { Provider, Contract, ethers } from "ethers";
-import { base } from "viem/chains";
 
 interface BoringVaultV1ContextProps {
   vaultEthersContract: Contract | null;
@@ -31,6 +30,9 @@ interface BoringVaultV1ContextProps {
   // Add other states and functions that consumers can read and use
   // fetch Total Assets
   fetchTotalAssets: () => Promise<number>;
+  fetchUserShares: () => Promise<number>;
+  fetchShareValue: () => Promise<number>;
+  fetchUserUnlockTime: () => Promise<number>;
   isBoringV1ContextReady: boolean;
   children: ReactNode;
 }
@@ -158,8 +160,6 @@ export const BoringVaultV1Provider: React.FC<{
     setTokens(depositTokens);
   }, [depositTokens]);
 
-  const [totalAssets, setTotalAssets] = useState<number>(0);
-
   const fetchTotalAssets = useCallback(async () => {
     if (
       !vaultEthersContract ||
@@ -194,6 +194,103 @@ export const BoringVaultV1Provider: React.FC<{
     isBoringV1ContextReady,
   ]);
 
+  const fetchUserShares = useCallback(async () => {
+    if (
+      !vaultEthersContract ||
+      !lensEthersContract ||
+      !baseToken ||
+      !isBoringV1ContextReady || 
+      !userAddress
+    ) {
+      console.error("Contracts or user not ready", {
+        /* Dependencies here */
+      });
+      return Promise.reject("Contracts or user not ready");
+    }
+    console.log("Fetching user balance ...");
+
+    try {
+      const balance = await lensEthersContract.balanceOf(
+        userAddress,
+        vaultContract,
+      );
+      console.log("User balance from contract: ", balance);
+      return Number(balance) / Math.pow(10, decimals!);
+    } catch (error) {
+      console.error("Error fetching user balance", error);
+      throw error;
+    }
+  }, [
+    vaultEthersContract,
+    lensEthersContract,
+    baseToken,
+    isBoringV1ContextReady,
+    userAddress,
+  ]);
+
+  const fetchShareValue = useCallback(async () => {
+    if (
+      !lensEthersContract ||
+      !accountantEthersContract ||
+      !baseToken ||
+      !isBoringV1ContextReady
+    ) {
+      console.error("Contracts not ready", {
+        /* Dependencies here */
+      });
+      return Promise.reject("Contracts not ready");
+    }
+    console.log("Fetching share value ...");
+
+    try {
+      const shareValue = await lensEthersContract.exchangeRate(
+        accountantContract
+      );
+      console.log("Share value from contract: ", shareValue);
+      return Number(shareValue) / Math.pow(10, baseToken.decimals);
+    } catch (error) {
+      console.error("Error fetching share value from contract", error);
+      throw error;
+    }
+  }, [
+    lensEthersContract,
+    accountantEthersContract,
+    baseToken,
+    isBoringV1ContextReady,
+  ]);
+
+  const fetchUserUnlockTime = useCallback(async () => {
+    if (
+      !lensEthersContract ||
+      !tellerEthersContract ||
+      !isBoringV1ContextReady ||
+      !userAddress
+    ) {
+      console.error("Contracts or user not ready", {
+        /* Dependencies here */
+      });
+      return Promise.reject("Contracts or user not ready");
+    }
+    console.log("Fetching user unlock time...");
+
+    try {
+      const userUnlockTime = await lensEthersContract.userUnlockTime(
+        userAddress,
+        tellerContract
+      );
+      console.log("User unlock time from contract: ", userUnlockTime);
+      return Number(userUnlockTime);
+    } catch (error) {
+      console.error("Error fetching user unlock time from contract", error);
+      throw error;
+    }
+  }, [
+    lensEthersContract,
+    accountantEthersContract,
+    userAddress,
+    isBoringV1ContextReady,
+  ]);
+
   return (
     <BoringVaultV1Context.Provider
       value={{
@@ -208,6 +305,9 @@ export const BoringVaultV1Provider: React.FC<{
         baseToken,
         vaultDecimals,
         fetchTotalAssets,
+        fetchUserShares,
+        fetchShareValue,
+        fetchUserUnlockTime,
         isBoringV1ContextReady,
         children,
       }}

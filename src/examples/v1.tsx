@@ -75,7 +75,7 @@ const theme = extendTheme({
 
 const VaultWidget = () => {
   const [assets, setAssets] = React.useState<number>(0);
-  const { fetchTotalAssets, isConnected, isBoringV1ContextReady } =
+  const { fetchTotalAssets, isBoringV1ContextReady, fetchUserShares, fetchShareValue, fetchUserUnlockTime } =
     useBoringVaultV1();
 
   useEffect(() => {
@@ -84,6 +84,33 @@ const VaultWidget = () => {
     fetchTotalAssets().then((assets) => {
       console.log("Total assets: ", assets);
       setAssets(assets);
+    });
+  }, [isBoringV1ContextReady]);
+
+  const [userShares, setUserShares] = React.useState<number>(0);
+  useEffect(() => {
+    if (!isBoringV1ContextReady) return;
+    fetchUserShares().then((shares) => {
+      console.log("User shares: ", shares);
+      setUserShares(shares);
+    });
+  }, [isBoringV1ContextReady]);
+
+  const [shareValue, setShareValue] = React.useState<number>(0);
+  useEffect(() => {
+    if (!isBoringV1ContextReady) return;
+    fetchShareValue().then((value) => {
+      console.log("Share value: ", value);
+      setShareValue(value);
+    });
+  }, [isBoringV1ContextReady]);
+
+  const [userUnlockTime, setUserUnlockTime] = React.useState<number>(0);
+  useEffect(() => {
+    if (!isBoringV1ContextReady) return;
+    fetchUserUnlockTime().then((time) => {
+      console.log("User Unlock time: ", time);
+      setUserUnlockTime(time);
     });
   }, [isBoringV1ContextReady]);
 
@@ -101,9 +128,9 @@ const VaultWidget = () => {
             Boring Vault Example
           </Text>
           <Text fontSize="l">{`TVL (ETH): ${assets}`}</Text>
-          <Text fontSize="md">{`Share Value (ETH): --`}</Text>
-          <Text fontSize="md">{`User Share Balance: --`}</Text>
-          <Text fontSize="md">{`User ETH Balance: --`}</Text>
+          <Text fontSize="md">{`Share (1 unit) Value (ETH): ${shareValue}`}</Text>
+          <Text fontSize="md">{`User Share Balance: ${userShares}`}</Text>
+          <Text fontSize="md">{`User Share Lock Duration Remaining: ${userUnlockTime}`}</Text>
           <DepositButton
             title="Example Vault"
             bottomText="
