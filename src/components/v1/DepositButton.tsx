@@ -134,6 +134,7 @@ const DepositButton: React.FC<DepositButtonProps> = ({
     } else if (depositStatus.success) {
       toast({
         title: "Deposit successful",
+        // Add link to etherscan
         description: `Transaction hash: ${depositStatus.tx_hash}`,
         status: "success",
         duration: 5000,

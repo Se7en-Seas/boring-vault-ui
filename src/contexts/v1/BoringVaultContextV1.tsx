@@ -357,6 +357,10 @@ export const BoringVaultV1Provider: React.FC<{
         console.warn("Amount to deposit: ", amountDepositBaseDenom.toNumber());
 
         if (allowance < amountDepositBaseDenom.toNumber()) {
+          setDepositStatus({
+            initiated: true,
+            loading: true,
+          });
           console.log("Approving token ...");
           const approveTx = await erc20Contract.approve(
             vaultContract,
@@ -368,16 +372,7 @@ export const BoringVaultV1Provider: React.FC<{
             await approveTx.wait();
           console.log("Token approved in tx: ", approvedReceipt);
 
-          if (!approvedReceipt) {
-            console.error("Token approval not seen on chain, retry later");
-            setDepositStatus({
-              initiated: false,
-              loading: false,
-              success: false,
-              error: "Token approval not seen on chain, retry later",
-            });
-            return depositStatus;
-          } else if (!approvedReceipt.hash) {
+          if (!approvedReceipt.hash) {
             console.error("Token approval failed");
             setDepositStatus({
               initiated: false,
@@ -391,23 +386,46 @@ export const BoringVaultV1Provider: React.FC<{
         }
 
         console.log("Depositing token ...");
+        // Get teller contract ready
+        const tellerContractWithSigner = new Contract(
+          tellerContract,
+          BoringTellerABI,
+          signer
+        );
 
+        // Deposit, but specifically only set the fields depositAsset and depositAmount
+        // TODO: Set the other fields as well (payableAmount -- relevant for vanilla ETH deposits, and minimumMint)
+        // TODO: Allow for custom gas limits
+        const depositTx = await tellerContractWithSigner.deposit(
+          token.address,
+          amountDepositBaseDenom.toNumber(),
+          0
+        );
 
+        // Wait for confirmation
+        const depositReceipt: ContractTransactionReceipt =
+          await depositTx.wait();
 
+        console.log("Token deposited in tx: ", depositReceipt);
+        if (!depositReceipt.hash) {
+          console.error("Deposit failed");
+          setDepositStatus({
+            initiated: false,
+            loading: false,
+            success: false,
+            error: "Deposit reverted",
+          });
+          return depositStatus;
+        }
+        console.log("Deposit hash: ", depositReceipt.hash);
 
-
-
-
-
-
-
-
-
-
-
-
-
-        
+        // Set status
+        setDepositStatus({
+          initiated: false,
+          loading: false,
+          success: true,
+          tx_hash: depositReceipt.hash,
+        });
       } catch (error: any) {
         console.error("Error depositing", error);
         setDepositStatus({
@@ -423,6 +441,7 @@ export const BoringVaultV1Provider: React.FC<{
     },
     [
       vaultEthersContract,
+      tellerEthersContract,
       userAddress,
       decimals,
       ethersProvider,
