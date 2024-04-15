@@ -13,7 +13,6 @@ import {
   BoringVaultV1Provider,
   useBoringVaultV1,
 } from "../contexts/v1/BoringVaultContextV1";
-import WETHABI from "../abis/tokens/WETHABI";
 import { WagmiProvider, createConfig, http } from "wagmi";
 import { mainnet } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -75,8 +74,13 @@ const theme = extendTheme({
 
 const VaultWidget = () => {
   const [assets, setAssets] = React.useState<number>(0);
-  const { fetchTotalAssets, isBoringV1ContextReady, fetchUserShares, fetchShareValue, fetchUserUnlockTime } =
-    useBoringVaultV1();
+  const {
+    fetchTotalAssets,
+    isBoringV1ContextReady,
+    fetchUserShares,
+    fetchShareValue,
+    fetchUserUnlockTime,
+  } = useBoringVaultV1();
 
   useEffect(() => {
     console.warn("ready: ", isBoringV1ContextReady);
@@ -186,7 +190,6 @@ const App = () => {
               depositTokens={[
                 {
                   address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-                  abi: WETHABI,
                   decimals: 18,
                   image:
                     "https://logowik.com/content/uploads/images/ethereum-eth7803.logowik.com.webp",
@@ -197,13 +200,11 @@ const App = () => {
                   image:
                     "https://cryptologos.cc/logos/usd-coin-usdc-logo.png?v=031",
                   address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
-                  abi: WETHABI,
                   decimals: 6,
                 },
               ]}
               baseAsset={{
                 address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-                abi: WETHABI,
                 decimals: 18,
                 image:
                   "https://logowik.com/content/uploads/images/ethereum-eth7803.logowik.com.webp",

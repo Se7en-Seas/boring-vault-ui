@@ -32,10 +32,13 @@ import {
   ModalHeader,
   ModalFooter,
   Avatar,
+  useToast,
 } from "@chakra-ui/react";
 import { useBoringVaultV1 } from "../../contexts/v1/BoringVaultContextV1";
 import { Token } from "../../types";
 import { Contract, formatUnits } from "ethers";
+import { erc20Abi } from "viem";
+import { useEthersSigner } from "../../hooks/ethers";
 
 interface DepositButtonProps {
   buttonText: string;
@@ -65,13 +68,21 @@ const DepositButton: React.FC<DepositButtonProps> = ({
   ...depositButtonProps
 }) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const { depositTokens, isConnected, userAddress, ethersProvider } =
-    useBoringVaultV1();
+  const {
+    depositTokens,
+    isConnected,
+    userAddress,
+    ethersProvider,
+    deposit,
+    depositStatus,
+  } = useBoringVaultV1();
 
   const [selectedToken, setSelectedToken] = React.useState<Token>(
     depositTokens[0]
   );
   const [balance, setBalance] = React.useState(0.0);
+  const [depositAmount, setDepositAmount] = React.useState("");
+  const signer = useEthersSigner();
 
   useEffect(() => {
     async function fetchBalance() {
@@ -82,7 +93,7 @@ const DepositButton: React.FC<DepositButtonProps> = ({
       try {
         const tokenContract = new Contract(
           selectedToken.address,
-          selectedToken.abi,
+          erc20Abi,
           ethersProvider
         );
 
@@ -100,15 +111,44 @@ const DepositButton: React.FC<DepositButtonProps> = ({
     fetchBalance();
   }, [userAddress, selectedToken, ethersProvider]);
 
- const handleSelectChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-   const newTokenAddress = event.target.value;
-   console.log("New token address:", newTokenAddress)
-   console.log("Deposit tokens:", depositTokens)
-   const newSelectedToken = depositTokens.find(
-     (token) => token.address === newTokenAddress
-   );
-   setSelectedToken(newSelectedToken || depositTokens[0]);
- };
+  const handleSelectChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const newTokenAddress = event.target.value;
+    console.log("New token address:", newTokenAddress);
+    console.log("Deposit tokens:", depositTokens);
+    const newSelectedToken = depositTokens.find(
+      (token) => token.address === newTokenAddress
+    );
+    setSelectedToken(newSelectedToken || depositTokens[0]);
+  };
+
+  // TODO: Allow people to pass in a toast to allow for custom toast branding
+  const toast = useToast();
+  useEffect(() => {
+    if (depositStatus.loading) {
+      toast({
+        title: "Processing deposit...",
+        status: "info",
+        duration: 3000,
+        isClosable: true,
+      });
+    } else if (depositStatus.success) {
+      toast({
+        title: "Deposit successful",
+        description: `Transaction hash: ${depositStatus.tx_hash}`,
+        status: "success",
+        duration: 5000,
+        isClosable: true,
+      });
+    } else if (depositStatus.error) {
+      toast({
+        title: "Failed to deposit",
+        description: depositStatus.error,
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+    }
+  }, [depositStatus, toast]);
 
   return (
     <>
@@ -147,7 +187,12 @@ const DepositButton: React.FC<DepositButtonProps> = ({
                 ))}
               </Select>
               <FormControl>
-                <Input placeholder="0.00" {...inputProps} />
+                {/* TODO: Sterilize input to only allow positive numbers */}
+                <Input
+                  placeholder="0.00"
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  {...inputProps}
+                />
                 <FormHelperText textAlign="right">
                   Balance: {balance} <Button size="xs">MAX</Button>
                 </FormHelperText>
@@ -156,7 +201,16 @@ const DepositButton: React.FC<DepositButtonProps> = ({
             <Flex justifyContent="space-between" mt={2}>
               <Text>${0.0}</Text>{" "}
               {/* Example static value, replace with actual conversion */}
-              <Button {...depositButtonProps}>Deposit</Button>
+              <Button
+                mt={4}
+                onClick={() => deposit(signer!, depositAmount, selectedToken)}
+                isDisabled={
+                  !depositAmount || parseFloat(depositAmount) > balance
+                }
+                {...depositButtonProps}
+              >
+                Deposit
+              </Button>
             </Flex>
           </ModalBody>
           {bottomText && (

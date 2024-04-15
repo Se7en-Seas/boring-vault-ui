@@ -8,12 +8,19 @@ import React, {
   useCallback,
 } from "react";
 import { useAccount } from "wagmi";
-import { Token } from "../../types";
+import { DepositStatus, Token } from "../../types";
 import BoringVaultABI from "../../abis/v1/BoringVaultABI";
 import BoringTellerABI from "../../abis/v1/BoringTellerABI";
 import BoringAccountantABI from "../../abis/v1/BoringAccountantABI";
 import BoringLensABI from "../../abis/v1/BoringLensABI";
-import { Provider, Contract, ethers } from "ethers";
+import {
+  Provider,
+  Contract,
+  JsonRpcSigner,
+  ContractTransactionReceipt,
+} from "ethers";
+import { erc20Abi } from "viem";
+import BigNumber from "bignumber.js";
 
 interface BoringVaultV1ContextProps {
   vaultEthersContract: Contract | null;
@@ -33,6 +40,12 @@ interface BoringVaultV1ContextProps {
   fetchUserShares: () => Promise<number>;
   fetchShareValue: () => Promise<number>;
   fetchUserUnlockTime: () => Promise<number>;
+  deposit: (
+    signer: JsonRpcSigner,
+    amount: string,
+    token: Token
+  ) => Promise<DepositStatus>;
+  depositStatus: DepositStatus;
   isBoringV1ContextReady: boolean;
   children: ReactNode;
 }
@@ -67,8 +80,9 @@ export const BoringVaultV1Provider: React.FC<{
 
   const [vaultEthersContract, setVaultEthersContract] =
     useState<Contract | null>(null);
-  const [tellerEthersContract, setTellerContractConfig] =
-    useState<Contract | null>(null);
+  const [tellerEthersContract, setTellerContract] = useState<Contract | null>(
+    null
+  );
   const [accountantEthersContract, setAccountantEthersContract] =
     useState<Contract | null>(null);
   const [lensEthersContract, setLensEthersContract] = useState<Contract | null>(
@@ -81,6 +95,10 @@ export const BoringVaultV1Provider: React.FC<{
   const [decimals, setDecimals] = useState<number | null>(null);
   const [isBoringV1ContextReady, setIsBoringV1ContextReady] =
     useState<boolean>(false);
+  const [depositStatus, setDepositStatus] = useState<DepositStatus>({
+    initiated: false,
+    loading: false,
+  });
 
   useEffect(() => {
     if (
@@ -114,7 +132,7 @@ export const BoringVaultV1Provider: React.FC<{
         ethersProvider
       );
       setVaultEthersContract(vaultEthersContract);
-      setTellerContractConfig(tellerEthersContract);
+      setTellerContract(tellerEthersContract);
       setAccountantEthersContract(accountantEthersContract);
       setLensEthersContract(lensEthersContract);
       setBaseToken(baseAsset);
@@ -173,7 +191,7 @@ export const BoringVaultV1Provider: React.FC<{
       });
       return Promise.reject("Contracts not ready");
     }
-    console.log("Fetching total assets...")
+    console.log("Fetching total assets...");
 
     try {
       const assets = await lensEthersContract.totalAssets(
@@ -199,7 +217,7 @@ export const BoringVaultV1Provider: React.FC<{
       !vaultEthersContract ||
       !lensEthersContract ||
       !baseToken ||
-      !isBoringV1ContextReady || 
+      !isBoringV1ContextReady ||
       !userAddress
     ) {
       console.error("Contracts or user not ready", {
@@ -212,7 +230,7 @@ export const BoringVaultV1Provider: React.FC<{
     try {
       const balance = await lensEthersContract.balanceOf(
         userAddress,
-        vaultContract,
+        vaultContract
       );
       console.log("User balance from contract: ", balance);
       return Number(balance) / Math.pow(10, decimals!);
@@ -291,6 +309,127 @@ export const BoringVaultV1Provider: React.FC<{
     isBoringV1ContextReady,
   ]);
 
+  const deposit = useCallback(
+    async (
+      signer: JsonRpcSigner,
+      amountHumanReadable: string,
+      token: Token
+    ) => {
+      if (
+        !vaultEthersContract ||
+        !isBoringV1ContextReady ||
+        !userAddress ||
+        !decimals ||
+        !signer
+      ) {
+        console.error("Contracts or user not ready", {
+          /* Dependencies here */
+        });
+
+        setDepositStatus({
+          initiated: false,
+          loading: false,
+          success: false,
+          error: "Contracts or user not ready",
+        });
+
+        return depositStatus;
+      }
+      console.log("Depositing ...");
+
+      setDepositStatus({
+        initiated: true,
+        loading: true,
+      });
+
+      try {
+        // First check if the token is approved for at least the amount
+        const erc20Contract = new Contract(token.address, erc20Abi, signer);
+        const allowance = Number(
+          await erc20Contract.allowance(userAddress, vaultContract)
+        );
+        const bigNumAmt = new BigNumber(amountHumanReadable);
+        console.warn(amountHumanReadable);
+        console.warn("Amount to deposit: ", bigNumAmt.toNumber());
+        const amountDepositBaseDenom = bigNumAmt.multipliedBy(
+          new BigNumber(10).pow(token.decimals)
+        );
+        console.warn("Amount to deposit: ", amountDepositBaseDenom.toNumber());
+
+        if (allowance < amountDepositBaseDenom.toNumber()) {
+          console.log("Approving token ...");
+          const approveTx = await erc20Contract.approve(
+            vaultContract,
+            amountDepositBaseDenom.toNumber()
+          );
+
+          // Wait for confirmation
+          const approvedReceipt: ContractTransactionReceipt =
+            await approveTx.wait();
+          console.log("Token approved in tx: ", approvedReceipt);
+
+          if (!approvedReceipt) {
+            console.error("Token approval not seen on chain, retry later");
+            setDepositStatus({
+              initiated: false,
+              loading: false,
+              success: false,
+              error: "Token approval not seen on chain, retry later",
+            });
+            return depositStatus;
+          } else if (!approvedReceipt.hash) {
+            console.error("Token approval failed");
+            setDepositStatus({
+              initiated: false,
+              loading: false,
+              success: false,
+              error: "Token approval reverted",
+            });
+            return depositStatus;
+          }
+          console.log("Approved hash: ", approvedReceipt.hash);
+        }
+
+        console.log("Depositing token ...");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      } catch (error: any) {
+        console.error("Error depositing", error);
+        setDepositStatus({
+          initiated: false,
+          loading: false,
+          success: false,
+          error: (error as Error).message,
+        });
+        return depositStatus;
+      }
+
+      return depositStatus;
+    },
+    [
+      vaultEthersContract,
+      userAddress,
+      decimals,
+      ethersProvider,
+      isBoringV1ContextReady,
+    ]
+  );
+
   return (
     <BoringVaultV1Context.Provider
       value={{
@@ -308,6 +447,8 @@ export const BoringVaultV1Provider: React.FC<{
         fetchUserShares,
         fetchShareValue,
         fetchUserUnlockTime,
+        deposit,
+        depositStatus,
         isBoringV1ContextReady,
         children,
       }}
