@@ -134,7 +134,7 @@ const VaultWidget = () => {
           <Text fontSize="l">{`TVL (ETH): ${assets}`}</Text>
           <Text fontSize="md">{`Share (1 unit) Value (ETH): ${shareValue}`}</Text>
           <Text fontSize="md">{`User Share Balance: ${userShares}`}</Text>
-          <Text fontSize="md">{`User Share Lock Duration Remaining: ${userUnlockTime}`}</Text>
+          <Text fontSize="md">{`User Share Unlock Unix seconds timestamp: ${userUnlockTime}`}</Text>
           <DepositButton
             title="Example Vault"
             bottomText="
