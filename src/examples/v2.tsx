@@ -14,7 +14,7 @@ import {
   useBoringVaultV1,
 } from "../contexts/v1/BoringVaultContextV1";
 import { WagmiProvider, createConfig, http } from "wagmi";
-import { mainnet } from "wagmi/chains";
+import { arbitrum } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   ConnectKitButton,
@@ -26,11 +26,11 @@ import { ethers } from "ethers";
 const config = createConfig(
   getDefaultConfig({
     // Your dApps chains
-    chains: [mainnet],
+    chains: [arbitrum],
     transports: {
       // RPC URL for each chain
-      [mainnet.id]: http(
-        `https://mainnet.infura.io/v3/${process.env.INFURA_API_KEY}`
+      [arbitrum.id]: http(
+        `https://arbitrum-mainnet.infura.io/v3/${process.env.INFURA_API_KEY}`
       ),
     },
 
@@ -39,7 +39,7 @@ const config = createConfig(
     walletConnectProjectId: process.env.WALLETCONNECT_PROJECT_ID!,
 
     // Required App Info
-    appName: "Boring Vault Example App",
+    appName: "Boring Vault Arbitrm Example App with Direct Withdraws",
 
     // Optional App Info
     appDescription: "An example app for the Boring Vault V1",
@@ -47,7 +47,7 @@ const config = createConfig(
   })
 );
 const ethersInfuraProvider = new ethers.InfuraProvider(
-  "mainnet",
+  "arbitrum",
   process.env.INFURA_API_KEY
 );
 
@@ -182,28 +182,28 @@ const App = () => {
           <ConnectKitProvider>
             <ConnectKitButton />
             <BoringVaultV1Provider
-              vaultContract="0x08c6F91e2B681FaF5e17227F2a44C307b3C1364C"
-              tellerContract="0x221Ea02d409074546265CCD1123050F4D498ef64"
-              accountantContract="0xc315D6e14DDCDC7407784e2Caf815d131Bc1D3E7"
+              vaultContract="0x289F7fA5B0f9064D904E83B8a125d1Ac3bf81547"
+              tellerContract="0x6BB4DC9d90cF4E9599bCf938233FAe7F78bfB9D1"
+              accountantContract="0xC0d0ef42a9183614Ceb84f87ABA8512dCCD45fF3"
               lensContract="0x5232bc0F5999f8dA604c42E1748A13a170F94A1B"
               ethersProvider={ethersInfuraProvider}
               depositTokens={[
                 {
-                  displayName: "USDC",
+                  displayName: "WETH",
                   image:
-                    "https://cryptologos.cc/logos/usd-coin-usdc-logo.png?v=031",
-                  address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
-                  decimals: 6,
+                    "https://cryptologos.cc/logos/ethereum-eth-logo.png?v=032",
+                  address: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+                  decimals: 18,
                 },
               ]}
               baseAsset={{
-                  displayName: "USDC",
-                  image:
-                    "https://cryptologos.cc/logos/usd-coin-usdc-logo.png?v=031",
-                  address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
-                  decimals: 6,
-                }}
-              vaultDecimals={6}
+                displayName: "WETH",
+                image:
+                  "https://cryptologos.cc/logos/ethereum-eth-logo.png?v=032",
+                address: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+                decimals: 18,
+              }}
+              vaultDecimals={18}
             >
               <VaultWidget />
             </BoringVaultV1Provider>
