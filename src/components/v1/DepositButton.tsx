@@ -128,7 +128,7 @@ const DepositButton: React.FC<DepositButtonProps> = ({
       toast({
         title: "Processing deposit...",
         status: "info",
-        duration: 3000,
+        duration: 5000,
         isClosable: true,
       });
     } else if (depositStatus.success) {

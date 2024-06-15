@@ -119,12 +119,12 @@ const DelayWithdrawButton: React.FC<DelayWithdrawButtonProps> = ({
       toast({
         title: "Processing withdraw...",
         status: "info",
-        duration: 3000,
+        duration: 5000,
         isClosable: true,
       });
     } else if (withdrawStatus.success) {
       toast({
-        title: "Withdraw Intent successful",
+        title: "Intent successful",
         // Add link to etherscan
         description: `Transaction hash: ${withdrawStatus.tx_hash}`,
         status: "success",

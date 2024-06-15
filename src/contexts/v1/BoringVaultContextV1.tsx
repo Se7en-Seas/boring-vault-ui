@@ -63,6 +63,10 @@ interface BoringVaultV1ContextProps {
   delayWithdrawStatuses: (
     signer: JsonRpcSigner
   ) => Promise<DelayWithdrawStatus[]>;
+  delayWithdrawCancel: (
+    signer: JsonRpcSigner,
+    tokenOut: Token
+  ) => Promise<WithdrawStatus>;
   depositStatus: DepositStatus;
   withdrawStatus: WithdrawStatus;
   isBoringV1ContextReady: boolean;
@@ -695,7 +699,11 @@ export const BoringVaultV1Provider: React.FC<{
             console.log("Status from contract: ", status);
             // Format the status object
 
-            // TODO MAKE DelayWithdrawStatus
+            if (Number(status.shares) === 0) {
+              // Skip if no shares
+              return null;
+            }
+
             return {
               allowThirdPartyToComplete: status.allowThirdPartyToComplete,
               maxLoss: Number(status.maxLoss) / 100,
@@ -709,7 +717,9 @@ export const BoringVaultV1Provider: React.FC<{
           })
         );
         console.log("All statuses: ", statuses);
-        return statuses; // Return the formatted statuses
+
+        // Drop null statuses
+        return statuses.filter((status) => status !== null);
       } catch (error) {
         console.error("Error fetching delay withdraw statuses", error);
         return []; // Return an empty array in case of an error
@@ -723,6 +733,88 @@ export const BoringVaultV1Provider: React.FC<{
       withdrawTokens,
     ]
   );
+
+  const delayWithdrawCancel = useCallback(
+    async (signer: JsonRpcSigner, tokenOut: Token) => {
+      if (
+        !delayWithdrawEthersContract ||
+        !isBoringV1ContextReady ||
+        !userAddress ||
+        !decimals ||
+        !signer
+      ) {
+        console.error("Contracts or user not ready to cancel withdraw", {
+          delayWithdrawEthersContract,
+          isBoringV1ContextReady,
+          userAddress,
+          decimals,
+          signer,
+        });
+
+        setWithdrawStatus({
+          initiated: false,
+          loading: false,
+          success: false,
+          error: "Contracts or user not ready",
+        });
+
+        return withdrawStatus;
+      }
+
+      console.log("Cancelling delay withdraw ...");
+      const delayWithdrawContractWithSigner = new Contract(
+        delayWithdrawContract!,
+        BoringDelayWithdrawContractABI,
+        signer
+      );
+
+      setWithdrawStatus({
+        initiated: true,
+        loading: true,
+      });
+
+      try {
+        const cancelTx = await delayWithdrawContractWithSigner.cancelWithdraw(
+          tokenOut.address
+        );
+
+        // Wait for confirmation
+        const cancelReceipt: ContractTransactionReceipt = await cancelTx.wait();
+
+        console.log("Withdraw Cancelled in tx: ", cancelReceipt);
+        if (!cancelReceipt.hash) {
+          console.error("Withdraw Cancel failed");
+          setWithdrawStatus({
+            initiated: false,
+            loading: false,
+            success: false,
+            error: "Withdraw Cancel reverted",
+          });
+          return withdrawStatus;
+        }
+        console.log("Withdraw Cancel hash: ", cancelReceipt.hash);
+
+        // Set status
+        setWithdrawStatus({
+          initiated: false,
+          loading: false,
+          success: true,
+          tx_hash: cancelReceipt.hash,
+        });
+
+      } catch (error: any) {
+        console.error("Error cancelling withdraw", error);
+        setWithdrawStatus({
+          initiated: false,
+          loading: false,
+          success: false,
+          error: (error as Error).message,
+        });
+        return withdrawStatus;
+      }
+      return withdrawStatus;
+
+    }, [delayWithdrawEthersContract, userAddress, decimals, ethersProvider, isBoringV1ContextReady]);
 
   return (
     <BoringVaultV1Context.Provider
@@ -746,6 +838,7 @@ export const BoringVaultV1Provider: React.FC<{
         deposit,
         delayWithdraw,
         delayWithdrawStatuses,
+        delayWithdrawCancel,
         depositStatus,
         withdrawStatus,
         isBoringV1ContextReady,

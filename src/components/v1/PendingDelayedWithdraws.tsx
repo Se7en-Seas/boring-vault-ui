@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { Box, Text, VStack } from "@chakra-ui/react";
+import { Box, HStack, Text, VStack } from "@chakra-ui/react";
 import { useBoringVaultV1 } from "../../contexts/v1/BoringVaultContextV1";
+import DelayWithdrawCancelButton from "./DelayWithdrawCancelButton";
 import { Token } from "../../types";
 import { useEthersSigner } from "../../hooks/ethers";
 
@@ -29,7 +30,11 @@ const PendingDelayedWithdraws: React.FC<PendingDelayedWithdrawsProps> = ({
 
   return (
     <Box outline={"5px solid black"} borderRadius={"1em"} padding={"1em"}>
-      {title && <Text>{title}</Text>}
+      {title && (
+        <Text fontSize={"md"} fontWeight={"bold"}>
+          {title}
+        </Text>
+      )}
       <VStack>
         {statuses.map((delayWithdrawStatus, index) => {
           return (
@@ -39,20 +44,40 @@ const PendingDelayedWithdraws: React.FC<PendingDelayedWithdrawsProps> = ({
               outline={"1px solid black"}
               borderRadius={"1em"}
             >
-              <Text>Shares {delayWithdrawStatus.shares} shares</Text>
-              <Text>Max Loss: {delayWithdrawStatus.maxLoss}%</Text>
-              <Text>
-                Maturity (unix seconds): {delayWithdrawStatus.maturity}
-              </Text>
-              <Text>
-                Exchange Rate @ Request:{" "}
-                {delayWithdrawStatus.exchangeRateAtTimeOfRequest}
-              </Text>
-              <Text>
-                Allow Third Party to Complete:{" "}
-                {delayWithdrawStatus.allowThirdPartyToComplete ? "Yes" : "No"}
-              </Text>
-              <Text>Token Out: {delayWithdrawStatus.token.displayName}</Text>
+              <HStack
+                key={index}
+                alignItems={"flex-start"}
+              >
+                <VStack
+                  alignItems={"flex-start"}
+                >
+                  <Text>
+                    <strong>Shares:</strong> {delayWithdrawStatus.shares}
+                  </Text>
+                  <Text>
+                    <strong>Max Loss:</strong> {delayWithdrawStatus.maxLoss}%
+                  </Text>
+                  <Text>
+                    <strong>Maturity (unix seconds):</strong>{" "}
+                    {delayWithdrawStatus.maturity}
+                  </Text>
+                  <Text>
+                    <strong>Exchange Rate @ Request:</strong>{" "}
+                    {delayWithdrawStatus.exchangeRateAtTimeOfRequest}
+                  </Text>
+                  <Text>
+                    <strong>Allow Third Party to Complete:</strong>{" "}
+                    {delayWithdrawStatus.allowThirdPartyToComplete
+                      ? "Yes"
+                      : "No"}
+                  </Text>
+                  <Text>
+                    <strong>Token Out:</strong>{" "}
+                    {delayWithdrawStatus.token.displayName}
+                  </Text>
+                </VStack>
+                <DelayWithdrawCancelButton token={delayWithdrawStatus.token} />
+              </HStack>
             </Box>
           );
         })}
