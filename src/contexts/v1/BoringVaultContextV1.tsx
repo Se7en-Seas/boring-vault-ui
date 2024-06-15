@@ -717,13 +717,15 @@ export const BoringVaultV1Provider: React.FC<{
                 Number(status.exchangeRateAtTimeOfRequest) /
                 Math.pow(10, vaultDecimals),
               token: token,
-            };
+            } as DelayWithdrawStatus;
           })
         );
         console.log("All statuses: ", statuses);
 
         // Drop null statuses
-        return statuses.filter((status) => status !== null);
+        return statuses.filter(
+          (status): status is DelayWithdrawStatus => status !== null
+        );
       } catch (error) {
         console.error("Error fetching delay withdraw statuses", error);
         return []; // Return an empty array in case of an error
