@@ -8,12 +8,16 @@ import React, {
   useCallback,
 } from "react";
 import { useAccount } from "wagmi";
-import { DepositStatus, WithdrawStatus, Token } from "../../types";
+import {
+  DepositStatus,
+  WithdrawStatus,
+  DelayWithdrawStatus,
+  Token,
+} from "../../types";
 import BoringVaultABI from "../../abis/v1/BoringVaultABI";
 import BoringTellerABI from "../../abis/v1/BoringTellerABI";
 import BoringAccountantABI from "../../abis/v1/BoringAccountantABI";
 import BoringLensABI from "../../abis/v1/BoringLensABI";
-import BoringDelayWithdrawContract from "../../abis/v1/BoringDelayWithdrawContractABI";
 import {
   Provider,
   Contract,
@@ -56,6 +60,9 @@ interface BoringVaultV1ContextProps {
     maxLoss: string,
     thirdPartyClaimer: boolean
   ) => Promise<WithdrawStatus>;
+  delayWithdrawStatuses: (
+    signer: JsonRpcSigner
+  ) => Promise<DelayWithdrawStatus[]>;
   depositStatus: DepositStatus;
   withdrawStatus: WithdrawStatus;
   isBoringV1ContextReady: boolean;
@@ -601,12 +608,13 @@ export const BoringVaultV1Provider: React.FC<{
           .multipliedBy(100)
           .decimalPlaces(0, BigNumber.ROUND_DOWN);
 
-        const withdrawTx = await delayWithdrawContractWithSigner.requestWithdraw(
-          tokenOut.address,
-          amountWithdrawBaseDenom.toNumber(),
-          maxLossBaseDenom.toNumber(),
-          thirdPartyClaimer
-        );
+        const withdrawTx =
+          await delayWithdrawContractWithSigner.requestWithdraw(
+            tokenOut.address,
+            amountWithdrawBaseDenom.toNumber(),
+            maxLossBaseDenom.toNumber(),
+            thirdPartyClaimer
+          );
 
         // Wait for confirmation
         const withdrawReceipt: ContractTransactionReceipt =
@@ -655,6 +663,67 @@ export const BoringVaultV1Provider: React.FC<{
     ]
   );
 
+  const delayWithdrawStatuses = useCallback(
+    async (signer: JsonRpcSigner) => {
+      if (
+        !delayWithdrawEthersContract ||
+        !isBoringV1ContextReady ||
+        !userAddress ||
+        !decimals ||
+        !signer
+      ) {
+        console.error("Contracts or user not ready for withdraw statuses...", {
+          delayWithdrawEthersContract,
+          isBoringV1ContextReady,
+          userAddress,
+          decimals,
+          signer,
+        });
+
+        return [];
+      }
+      console.log("Fetching delay withdraw statuses ...");
+
+      try {
+        // Create a request per token
+        const statuses = await Promise.all(
+          withdrawTokens.map(async (token) => {
+            const status = await delayWithdrawEthersContract.withdrawRequests(
+              userAddress,
+              token.address
+            );
+            console.log("Status from contract: ", status);
+            // Format the status object
+
+            // TODO MAKE DelayWithdrawStatus
+            return {
+              allowThirdPartyToComplete: status.allowThirdPartyToComplete,
+              maxLoss: Number(status.maxLoss) / 100,
+              maturity: Number(status.maturity),
+              shares: Number(status.shares) / Math.pow(10, vaultDecimals),
+              exchangeRateAtTimeOfRequest:
+                Number(status.exchangeRateAtTimeOfRequest) /
+                Math.pow(10, vaultDecimals),
+              token: token,
+            };
+          })
+        );
+        console.log("All statuses: ", statuses);
+        return statuses; // Return the formatted statuses
+      } catch (error) {
+        console.error("Error fetching delay withdraw statuses", error);
+        return []; // Return an empty array in case of an error
+      }
+    },
+    [
+      delayWithdrawEthersContract,
+      userAddress,
+      decimals,
+      isBoringV1ContextReady,
+      withdrawTokens,
+    ]
+  );
+
   return (
     <BoringVaultV1Context.Provider
       value={{
@@ -676,6 +745,7 @@ export const BoringVaultV1Provider: React.FC<{
         fetchUserUnlockTime,
         deposit,
         delayWithdraw,
+        delayWithdrawStatuses,
         depositStatus,
         withdrawStatus,
         isBoringV1ContextReady,

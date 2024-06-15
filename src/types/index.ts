@@ -16,7 +16,7 @@ export interface VaultState {
 
 export interface DepositStatus {
   initiated: boolean;
-  loading: boolean
+  loading: boolean;
   success?: boolean;
   error?: string;
   tx_hash?: string;
@@ -24,8 +24,17 @@ export interface DepositStatus {
 
 export interface WithdrawStatus {
   initiated: boolean;
-  loading: boolean
+  loading: boolean;
   success?: boolean;
   error?: string;
   tx_hash?: string;
+}
+
+export interface DelayWithdrawStatus {
+  allowThirdPartyToComplete: boolean;
+  maxLoss: number;
+  maturity: number;
+  shares: number;
+  exchangeRateAtTimeOfRequest: number;
+  token: Token;
 }
