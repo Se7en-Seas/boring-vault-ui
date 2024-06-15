@@ -5,9 +5,12 @@ import {
   extendTheme,
   Box,
   VStack,
+  HStack,
   Text,
 } from "@chakra-ui/react";
 import DepositButton from "../components/v1/DepositButton";
+import PendingDelayedWithdraws from "../components/v1/PendingDelayedWithdraws";
+import DelayWithdrawButton from "../components/v1/DelayWithdrawButton";
 import { createRoot } from "react-dom/client";
 import {
   BoringVaultV1Provider,
@@ -131,43 +134,79 @@ const VaultWidget = () => {
           <Text fontSize="xl" fontWeight={"bold"}>
             Boring Vault Example
           </Text>
-          <Text fontSize="l">{`TVL (USD): ${assets}`}</Text>
-          <Text fontSize="md">{`Share (1 unit) Value (USD): ${shareValue}`}</Text>
+          <Text fontSize="l">{`TVL (ETH): ${assets}`}</Text>
+          <Text fontSize="md">{`Share (1 unit) Value (ETH): ${shareValue}`}</Text>
           <Text fontSize="md">{`User Share Balance: ${userShares}`}</Text>
           <Text fontSize="md">{`User Share Unlock Unix seconds timestamp: ${userUnlockTime}`}</Text>
-          <DepositButton
-            title="Example Vault"
-            bottomText="
+          <HStack spacing="2">
+            <DepositButton
+              title="Example Vault"
+              bottomText="
                   All vaults contain smart contract risk and various degrees of economic risk. This includes, but is not limited to, liquidity provisioning which can result in impermanent loss and use of leverage, meaning there is liquidation risk
                 "
-            buttonText="Deposit Funds"
-            popupText="Welcome to the deposit interface!"
-            buttonProps={{
-              colorScheme: "teal",
-              size: "lg",
-              shadow: "md",
-              _hover: {
-                bg: "teal.600",
-              },
-            }}
-            modalOverlayProps={{
-              bg: "blackAlpha.300",
-            }}
-            modalContentProps={{
-              mx: 4,
-              rounded: "lg",
-              shadow: "xl",
-            }}
-            modalBodyProps={{
-              p: 6,
-            }}
-            modalCloseButtonProps={{
-              size: "lg",
-              _focus: {
-                boxShadow: "none",
-              },
-            }}
-          />
+              buttonText="Deposit Funds"
+              popupText="Welcome to the deposit interface!"
+              buttonProps={{
+                colorScheme: "teal",
+                size: "lg",
+                shadow: "md",
+                _hover: {
+                  bg: "teal.600",
+                },
+              }}
+              modalOverlayProps={{
+                bg: "blackAlpha.300",
+              }}
+              modalContentProps={{
+                mx: 4,
+                rounded: "lg",
+                shadow: "xl",
+              }}
+              modalBodyProps={{
+                p: 6,
+              }}
+              modalCloseButtonProps={{
+                size: "lg",
+                _focus: {
+                  boxShadow: "none",
+                },
+              }}
+            />
+            <DelayWithdrawButton
+              title="Example Vault"
+              bottomText="
+                  Once you request a withdraw you will be able to claim your shares after some time, please come back to check on the status of your withdraw and claim your funds when ready.
+                "
+              buttonText="Withdraw"
+              popupText="Welcome to the delay withdraw interface!"
+              buttonProps={{
+                colorScheme: "teal",
+                size: "lg",
+                shadow: "md",
+                _hover: {
+                  bg: "teal.600",
+                },
+              }}
+              modalOverlayProps={{
+                bg: "blackAlpha.300",
+              }}
+              modalContentProps={{
+                mx: 4,
+                rounded: "lg",
+                shadow: "xl",
+              }}
+              modalBodyProps={{
+                p: 6,
+              }}
+              modalCloseButtonProps={{
+                size: "lg",
+                _focus: {
+                  boxShadow: "none",
+                },
+              }}
+            />
+          </HStack>
+          <PendingDelayedWithdraws title="Pending Delay Withdraws" />
         </VStack>
       </Box>
     </>
@@ -186,8 +225,18 @@ const App = () => {
               tellerContract="0x6BB4DC9d90cF4E9599bCf938233FAe7F78bfB9D1"
               accountantContract="0xC0d0ef42a9183614Ceb84f87ABA8512dCCD45fF3"
               lensContract="0x5232bc0F5999f8dA604c42E1748A13a170F94A1B"
+              delayWithdrawContract="0xB2F9C926B676CBD4fFd2bEE450d4aD9Adf8EAb6A"
               ethersProvider={ethersInfuraProvider}
               depositTokens={[
+                {
+                  displayName: "WETH",
+                  image:
+                    "https://cryptologos.cc/logos/ethereum-eth-logo.png?v=032",
+                  address: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+                  decimals: 18,
+                },
+              ]}
+              withdrawTokens={[
                 {
                   displayName: "WETH",
                   image:

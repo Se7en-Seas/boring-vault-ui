@@ -21,3 +21,11 @@ export interface DepositStatus {
   error?: string;
   tx_hash?: string;
 }
+
+export interface WithdrawStatus {
+  initiated: boolean;
+  loading: boolean
+  success?: boolean;
+  error?: string;
+  tx_hash?: string;
+}

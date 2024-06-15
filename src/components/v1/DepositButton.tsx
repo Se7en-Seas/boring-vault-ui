@@ -53,7 +53,7 @@ interface DepositButtonProps {
   modalCloseButtonProps?: ModalCloseButtonProps;
   inputProps?: any;
 }
-// src/components/v1/DepositButton.tsx
+
 const DepositButton: React.FC<DepositButtonProps> = ({
   buttonText,
   buttonProps,
