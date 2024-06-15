@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Box, HStack, Text, VStack } from "@chakra-ui/react";
 import { useBoringVaultV1 } from "../../contexts/v1/BoringVaultContextV1";
 import DelayWithdrawCancelButton from "./DelayWithdrawCancelButton";
-import { Token } from "../../types";
+import DelayWithdrawClaim from "./DelayWithdrawClaim";
 import { useEthersSigner } from "../../hooks/ethers";
 
 interface PendingDelayedWithdrawsProps {
@@ -44,13 +44,8 @@ const PendingDelayedWithdraws: React.FC<PendingDelayedWithdrawsProps> = ({
               outline={"1px solid black"}
               borderRadius={"1em"}
             >
-              <HStack
-                key={index}
-                alignItems={"flex-start"}
-              >
-                <VStack
-                  alignItems={"flex-start"}
-                >
+              <HStack key={index} alignItems={"flex-start"}>
+                <VStack alignItems={"flex-start"}>
                   <Text>
                     <strong>Shares:</strong> {delayWithdrawStatus.shares}
                   </Text>
@@ -76,7 +71,15 @@ const PendingDelayedWithdraws: React.FC<PendingDelayedWithdrawsProps> = ({
                     {delayWithdrawStatus.token.displayName}
                   </Text>
                 </VStack>
-                <DelayWithdrawCancelButton token={delayWithdrawStatus.token} />
+                <VStack paddingLeft="1em">
+                  <DelayWithdrawClaim
+                    token={delayWithdrawStatus.token}
+                    unixSecondsReadyToClaim={delayWithdrawStatus.maturity}
+                  />
+                  <DelayWithdrawCancelButton
+                    token={delayWithdrawStatus.token}
+                  />
+                </VStack>
               </HStack>
             </Box>
           );

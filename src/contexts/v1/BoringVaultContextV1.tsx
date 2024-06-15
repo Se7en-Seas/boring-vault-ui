@@ -67,6 +67,10 @@ interface BoringVaultV1ContextProps {
     signer: JsonRpcSigner,
     tokenOut: Token
   ) => Promise<WithdrawStatus>;
+  delayWithdrawComplete: (
+    signer: JsonRpcSigner,
+    tokenOut: Token
+  ) => Promise<WithdrawStatus>;
   depositStatus: DepositStatus;
   withdrawStatus: WithdrawStatus;
   isBoringV1ContextReady: boolean;
@@ -816,6 +820,93 @@ export const BoringVaultV1Provider: React.FC<{
 
     }, [delayWithdrawEthersContract, userAddress, decimals, ethersProvider, isBoringV1ContextReady]);
 
+
+  const delayWithdrawComplete = useCallback(
+    async (signer: JsonRpcSigner, tokenOut: Token) => {
+      if (
+        !delayWithdrawEthersContract ||
+        !isBoringV1ContextReady ||
+        !userAddress ||
+        !decimals ||
+        !signer
+      ) {
+        console.error("Contracts or user not ready to complete withdraw", {
+          delayWithdrawEthersContract,
+          isBoringV1ContextReady,
+          userAddress,
+          decimals,
+          signer,
+        });
+
+        setWithdrawStatus({
+          initiated: false,
+          loading: false,
+          success: false,
+          error: "Contracts or user not ready",
+        });
+
+        return withdrawStatus;
+      }
+
+      try {
+        const delayWithdrawContractWithSigner = new Contract(
+          delayWithdrawContract!,
+          BoringDelayWithdrawContractABI,
+          signer
+        );
+
+        console.log("Completing delay withdraw ...");
+
+        setWithdrawStatus({
+          initiated: true,
+          loading: true,
+        });
+
+        const completeTx = await delayWithdrawContractWithSigner.completeWithdraw(
+          tokenOut.address,
+          userAddress
+        );
+
+        // Wait for confirmation
+        const completeReceipt: ContractTransactionReceipt = await completeTx.wait();
+
+        console.log("Withdraw Completed in tx: ", completeReceipt);
+
+        if (!completeReceipt.hash) {
+          console.error("Withdraw Complete failed");
+          setWithdrawStatus({
+            initiated: false,
+            loading: false,
+            success: false,
+            error: "Withdraw Complete reverted",
+          });
+          return withdrawStatus;
+        }
+
+        console.log("Withdraw Complete hash: ", completeReceipt.hash);
+
+        // Set status
+        setWithdrawStatus({
+          initiated: false,
+          loading: false,
+          success: true,
+          tx_hash: completeReceipt.hash,
+        });
+
+      } catch (error: any) {
+        console.error("Error completing withdraw", error);
+        setWithdrawStatus({
+          initiated: false,
+          loading: false,
+          success: false,
+          error: (error as Error).message,
+        });
+        return withdrawStatus;
+      }
+      return withdrawStatus;
+    }, [delayWithdrawEthersContract, userAddress, decimals, ethersProvider, isBoringV1ContextReady]);
+
+
   return (
     <BoringVaultV1Context.Provider
       value={{
@@ -839,6 +930,7 @@ export const BoringVaultV1Provider: React.FC<{
         delayWithdraw,
         delayWithdrawStatuses,
         delayWithdrawCancel,
+        delayWithdrawComplete,
         depositStatus,
         withdrawStatus,
         isBoringV1ContextReady,
