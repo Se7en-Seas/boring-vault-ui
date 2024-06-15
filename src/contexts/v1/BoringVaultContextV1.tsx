@@ -504,6 +504,7 @@ export const BoringVaultV1Provider: React.FC<{
     ) => {
       if (
         !delayWithdrawEthersContract ||
+        !vaultEthersContract ||
         !isBoringV1ContextReady ||
         !userAddress ||
         !decimals ||
@@ -526,7 +527,7 @@ export const BoringVaultV1Provider: React.FC<{
 
         return withdrawStatus;
       }
-      console.log("Begging delay withdraw ...");
+      console.log("Beginning delay withdraw ...");
 
       setWithdrawStatus({
         initiated: true,
@@ -534,7 +535,103 @@ export const BoringVaultV1Provider: React.FC<{
       });
 
       try {
-        // TODO
+        // First check if the delay withdraw is approved for at least the amount
+        const vaultContractWithSigner = new Contract(
+          vaultContract,
+          BoringVaultABI,
+          signer
+        );
+
+        const allowance = Number(
+          await vaultContractWithSigner.allowance(
+            userAddress,
+            delayWithdrawContract
+          )
+        );
+        const bigNumAmt = new BigNumber(shareAmountHumanReadable);
+        console.warn(shareAmountHumanReadable);
+        console.warn("Amount to withdraw: ", bigNumAmt.toNumber());
+        const amountWithdrawBaseDenom = bigNumAmt.multipliedBy(
+          new BigNumber(10).pow(vaultDecimals)
+        );
+        console.warn(
+          "Amount to withdraw: ",
+          amountWithdrawBaseDenom.toNumber()
+        );
+
+        if (allowance < amountWithdrawBaseDenom.toNumber()) {
+          setWithdrawStatus({
+            initiated: true,
+            loading: true,
+          });
+          console.log("Approving token ...");
+          const approveTx = await vaultContractWithSigner.approve(
+            delayWithdrawContract,
+            amountWithdrawBaseDenom.toNumber()
+          );
+
+          // Wait for confirmation
+          const approvedReceipt: ContractTransactionReceipt =
+            await approveTx.wait();
+          console.log("Token approved in tx: ", approvedReceipt);
+
+          if (!approvedReceipt.hash) {
+            console.error("Token approval failed");
+            setWithdrawStatus({
+              initiated: false,
+              loading: false,
+              success: false,
+              error: "Token approval reverted",
+            });
+            return withdrawStatus;
+          }
+          console.log("Approved hash: ", approvedReceipt.hash);
+        }
+
+        console.log("Withdrawing token ...");
+        // Get withdraw contract ready
+        const delayWithdrawContractWithSigner = new Contract(
+          delayWithdrawContract!,
+          BoringDelayWithdrawContractABI,
+          signer
+        );
+
+        // Max loss is truncated(human readable * 100)
+        const maxLossBaseDenom = new BigNumber(maxLossHumanReadable)
+          .multipliedBy(100)
+          .decimalPlaces(0, BigNumber.ROUND_DOWN);
+
+        const withdrawTx = await delayWithdrawContractWithSigner.requestWithdraw(
+          tokenOut.address,
+          amountWithdrawBaseDenom.toNumber(),
+          maxLossBaseDenom.toNumber(),
+          thirdPartyClaimer
+        );
+
+        // Wait for confirmation
+        const withdrawReceipt: ContractTransactionReceipt =
+          await withdrawTx.wait();
+
+        console.log("Withdraw Requested in tx: ", withdrawReceipt);
+        if (!withdrawReceipt.hash) {
+          console.error("Withdraw Request failed");
+          setWithdrawStatus({
+            initiated: false,
+            loading: false,
+            success: false,
+            error: "Withdraw reverted",
+          });
+          return withdrawStatus;
+        }
+        console.log("Withdraw Request hash: ", withdrawReceipt.hash);
+
+        // Set status
+        setWithdrawStatus({
+          initiated: false,
+          loading: false,
+          success: true,
+          tx_hash: withdrawReceipt.hash,
+        });
       } catch (error: any) {
         console.error("Error withdrawing", error);
         setWithdrawStatus({
