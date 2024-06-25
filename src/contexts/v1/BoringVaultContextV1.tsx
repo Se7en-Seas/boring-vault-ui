@@ -27,7 +27,7 @@ import {
   ContractTransactionReceipt,
 } from "ethers";
 import { erc20Abi } from "viem";
-import BigNumber from "bignumber.js";
+import BigNumber from "bignumber.js"
 import BoringDelayWithdrawContractABI from "../../abis/v1/BoringDelayWithdrawContractABI";
 
 const SEVEN_SEAS_BASE_API_URL = "https://api.sevenseas.capital";
