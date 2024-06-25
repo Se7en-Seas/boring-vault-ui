@@ -221,6 +221,7 @@ const App = () => {
           <ConnectKitProvider>
             <ConnectKitButton />
             <BoringVaultV1Provider
+              chain="arbitrum"
               vaultContract="0x289F7fA5B0f9064D904E83B8a125d1Ac3bf81547"
               tellerContract="0x6BB4DC9d90cF4E9599bCf938233FAe7F78bfB9D1"
               accountantContract="0xC0d0ef42a9183614Ceb84f87ABA8512dCCD45fF3"

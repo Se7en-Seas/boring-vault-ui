@@ -12,12 +12,14 @@ import {
   DepositStatus,
   WithdrawStatus,
   DelayWithdrawStatus,
+  WithdrawQueueStatus,
   Token,
 } from "../../types";
 import BoringVaultABI from "../../abis/v1/BoringVaultABI";
 import BoringTellerABI from "../../abis/v1/BoringTellerABI";
 import BoringAccountantABI from "../../abis/v1/BoringAccountantABI";
 import BoringLensABI from "../../abis/v1/BoringLensABI";
+import BoringWithdrawQueueContractABI from "../../abis/v1/BoringWithdrawQueueContractABI";
 import {
   Provider,
   Contract,
@@ -28,12 +30,16 @@ import { erc20Abi } from "viem";
 import BigNumber from "bignumber.js";
 import BoringDelayWithdrawContractABI from "../../abis/v1/BoringDelayWithdrawContractABI";
 
+const SEVEN_SEAS_BASE_API_URL = "https://api.sevenseas.capital";
+
 interface BoringVaultV1ContextProps {
+  chain: string;
   vaultEthersContract: Contract | null;
   tellerEthersContract: Contract | null;
   accountantEthersContract: Contract | null;
   lensEthersContract: Contract | null;
   delayWithdrawEthersContract: Contract | null;
+  withdrawQueueEthersContract: Contract | null;
   depositTokens: Token[];
   withdrawTokens: Token[];
   isConnected: boolean;
@@ -53,6 +59,7 @@ interface BoringVaultV1ContextProps {
     amount: string,
     token: Token
   ) => Promise<DepositStatus>;
+  /* Delay Withdraws */
   delayWithdraw: (
     signer: JsonRpcSigner,
     shareAmount: string,
@@ -71,6 +78,11 @@ interface BoringVaultV1ContextProps {
     signer: JsonRpcSigner,
     tokenOut: Token
   ) => Promise<WithdrawStatus>;
+  /* withdrawQueue */
+  withdrawQueueStatuses: (
+    Signer: JsonRpcSigner
+  ) => Promise<WithdrawQueueStatus[]>;
+  /* Statuses */
   depositStatus: DepositStatus;
   withdrawStatus: WithdrawStatus;
   isBoringV1ContextReady: boolean;
@@ -82,11 +94,13 @@ const BoringVaultV1Context = createContext<BoringVaultV1ContextProps | null>(
 );
 
 export const BoringVaultV1Provider: React.FC<{
+  chain: string;
   vaultContract: string;
   tellerContract: string;
   accountantContract: string;
   lensContract: string;
   delayWithdrawContract?: string;
+  withdrawQueueContract?: string;
   depositTokens: Token[];
   withdrawTokens: Token[];
   ethersProvider: Provider;
@@ -95,6 +109,7 @@ export const BoringVaultV1Provider: React.FC<{
   children: ReactNode;
 }> = ({
   children,
+  chain,
   depositTokens,
   withdrawTokens,
   vaultContract,
@@ -102,13 +117,13 @@ export const BoringVaultV1Provider: React.FC<{
   accountantContract,
   lensContract,
   delayWithdrawContract,
+  withdrawQueueContract,
   ethersProvider,
   vaultDecimals,
   baseAsset,
 }) => {
   const { address } = useAccount();
   const isConnected = !!address;
-
   const [vaultEthersContract, setVaultEthersContract] =
     useState<Contract | null>(null);
   const [tellerEthersContract, setTellerContract] = useState<Contract | null>(
@@ -121,6 +136,8 @@ export const BoringVaultV1Provider: React.FC<{
   );
   const [delayWithdrawEthersContract, setDelayWithdrawEthersContract] =
     useState<Contract | null>(null);
+  const [withdrawQueueEthersContract, setWithdrawQueueEthersContract] =
+    useState<Contract | null>(null);
 
   const [baseToken, setBaseToken] = useState<Token | null>(null);
 
@@ -128,6 +145,7 @@ export const BoringVaultV1Provider: React.FC<{
     useState<Token[]>(depositTokens);
   const [vaultWithdrawTokens, setVaultWithdrawTokens] =
     useState<Token[]>(withdrawTokens);
+
   const [userAddress, setUserAddress] = useState<string | null>(null);
   const [decimals, setDecimals] = useState<number | null>(null);
   const [isBoringV1ContextReady, setIsBoringV1ContextReady] =
@@ -143,6 +161,7 @@ export const BoringVaultV1Provider: React.FC<{
 
   useEffect(() => {
     if (
+      chain &&
       vaultContract &&
       tellerContract &&
       accountantContract &&
@@ -183,6 +202,15 @@ export const BoringVaultV1Provider: React.FC<{
         setDelayWithdrawEthersContract(delayWithdrawEthersContract);
       }
 
+      if (withdrawQueueContract) {
+        const withdrawQueueEthersContract = new Contract(
+          withdrawQueueContract,
+          BoringWithdrawQueueContractABI,
+          ethersProvider
+        );
+        setWithdrawQueueEthersContract(withdrawQueueEthersContract);
+      }
+
       setVaultEthersContract(vaultEthersContract);
       setTellerContract(tellerEthersContract);
       setAccountantEthersContract(accountantEthersContract);
@@ -194,6 +222,7 @@ export const BoringVaultV1Provider: React.FC<{
     } else {
       console.warn("Boring vault contracts not initialized");
       console.warn("Missing: ", {
+        chain,
         vaultContract,
         tellerContract,
         accountantContract,
@@ -206,6 +235,7 @@ export const BoringVaultV1Provider: React.FC<{
       });
     }
   }, [
+    chain,
     vaultContract,
     tellerContract,
     accountantContract,
@@ -509,6 +539,8 @@ export const BoringVaultV1Provider: React.FC<{
     ]
   );
 
+  /* Delay Withdraws */
+
   const delayWithdraw = useCallback(
     async (
       signer: JsonRpcSigner,
@@ -807,7 +839,6 @@ export const BoringVaultV1Provider: React.FC<{
           success: true,
           tx_hash: cancelReceipt.hash,
         });
-
       } catch (error: any) {
         console.error("Error cancelling withdraw", error);
         setWithdrawStatus({
@@ -819,9 +850,15 @@ export const BoringVaultV1Provider: React.FC<{
         return withdrawStatus;
       }
       return withdrawStatus;
-
-    }, [delayWithdrawEthersContract, userAddress, decimals, ethersProvider, isBoringV1ContextReady]);
-
+    },
+    [
+      delayWithdrawEthersContract,
+      userAddress,
+      decimals,
+      ethersProvider,
+      isBoringV1ContextReady,
+    ]
+  );
 
   const delayWithdrawComplete = useCallback(
     async (signer: JsonRpcSigner, tokenOut: Token) => {
@@ -864,13 +901,15 @@ export const BoringVaultV1Provider: React.FC<{
           loading: true,
         });
 
-        const completeTx = await delayWithdrawContractWithSigner.completeWithdraw(
-          tokenOut.address,
-          userAddress
-        );
+        const completeTx =
+          await delayWithdrawContractWithSigner.completeWithdraw(
+            tokenOut.address,
+            userAddress
+          );
 
         // Wait for confirmation
-        const completeReceipt: ContractTransactionReceipt = await completeTx.wait();
+        const completeReceipt: ContractTransactionReceipt =
+          await completeTx.wait();
 
         console.log("Withdraw Completed in tx: ", completeReceipt);
 
@@ -894,7 +933,6 @@ export const BoringVaultV1Provider: React.FC<{
           success: true,
           tx_hash: completeReceipt.hash,
         });
-
       } catch (error: any) {
         console.error("Error completing withdraw", error);
         setWithdrawStatus({
@@ -906,17 +944,95 @@ export const BoringVaultV1Provider: React.FC<{
         return withdrawStatus;
       }
       return withdrawStatus;
-    }, [delayWithdrawEthersContract, userAddress, decimals, ethersProvider, isBoringV1ContextReady]);
+    },
+    [
+      delayWithdrawEthersContract,
+      userAddress,
+      decimals,
+      ethersProvider,
+      isBoringV1ContextReady,
+    ]
+  );
 
+  /* withdrawQueue */
+  const withdrawQueueStatuses = useCallback(
+    async (signer: JsonRpcSigner) => {
+      if (
+        !withdrawQueueEthersContract ||
+        !isBoringV1ContextReady ||
+        !userAddress ||
+        !decimals ||
+        !signer
+      ) {
+        console.error(
+          "Contracts or user not ready for withdraw queue statuses...",
+          {
+            withdrawQueueEthersContract,
+            isBoringV1ContextReady,
+            userAddress,
+            decimals,
+            signer,
+          }
+        );
+        return [];
+      }
+      console.log("Fetching withdraw queue statuses ...");
+
+      try {
+        const withdrawURL = `${SEVEN_SEAS_BASE_API_URL}/withdrawRequests/${chain.toLowerCase()}/${vaultContract}/${userAddress}`;
+        const response = await fetch(withdrawURL)
+          .then((response) => {
+            return response.json();
+          })
+          .catch((error) => {
+            console.error("Error fetching withdraw queue statuses", error);
+            return [];
+          });
+        console.log("Response from Withdraw API: ", response);
+        // Parse on ["Response"]["open_requests"]
+        const openRequests = response["Response"]["open_requests"];
+
+        // Format the status object
+        return openRequests.map((request: any) => {
+          return {
+            sharesWithdrawing: Number(request["amount"]) / 10 ** vaultDecimals,
+            blockNumberOpened: Number(request["blockNumber"]),
+            deadlineUnixSeconds: Number(request["deadline"]),
+            errorCode: Number(request["errorCode"]),
+            minSharePrice: Number(request["minPrice"]) / 10 ** vaultDecimals,
+            timestampOpenedUnixSeconds: Number(request["timestamp"]),
+            transactionHashOpened: request["transactionHash"],
+            tokenOut: withdrawTokens.find(
+              (token) =>
+                token.address.toLowerCase() ===
+                request["wantToken"].toLowerCase()
+            )!,
+          } as WithdrawQueueStatus;
+        });
+      } catch (error) {
+        console.error("Error fetching withdraw queue statuses", error);
+        return []; // Return an empty array in case of an error
+      }
+    },
+    [
+      withdrawQueueEthersContract,
+      userAddress,
+      decimals,
+      ethersProvider,
+      isBoringV1ContextReady,
+    ]
+  );
 
   return (
     <BoringVaultV1Context.Provider
       value={{
+        chain,
         vaultEthersContract,
         tellerEthersContract,
         accountantEthersContract,
         lensEthersContract,
         delayWithdrawEthersContract,
+        withdrawQueueEthersContract,
         depositTokens: depositTokens,
         withdrawTokens: withdrawTokens,
         isConnected,
@@ -933,6 +1049,7 @@ export const BoringVaultV1Provider: React.FC<{
         delayWithdrawStatuses,
         delayWithdrawCancel,
         delayWithdrawComplete,
+        withdrawQueueStatuses,
         depositStatus,
         withdrawStatus,
         isBoringV1ContextReady,
