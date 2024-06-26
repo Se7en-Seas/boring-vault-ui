@@ -27,7 +27,7 @@ import {
   ContractTransactionReceipt,
 } from "ethers";
 import { erc20Abi } from "viem";
-import BigNumber from "bignumber.js"
+import BigNumber from "bignumber.js";
 import BoringDelayWithdrawContractABI from "../../abis/v1/BoringDelayWithdrawContractABI";
 
 const SEVEN_SEAS_BASE_API_URL = "https://api.sevenseas.capital";
@@ -79,10 +79,13 @@ interface BoringVaultV1ContextProps {
     tokenOut: Token
   ) => Promise<WithdrawStatus>;
   /* withdrawQueue */
-
-
-
-  // TODO: Create
+  queueWithdraw: (
+    signer: JsonRpcSigner,
+    amount: string,
+    token: Token,
+    discountPercent: string,
+    daysValid: string
+  ) => Promise<WithdrawStatus>;
   withdrawQueueCancel: (
     signer: JsonRpcSigner,
     token: Token
@@ -963,6 +966,246 @@ export const BoringVaultV1Provider: React.FC<{
   );
 
   /* withdrawQueue */
+  const queueWithdraw = useCallback(
+    async (
+      signer: JsonRpcSigner,
+      amountHumanReadable: string,
+      token: Token,
+      discountPercent: string,
+      daysValid: string
+    ) => {
+      if (
+        !withdrawQueueEthersContract ||
+        !vaultEthersContract ||
+        !isBoringV1ContextReady ||
+        !lensEthersContract ||
+        !userAddress ||
+        !decimals ||
+        !signer
+      ) {
+        console.error("Contracts or user not ready", {
+          withdrawQueueEthersContract,
+          isBoringV1ContextReady,
+          userAddress,
+          decimals,
+          signer,
+        });
+
+        setWithdrawStatus({
+          initiated: false,
+          loading: false,
+          success: false,
+          error: "Contracts or user not ready",
+        });
+
+        return withdrawStatus;
+      }
+
+      console.log("Queueing withdraw ...");
+      const withdrawQueueContractWithSigner = new Contract(
+        withdrawQueueContract!,
+        BoringWithdrawQueueContractABI,
+        signer
+      );
+
+      setWithdrawStatus({
+        initiated: true,
+        loading: true,
+      });
+
+      try {
+        // Get the amount in base denomination
+        const bigNumAmt = new BigNumber(amountHumanReadable);
+        console.warn(amountHumanReadable);
+        console.warn("Amount to withdraw: ", bigNumAmt.toNumber());
+        const amountWithdrawBaseDenom = bigNumAmt
+          .multipliedBy(new BigNumber(10).pow(vaultDecimals))
+          .decimalPlaces(0, BigNumber.ROUND_DOWN);
+        console.warn(
+          "Amount to withdraw: ",
+          amountWithdrawBaseDenom.toNumber()
+        );
+
+        // Get the current share price
+        const sharePrice = await lensEthersContract.exchangeRate(
+          accountantContract
+        );
+
+        // Discounted share price
+        const discountedSharePrice = new BigNumber(sharePrice)
+          .multipliedBy(
+            new BigNumber(100)
+              .minus(new BigNumber(discountPercent))
+              .dividedBy(100)
+          )
+          .decimalPlaces(0, BigNumber.ROUND_DOWN);
+
+        // Get the days valid
+        const daysValidSeconds = new BigNumber(daysValid).multipliedBy(
+          new BigNumber(86400) // 1 day in seconds
+        );
+        // Get the current unix time seconds and add the days valid
+        const deadline = new BigNumber(
+          Math.floor(Date.now() / 1000) +
+            Math.floor(daysValidSeconds.toNumber())
+        ).decimalPlaces(0, BigNumber.ROUND_DOWN);
+
+        const queueTx =
+          await withdrawQueueContractWithSigner.updateAtomicRequest(
+            vaultContract,
+            token.address,
+            [
+              deadline.toNumber(), // Deadline
+              discountedSharePrice.toNumber(), // atomicPrice
+              amountWithdrawBaseDenom.toNumber(), // offerAmount
+              false, // inSolver
+            ]
+          );
+
+        // Wait for confirmation
+        const queueReceipt: ContractTransactionReceipt = await queueTx.wait();
+
+        console.log("Withdraw Queued in tx: ", queueReceipt);
+        if (!queueReceipt.hash) {
+          console.error("Withdraw Queue failed");
+          setWithdrawStatus({
+            initiated: false,
+            loading: false,
+            success: false,
+            error: "Withdraw Queue reverted",
+          });
+          return withdrawStatus;
+        }
+        console.log("Withdraw Queue hash: ", queueReceipt.hash);
+
+        // Set status
+        setWithdrawStatus({
+          initiated: false,
+          loading: false,
+          success: true,
+          tx_hash: queueReceipt.hash,
+        });
+      } catch (error: any) {
+        console.error("Error queueing withdraw", error);
+        setWithdrawStatus({
+          initiated: false,
+          loading: false,
+          success: false,
+          error: (error as Error).message,
+        });
+        return withdrawStatus;
+      }
+
+      return withdrawStatus;
+    },
+    [
+      withdrawQueueEthersContract,
+      lensEthersContract,
+      userAddress,
+      decimals,
+      ethersProvider,
+      isBoringV1ContextReady,
+    ]
+  );
+
+  const withdrawQueueCancel = useCallback(
+    async (signer: JsonRpcSigner, token: Token) => {
+      if (
+        !withdrawQueueEthersContract ||
+        !isBoringV1ContextReady ||
+        !userAddress ||
+        !decimals ||
+        !signer
+      ) {
+        console.error("Contracts or user not ready to cancel withdraw", {
+          withdrawQueueEthersContract,
+          isBoringV1ContextReady,
+          userAddress,
+          decimals,
+          signer,
+        });
+
+        setWithdrawStatus({
+          initiated: false,
+          loading: false,
+          success: false,
+          error: "Contracts or user not ready",
+        });
+
+        return withdrawStatus;
+      }
+
+      console.log("Cancelling withdraw queue ...");
+      const withdrawQueueContractWithSigner = new Contract(
+        withdrawQueueContract!,
+        BoringWithdrawQueueContractABI,
+        signer
+      );
+
+      setWithdrawStatus({
+        initiated: true,
+        loading: true,
+      });
+
+      try {
+        // Update request with same token, but 0 amount
+        const cancelTx =
+          await withdrawQueueContractWithSigner.updateAtomicRequest(
+            vaultContract,
+            token.address,
+            [
+              0, // Deadline
+              0, // atomicPrice
+              0, // offerAmount
+              false, // inSolver
+            ]
+          );
+
+        // Wait for confirmation
+        const cancelReceipt: ContractTransactionReceipt = await cancelTx.wait();
+
+        console.log("Withdraw Cancelled in tx: ", cancelReceipt);
+        if (!cancelReceipt.hash) {
+          console.error("Withdraw Cancel failed");
+          setWithdrawStatus({
+            initiated: false,
+            loading: false,
+            success: false,
+            error: "Withdraw Cancel reverted",
+          });
+          return withdrawStatus;
+        }
+        console.log("Withdraw Cancel hash: ", cancelReceipt.hash);
+
+        // Set status
+        setWithdrawStatus({
+          initiated: false,
+          loading: false,
+          success: true,
+          tx_hash: cancelReceipt.hash,
+        });
+      } catch (error: any) {
+        console.error("Error cancelling withdraw", error);
+        setWithdrawStatus({
+          initiated: false,
+          loading: false,
+          success: false,
+          error: (error as Error).message,
+        });
+        return withdrawStatus;
+      }
+
+      return withdrawStatus;
+    },
+    [
+      withdrawQueueEthersContract,
+      userAddress,
+      decimals,
+      ethersProvider,
+      isBoringV1ContextReady,
+    ]
+  );
+
   const withdrawQueueStatuses = useCallback(
     async (signer: JsonRpcSigner) => {
       if (
@@ -1031,95 +1274,6 @@ export const BoringVaultV1Provider: React.FC<{
     ]
   );
 
-  const withdrawQueueCancel = useCallback(
-    async (signer: JsonRpcSigner, token: Token) => {
-      if (
-        !withdrawQueueEthersContract ||
-        !isBoringV1ContextReady ||
-        !userAddress ||
-        !decimals ||
-        !signer
-      ) {
-        console.error("Contracts or user not ready to cancel withdraw", {
-          withdrawQueueEthersContract,
-          isBoringV1ContextReady,
-          userAddress,
-          decimals,
-          signer,
-        });
-
-        setWithdrawStatus({
-          initiated: false,
-          loading: false,
-          success: false,
-          error: "Contracts or user not ready",
-        });
-
-        return withdrawStatus;
-      }
-
-      console.log("Cancelling withdraw queue ...");
-      const withdrawQueueContractWithSigner = new Contract(
-        withdrawQueueContract!,
-        BoringWithdrawQueueContractABI,
-        signer
-      );
-
-      setWithdrawStatus({
-        initiated: true,
-        loading: true,
-      });
-
-      try {
-        // Update request with same token, but 0 amount
-        const cancelTx = await withdrawQueueContractWithSigner.updateAtomicRequest(
-          vaultContract,
-          token.address,
-          [
-            0, // Deadline
-            0, // atomicPrice
-            0, // offerAmount
-            false, // inSolver
-          ]
-        );
-
-        // Wait for confirmation
-        const cancelReceipt: ContractTransactionReceipt = await cancelTx.wait();
-
-        console.log("Withdraw Cancelled in tx: ", cancelReceipt);
-        if (!cancelReceipt.hash) {
-          console.error("Withdraw Cancel failed");
-          setWithdrawStatus({
-            initiated: false,
-            loading: false,
-            success: false,
-            error: "Withdraw Cancel reverted",
-          });
-          return withdrawStatus;
-        }
-        console.log("Withdraw Cancel hash: ", cancelReceipt.hash);
-
-        // Set status
-        setWithdrawStatus({
-          initiated: false,
-          loading: false,
-          success: true,
-          tx_hash: cancelReceipt.hash,
-        });
-      } catch (error: any) {
-        console.error("Error cancelling withdraw", error);
-        setWithdrawStatus({
-          initiated: false,
-          loading: false,
-          success: false,
-          error: (error as Error).message,
-        });
-        return withdrawStatus;
-      }
-
-      return withdrawStatus;
-    }, [withdrawQueueEthersContract, userAddress, decimals, ethersProvider, isBoringV1ContextReady]);
-
   return (
     <BoringVaultV1Context.Provider
       value={{
@@ -1146,6 +1300,7 @@ export const BoringVaultV1Provider: React.FC<{
         delayWithdrawStatuses,
         delayWithdrawCancel,
         delayWithdrawComplete,
+        queueWithdraw,
         withdrawQueueCancel,
         withdrawQueueStatuses,
         depositStatus,

@@ -23,6 +23,7 @@ import {
 } from "connectkit";
 import { ethers } from "ethers";
 import PendingWithdrawQueueStatuses from "../components/v1/PendingWithdrawQueueStatuses";
+import WithdrawQueueButton from "../components/v1/WithdrawQueueButton";
 
 const config = createConfig(
   getDefaultConfig({
@@ -143,6 +144,39 @@ const VaultWidget = () => {
                 "
             buttonText="Deposit Funds"
             popupText="Welcome to the deposit interface!"
+            buttonProps={{
+              colorScheme: "teal",
+              size: "lg",
+              shadow: "md",
+              _hover: {
+                bg: "teal.600",
+              },
+            }}
+            modalOverlayProps={{
+              bg: "blackAlpha.300",
+            }}
+            modalContentProps={{
+              mx: 4,
+              rounded: "lg",
+              shadow: "xl",
+            }}
+            modalBodyProps={{
+              p: 6,
+            }}
+            modalCloseButtonProps={{
+              size: "lg",
+              _focus: {
+                boxShadow: "none",
+              },
+            }}
+          />
+          <WithdrawQueueButton
+            title="Example Vault"
+            bottomText="
+                  Once you request a withdraw a solver will need to process your request. This can take some time depending on the current queue length and the gas price you are willing to pay. You can check the status of your withdraw request below.
+                "
+            buttonText="Withdraw"
+            popupText="Welcome to the delay withdraw interface!"
             buttonProps={{
               colorScheme: "teal",
               size: "lg",
