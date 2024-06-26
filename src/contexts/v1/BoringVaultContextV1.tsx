@@ -1013,14 +1013,58 @@ export const BoringVaultV1Provider: React.FC<{
         loading: true,
       });
 
+      // Get the amount in base denomination
+      const bigNumAmt = new BigNumber(amountHumanReadable);
+      console.warn(amountHumanReadable);
+      console.warn("Amount to withdraw: ", bigNumAmt.toNumber());
+      const amountWithdrawBaseDenom = bigNumAmt
+        .multipliedBy(new BigNumber(10).pow(vaultDecimals))
+        .decimalPlaces(0, BigNumber.ROUND_DOWN);
+
       try {
-        // Get the amount in base denomination
-        const bigNumAmt = new BigNumber(amountHumanReadable);
-        console.warn(amountHumanReadable);
-        console.warn("Amount to withdraw: ", bigNumAmt.toNumber());
-        const amountWithdrawBaseDenom = bigNumAmt
-          .multipliedBy(new BigNumber(10).pow(vaultDecimals))
-          .decimalPlaces(0, BigNumber.ROUND_DOWN);
+        // First check if the delay withdraw is approved for at least the amount
+        const vaultContractWithSigner = new Contract(
+          vaultContract,
+          BoringVaultABI,
+          signer
+        );
+
+        const allowance = Number(
+          await vaultContractWithSigner.allowance(
+            userAddress,
+            withdrawQueueContract
+          )
+        );
+
+        if (allowance < amountWithdrawBaseDenom.toNumber()) {
+          setWithdrawStatus({
+            initiated: true,
+            loading: true,
+          });
+          console.log("Approving token ...");
+          const approveTx = await vaultContractWithSigner.approve(
+            withdrawQueueContract,
+            amountWithdrawBaseDenom.toNumber()
+          );
+
+          // Wait for confirmation
+          const approvedReceipt: ContractTransactionReceipt =
+            await approveTx.wait();
+          console.log("Token approved in tx: ", approvedReceipt);
+
+          if (!approvedReceipt.hash) {
+            console.error("Token approval failed");
+            setWithdrawStatus({
+              initiated: false,
+              loading: false,
+              success: false,
+              error: "Token approval reverted",
+            });
+            return withdrawStatus;
+          }
+          console.log("Approved hash: ", approvedReceipt.hash);
+        }
+
         console.warn(
           "Amount to withdraw: ",
           amountWithdrawBaseDenom.toNumber()
