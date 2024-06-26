@@ -7,6 +7,7 @@ const dotenv = require("dotenv");
 dotenv.config({ path: path.resolve(__dirname, ".env") });
 
 /* Uncomment for arbitrum example with direct withdraws */
+/*
 module.exports = {
   entry: "./src/examples/v2.tsx", // Entry point for your React app
   output: {
@@ -43,8 +44,10 @@ module.exports = {
     children: true, // Display information about child compilations
   },
 };
+*/
 
-/* Uncomment for ethereum example with withdraw queue 
+/* Uncomment for ethereum example with withdraw queue */
+
 module.exports = {
   entry: "./src/examples/v1.tsx", // Entry point for your React app
   output: {
@@ -81,4 +84,3 @@ module.exports = {
     children: true, // Display information about child compilations
   },
 };
-*/

@@ -22,6 +22,8 @@ import {
   getDefaultConfig,
 } from "connectkit";
 import { ethers } from "ethers";
+import PendingWithdrawQueueStatuses from "../components/v1/PendingWithdrawQueueStatuses";
+import WithdrawQueueButton from "../components/v1/WithdrawQueueButton";
 
 const config = createConfig(
   getDefaultConfig({
@@ -168,6 +170,40 @@ const VaultWidget = () => {
               },
             }}
           />
+          <WithdrawQueueButton
+            title="Example Vault"
+            bottomText="
+                  Once you request a withdraw a solver will need to process your request. This can take some time depending on the current queue length and the gas price you are willing to pay. You can check the status of your withdraw request below.
+                "
+            buttonText="Withdraw"
+            popupText="Welcome to the delay withdraw interface!"
+            buttonProps={{
+              colorScheme: "teal",
+              size: "lg",
+              shadow: "md",
+              _hover: {
+                bg: "teal.600",
+              },
+            }}
+            modalOverlayProps={{
+              bg: "blackAlpha.300",
+            }}
+            modalContentProps={{
+              mx: 4,
+              rounded: "lg",
+              shadow: "xl",
+            }}
+            modalBodyProps={{
+              p: 6,
+            }}
+            modalCloseButtonProps={{
+              size: "lg",
+              _focus: {
+                boxShadow: "none",
+              },
+            }}
+          />
+          <PendingWithdrawQueueStatuses title="Pending Withdraw Queue Statuses" />
         </VStack>
       </Box>
     </>
@@ -182,10 +218,12 @@ const App = () => {
           <ConnectKitProvider>
             <ConnectKitButton />
             <BoringVaultV1Provider
+              chain="ethereum"
               vaultContract="0x08c6F91e2B681FaF5e17227F2a44C307b3C1364C"
               tellerContract="0x221Ea02d409074546265CCD1123050F4D498ef64"
               accountantContract="0xc315D6e14DDCDC7407784e2Caf815d131Bc1D3E7"
               lensContract="0x5232bc0F5999f8dA604c42E1748A13a170F94A1B"
+              withdrawQueueContract="0xD45884B592E316eB816199615A95C182F75dea07"
               ethersProvider={ethersInfuraProvider}
               depositTokens={[
                 {
@@ -203,6 +241,13 @@ const App = () => {
                     "https://cryptologos.cc/logos/usd-coin-usdc-logo.png?v=031",
                   address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
                   decimals: 6,
+                },
+                {
+                  displayName: "USDe",
+                  image:
+                    "https://s2.coinmarketcap.com/static/img/coins/64x64/29470.png",
+                  address: "0x9D39A5DE30e57443BfF2A8307A4256c8797A3497",
+                  decimals: 18,
                 },
               ]}
               baseAsset={{

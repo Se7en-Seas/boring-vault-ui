@@ -1,3 +1,5 @@
+import { off } from "process";
+
 // src/types/index.ts
 export interface Token {
   address: string;
@@ -37,4 +39,15 @@ export interface DelayWithdrawStatus {
   shares: number;
   exchangeRateAtTimeOfRequest: number;
   token: Token;
+}
+
+export interface WithdrawQueueStatus {
+  sharesWithdrawing: number;
+  blockNumberOpened: number;
+  deadlineUnixSeconds: number;
+  errorCode: number;
+  minSharePrice: number;
+  timestampOpenedUnixSeconds: number;
+  transactionHashOpened: string;
+  tokenOut: Token;
 }
