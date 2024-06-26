@@ -3,6 +3,7 @@ import { Box, HStack, Text, VStack } from "@chakra-ui/react";
 import { useBoringVaultV1 } from "../../contexts/v1/BoringVaultContextV1";
 import { useEthersSigner } from "../../hooks/ethers";
 import { WithdrawQueueStatus } from "../../types";
+import WithdrawQueueCancelButton from "./WithdrawQueueCancelButton";
 
 interface PendingWithdrawQueueStatusesProps {
   title?: string; // Optional title
@@ -47,7 +48,8 @@ const PendingWithdrawQueueStatuses: React.FC<
               <HStack key={index} alignItems={"flex-start"}>
                 <VStack alignItems={"flex-start"}>
                   <Text>
-                    <strong>Shares Withdrawing:</strong> {withdrawStatus.sharesWithdrawing}
+                    <strong>Shares Withdrawing:</strong>{" "}
+                    {withdrawStatus.sharesWithdrawing}
                   </Text>
                   <Text>
                     <strong>Token Out:</strong>{" "}
@@ -63,11 +65,7 @@ const PendingWithdrawQueueStatuses: React.FC<
                   </Text>
                 </VStack>
                 <VStack paddingLeft="1em">
-                  {/* TODO: Cancel Button 
-                  <DelayWithdrawCancelButton
-                    token={withdrawStatus.token}
-                  />
-                  */}
+                  <WithdrawQueueCancelButton token={withdrawStatus.tokenOut} />
                 </VStack>
               </HStack>
             </Box>
