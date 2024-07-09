@@ -40,6 +40,7 @@ import { Token } from "../../types";
 import { Contract, formatUnits } from "ethers";
 import { erc20Abi } from "viem";
 import { useEthersSigner } from "../../hooks/ethers";
+import { useAccount } from "wagmi";
 
 interface WithdrawQueueButtonProps {
   buttonText: string;
@@ -71,8 +72,6 @@ const WithdrawQueueButton: React.FC<WithdrawQueueButtonProps> = ({
   const { isOpen, onOpen, onClose } = useDisclosure();
   const {
     withdrawTokens,
-    isConnected,
-    userAddress,
     ethersProvider,
     withdrawStatus,
     queueWithdraw,
@@ -90,10 +89,12 @@ const WithdrawQueueButton: React.FC<WithdrawQueueButtonProps> = ({
 
   useEffect(() => {
     async function fetchBalance() {
-      if (!userAddress || !ethersProvider) return;
+      if (!signer || !ethersProvider) return;
 
       try {
-        const shareBalance = await fetchUserShares();
+        const shareBalance = await fetchUserShares(
+          await signer.getAddress(),
+        );
         setBalance(shareBalance);
       } catch (error) {
         console.error("Failed to fetch share balance:", error);
@@ -102,7 +103,7 @@ const WithdrawQueueButton: React.FC<WithdrawQueueButtonProps> = ({
     }
 
     fetchBalance();
-  }, [userAddress, ethersProvider]);
+  }, [signer, ethersProvider]);
 
   const handleSelectChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const newTokenAddress = event.target.value;
@@ -146,7 +147,7 @@ const WithdrawQueueButton: React.FC<WithdrawQueueButtonProps> = ({
 
   return (
     <>
-      <Button onClick={onOpen} isDisabled={!isConnected} {...buttonProps}>
+      <Button onClick={onOpen} isDisabled={!useAccount().isConnected} {...buttonProps}>
         {buttonText}
       </Button>
       <Modal isOpen={isOpen} onClose={onClose} isCentered {...modalProps}>

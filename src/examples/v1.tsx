@@ -24,6 +24,7 @@ import {
 import { ethers } from "ethers";
 import PendingWithdrawQueueStatuses from "../components/v1/PendingWithdrawQueueStatuses";
 import WithdrawQueueButton from "../components/v1/WithdrawQueueButton";
+import { useEthersSigner } from "../hooks/ethers";
 
 const config = createConfig(
   getDefaultConfig({
@@ -93,14 +94,25 @@ const VaultWidget = () => {
     });
   }, [isBoringV1ContextReady]);
 
+  // Get the signer
+  const signer = useEthersSigner();
+
   const [userShares, setUserShares] = React.useState<number>(0);
   useEffect(() => {
-    if (!isBoringV1ContextReady) return;
-    fetchUserShares().then((shares) => {
-      console.log("User shares: ", shares);
-      setUserShares(shares);
-    });
-  }, [isBoringV1ContextReady]);
+    if (!isBoringV1ContextReady || !signer) return;
+    
+    const fetchShares = async () => {
+      const address = await signer.getAddress();
+      fetchUserShares(address)
+        .then((shares) => {
+          console.log("User shares: ", shares);
+          setUserShares(shares);
+        })
+        .catch((error) => console.error("Failed to fetch user shares:", error));
+    };
+
+    fetchShares();
+  }, [isBoringV1ContextReady, signer]);
 
   const [shareValue, setShareValue] = React.useState<number>(0);
   useEffect(() => {
@@ -113,12 +125,21 @@ const VaultWidget = () => {
 
   const [userUnlockTime, setUserUnlockTime] = React.useState<number>(0);
   useEffect(() => {
-    if (!isBoringV1ContextReady) return;
-    fetchUserUnlockTime().then((time) => {
-      console.log("User Unlock time: ", time);
-      setUserUnlockTime(time);
-    });
-  }, [isBoringV1ContextReady]);
+    if (!isBoringV1ContextReady || !signer) return;
+    const fetchUnlockTime = async () => {
+      const address = await signer.getAddress();
+      fetchUserUnlockTime(address)
+        .then((time) => {
+          console.log("User Unlock time: ", time);
+          setUserUnlockTime(time);
+        })
+        .catch((error) =>
+          console.error("Failed to fetch user unlock time:", error)
+        );
+    }
+
+    fetchUnlockTime();
+  }, [isBoringV1ContextReady, signer]);
 
   return (
     <>

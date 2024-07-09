@@ -7,7 +7,6 @@ import React, {
   ReactNode,
   useCallback,
 } from "react";
-import { useAccount } from "wagmi";
 import {
   DepositStatus,
   WithdrawStatus,
@@ -42,8 +41,6 @@ interface BoringVaultV1ContextProps {
   withdrawQueueEthersContract: Contract | null;
   depositTokens: Token[];
   withdrawTokens: Token[];
-  isConnected: boolean;
-  userAddress: string | null;
   // Any ethers provider
   ethersProvider: Provider; // Accept any Ethers provider
   baseToken: Token | null;
@@ -51,9 +48,9 @@ interface BoringVaultV1ContextProps {
   // Add other states and functions that consumers can read and use
   // fetch Total Assets
   fetchTotalAssets: () => Promise<number>;
-  fetchUserShares: () => Promise<number>;
+  fetchUserShares: (userAddress: string) => Promise<number>;
   fetchShareValue: () => Promise<number>;
-  fetchUserUnlockTime: () => Promise<number>;
+  fetchUserUnlockTime: (userAddress: string) => Promise<number>;
   deposit: (
     signer: JsonRpcSigner,
     amount: string,
@@ -133,8 +130,6 @@ export const BoringVaultV1Provider: React.FC<{
   vaultDecimals,
   baseAsset,
 }) => {
-  const { address } = useAccount();
-  const isConnected = !!address;
   const [vaultEthersContract, setVaultEthersContract] =
     useState<Contract | null>(null);
   const [tellerEthersContract, setTellerContract] = useState<Contract | null>(
@@ -157,7 +152,6 @@ export const BoringVaultV1Provider: React.FC<{
   const [vaultWithdrawTokens, setVaultWithdrawTokens] =
     useState<Token[]>(withdrawTokens);
 
-  const [userAddress, setUserAddress] = useState<string | null>(null);
   const [decimals, setDecimals] = useState<number | null>(null);
   const [isBoringV1ContextReady, setIsBoringV1ContextReady] =
     useState<boolean>(false);
@@ -259,16 +253,6 @@ export const BoringVaultV1Provider: React.FC<{
     delayWithdrawContract,
   ]);
 
-  // Effect to handle updates on user address if needed
-  useEffect(() => {
-    if (isConnected) {
-      console.log("Connected to wallet: ", address);
-      setUserAddress(address);
-    } else {
-      console.warn("Not connected to a wallet");
-    }
-  }, [isConnected, address]);
-
   // Effect to handle updates on acceptedTokens if needed
   useEffect(() => {
     setVaultDepositTokens(depositTokens);
@@ -313,39 +297,40 @@ export const BoringVaultV1Provider: React.FC<{
     isBoringV1ContextReady,
   ]);
 
-  const fetchUserShares = useCallback(async () => {
-    if (
-      !vaultEthersContract ||
-      !lensEthersContract ||
-      !baseToken ||
-      !isBoringV1ContextReady ||
-      !userAddress
-    ) {
-      console.error("Contracts or user not ready", {
-        /* Dependencies here */
-      });
-      return Promise.reject("Contracts or user not ready");
-    }
-    console.log("Fetching user balance ...");
+  const fetchUserShares = useCallback(
+    async (userAddress: string) => {
+      if (
+        !vaultEthersContract ||
+        !lensEthersContract ||
+        !baseToken ||
+        !isBoringV1ContextReady ||
+        !userAddress
+      ) {
+        console.error("Contracts or user not ready", {
+          vaultEthersContract,
+          lensEthersContract,
+          baseToken,
+          isBoringV1ContextReady,
+          userAddress,
+        });
+        return Promise.reject("Contracts or user not ready");
+      }
+      console.log("Fetching user balance ...");
 
-    try {
-      const balance = await lensEthersContract.balanceOf(
-        userAddress,
-        vaultContract
-      );
-      console.log("User balance from contract: ", balance);
-      return Number(balance) / Math.pow(10, decimals!);
-    } catch (error) {
-      console.error("Error fetching user balance", error);
-      throw error;
-    }
-  }, [
-    vaultEthersContract,
-    lensEthersContract,
-    baseToken,
-    isBoringV1ContextReady,
-    userAddress,
-  ]);
+      try {
+        const balance = await lensEthersContract.balanceOf(
+          userAddress,
+          vaultContract
+        );
+        console.log("User balance from contract: ", balance);
+        return Number(balance) / Math.pow(10, decimals!);
+      } catch (error) {
+        console.error("Error fetching user balance", error);
+        throw error;
+      }
+    },
+    [vaultEthersContract, lensEthersContract, baseToken, isBoringV1ContextReady]
+  );
 
   const fetchShareValue = useCallback(async () => {
     if (
@@ -378,37 +363,38 @@ export const BoringVaultV1Provider: React.FC<{
     isBoringV1ContextReady,
   ]);
 
-  const fetchUserUnlockTime = useCallback(async () => {
-    if (
-      !lensEthersContract ||
-      !tellerEthersContract ||
-      !isBoringV1ContextReady ||
-      !userAddress
-    ) {
-      console.error("Contracts or user not ready", {
-        /* Dependencies here */
-      });
-      return Promise.reject("Contracts or user not ready");
-    }
-    console.log("Fetching user unlock time...");
+  const fetchUserUnlockTime = useCallback(
+    async (userAddress: string) => {
+      if (
+        !lensEthersContract ||
+        !tellerEthersContract ||
+        !isBoringV1ContextReady ||
+        !userAddress
+      ) {
+        console.error("Contracts or user not ready", {
+          lensEthersContract,
+          tellerEthersContract,
+          isBoringV1ContextReady,
+          userAddress,
+        });
+        return Promise.reject("Contracts or user not ready");
+      }
+      console.log("Fetching user unlock time...");
 
-    try {
-      const userUnlockTime = await lensEthersContract.userUnlockTime(
-        userAddress,
-        tellerContract
-      );
-      console.log("User unlock time from contract: ", userUnlockTime);
-      return Number(userUnlockTime);
-    } catch (error) {
-      console.error("Error fetching user unlock time from contract", error);
-      throw error;
-    }
-  }, [
-    lensEthersContract,
-    accountantEthersContract,
-    userAddress,
-    isBoringV1ContextReady,
-  ]);
+      try {
+        const userUnlockTime = await lensEthersContract.userUnlockTime(
+          userAddress,
+          tellerContract
+        );
+        console.log("User unlock time from contract: ", userUnlockTime);
+        return Number(userUnlockTime);
+      } catch (error) {
+        console.error("Error fetching user unlock time from contract", error);
+        throw error;
+      }
+    },
+    [lensEthersContract, accountantEthersContract, isBoringV1ContextReady]
+  );
 
   const deposit = useCallback(
     async (
@@ -419,7 +405,6 @@ export const BoringVaultV1Provider: React.FC<{
       if (
         !vaultEthersContract ||
         !isBoringV1ContextReady ||
-        !userAddress ||
         !decimals ||
         !signer
       ) {
@@ -447,7 +432,10 @@ export const BoringVaultV1Provider: React.FC<{
         // First check if the token is approved for at least the amount
         const erc20Contract = new Contract(token.address, erc20Abi, signer);
         const allowance = Number(
-          await erc20Contract.allowance(userAddress, vaultContract)
+          await erc20Contract.allowance(
+            await signer.getAddress(),
+            vaultContract
+          )
         );
         const bigNumAmt = new BigNumber(amountHumanReadable);
         console.warn(amountHumanReadable);
@@ -543,7 +531,6 @@ export const BoringVaultV1Provider: React.FC<{
     [
       vaultEthersContract,
       tellerEthersContract,
-      userAddress,
       decimals,
       ethersProvider,
       isBoringV1ContextReady,
@@ -564,14 +551,12 @@ export const BoringVaultV1Provider: React.FC<{
         !delayWithdrawEthersContract ||
         !vaultEthersContract ||
         !isBoringV1ContextReady ||
-        !userAddress ||
         !decimals ||
         !signer
       ) {
         console.error("Contracts or user not ready", {
           delayWithdrawEthersContract,
           isBoringV1ContextReady,
-          userAddress,
           decimals,
           signer,
         });
@@ -602,7 +587,7 @@ export const BoringVaultV1Provider: React.FC<{
 
         const allowance = Number(
           await vaultContractWithSigner.allowance(
-            userAddress,
+            await signer.getAddress(),
             delayWithdrawContract
           )
         );
@@ -706,7 +691,6 @@ export const BoringVaultV1Provider: React.FC<{
     },
     [
       vaultEthersContract,
-      userAddress,
       decimals,
       ethersProvider,
       isBoringV1ContextReady,
@@ -719,14 +703,12 @@ export const BoringVaultV1Provider: React.FC<{
       if (
         !delayWithdrawEthersContract ||
         !isBoringV1ContextReady ||
-        !userAddress ||
         !decimals ||
         !signer
       ) {
         console.error("Contracts or user not ready for withdraw statuses...", {
           delayWithdrawEthersContract,
           isBoringV1ContextReady,
-          userAddress,
           decimals,
           signer,
         });
@@ -740,7 +722,7 @@ export const BoringVaultV1Provider: React.FC<{
         const statuses = await Promise.all(
           withdrawTokens.map(async (token) => {
             const status = await delayWithdrawEthersContract.withdrawRequests(
-              userAddress,
+              await signer.getAddress(),
               token.address
             );
             console.log("Status from contract: ", status);
@@ -776,7 +758,6 @@ export const BoringVaultV1Provider: React.FC<{
     },
     [
       delayWithdrawEthersContract,
-      userAddress,
       decimals,
       isBoringV1ContextReady,
       withdrawTokens,
@@ -788,14 +769,12 @@ export const BoringVaultV1Provider: React.FC<{
       if (
         !delayWithdrawEthersContract ||
         !isBoringV1ContextReady ||
-        !userAddress ||
         !decimals ||
         !signer
       ) {
         console.error("Contracts or user not ready to cancel withdraw", {
           delayWithdrawEthersContract,
           isBoringV1ContextReady,
-          userAddress,
           decimals,
           signer,
         });
@@ -864,7 +843,6 @@ export const BoringVaultV1Provider: React.FC<{
     },
     [
       delayWithdrawEthersContract,
-      userAddress,
       decimals,
       ethersProvider,
       isBoringV1ContextReady,
@@ -876,14 +854,12 @@ export const BoringVaultV1Provider: React.FC<{
       if (
         !delayWithdrawEthersContract ||
         !isBoringV1ContextReady ||
-        !userAddress ||
         !decimals ||
         !signer
       ) {
         console.error("Contracts or user not ready to complete withdraw", {
           delayWithdrawEthersContract,
           isBoringV1ContextReady,
-          userAddress,
           decimals,
           signer,
         });
@@ -915,7 +891,7 @@ export const BoringVaultV1Provider: React.FC<{
         const completeTx =
           await delayWithdrawContractWithSigner.completeWithdraw(
             tokenOut.address,
-            userAddress
+            await signer.getAddress()
           );
 
         // Wait for confirmation
@@ -958,7 +934,6 @@ export const BoringVaultV1Provider: React.FC<{
     },
     [
       delayWithdrawEthersContract,
-      userAddress,
       decimals,
       ethersProvider,
       isBoringV1ContextReady,
@@ -979,14 +954,12 @@ export const BoringVaultV1Provider: React.FC<{
         !vaultEthersContract ||
         !isBoringV1ContextReady ||
         !lensEthersContract ||
-        !userAddress ||
         !decimals ||
         !signer
       ) {
         console.error("Contracts or user not ready", {
           withdrawQueueEthersContract,
           isBoringV1ContextReady,
-          userAddress,
           decimals,
           signer,
         });
@@ -1031,7 +1004,7 @@ export const BoringVaultV1Provider: React.FC<{
 
         const allowance = Number(
           await vaultContractWithSigner.allowance(
-            userAddress,
+            await signer.getAddress(),
             withdrawQueueContract
           )
         );
@@ -1145,7 +1118,6 @@ export const BoringVaultV1Provider: React.FC<{
     [
       withdrawQueueEthersContract,
       lensEthersContract,
-      userAddress,
       decimals,
       ethersProvider,
       isBoringV1ContextReady,
@@ -1157,14 +1129,12 @@ export const BoringVaultV1Provider: React.FC<{
       if (
         !withdrawQueueEthersContract ||
         !isBoringV1ContextReady ||
-        !userAddress ||
         !decimals ||
         !signer
       ) {
         console.error("Contracts or user not ready to cancel withdraw", {
           withdrawQueueEthersContract,
           isBoringV1ContextReady,
-          userAddress,
           decimals,
           signer,
         });
@@ -1243,7 +1213,6 @@ export const BoringVaultV1Provider: React.FC<{
     },
     [
       withdrawQueueEthersContract,
-      userAddress,
       decimals,
       ethersProvider,
       isBoringV1ContextReady,
@@ -1255,7 +1224,6 @@ export const BoringVaultV1Provider: React.FC<{
       if (
         !withdrawQueueEthersContract ||
         !isBoringV1ContextReady ||
-        !userAddress ||
         !decimals ||
         !signer
       ) {
@@ -1264,7 +1232,6 @@ export const BoringVaultV1Provider: React.FC<{
           {
             withdrawQueueEthersContract,
             isBoringV1ContextReady,
-            userAddress,
             decimals,
             signer,
           }
@@ -1274,7 +1241,7 @@ export const BoringVaultV1Provider: React.FC<{
       console.log("Fetching withdraw queue statuses ...");
 
       try {
-        const withdrawURL = `${SEVEN_SEAS_BASE_API_URL}/withdrawRequests/${chain.toLowerCase()}/${vaultContract}/${userAddress}`;
+        const withdrawURL = `${SEVEN_SEAS_BASE_API_URL}/withdrawRequests/${chain.toLowerCase()}/${vaultContract}/${await signer.getAddress()}`;
         const response = await fetch(withdrawURL)
           .then((response) => {
             return response.json();
@@ -1311,7 +1278,6 @@ export const BoringVaultV1Provider: React.FC<{
     },
     [
       withdrawQueueEthersContract,
-      userAddress,
       decimals,
       ethersProvider,
       isBoringV1ContextReady,
@@ -1330,8 +1296,6 @@ export const BoringVaultV1Provider: React.FC<{
         withdrawQueueEthersContract,
         depositTokens: depositTokens,
         withdrawTokens: withdrawTokens,
-        isConnected,
-        userAddress,
         ethersProvider: ethersProvider,
         baseToken,
         vaultDecimals,

@@ -14,13 +14,15 @@ const PendingDelayedWithdraws: React.FC<PendingDelayedWithdrawsProps> = ({
   title,
   ...pendingDelayWithdrawProps
 }) => {
-  const { isConnected, userAddress, ethersProvider, delayWithdrawStatuses } =
+  const { ethersProvider, delayWithdrawStatuses } =
     useBoringVaultV1();
   const [statuses, setStatuses] = useState<any[]>([]); // State to store fetched statuses
   const signer = useEthersSigner();
 
   useEffect(() => {
     const fetchStatuses = async () => {
+      if (!signer) return;
+      
       const fetchedStatuses = await delayWithdrawStatuses(signer!);
       setStatuses(fetchedStatuses);
     };

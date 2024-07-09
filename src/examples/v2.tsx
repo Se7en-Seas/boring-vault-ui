@@ -25,6 +25,7 @@ import {
   getDefaultConfig,
 } from "connectkit";
 import { ethers } from "ethers";
+import { useEthersSigner } from "../hooks/ethers";
 
 const config = createConfig(
   getDefaultConfig({
@@ -84,6 +85,7 @@ const VaultWidget = () => {
     fetchShareValue,
     fetchUserUnlockTime,
   } = useBoringVaultV1();
+  const signer = useEthersSigner();
 
   useEffect(() => {
     console.warn("ready: ", isBoringV1ContextReady);
@@ -96,12 +98,19 @@ const VaultWidget = () => {
 
   const [userShares, setUserShares] = React.useState<number>(0);
   useEffect(() => {
-    if (!isBoringV1ContextReady) return;
-    fetchUserShares().then((shares) => {
-      console.log("User shares: ", shares);
-      setUserShares(shares);
-    });
-  }, [isBoringV1ContextReady]);
+    if (!isBoringV1ContextReady || !signer) return;
+    const fetchShares = async () => {
+      const address = await signer.getAddress();
+      fetchUserShares(address)
+        .then((shares) => {
+          console.log("User shares: ", shares);
+          setUserShares(shares);
+        })
+        .catch((error) => console.error("Failed to fetch user shares:", error));
+    };
+
+    fetchShares();
+  }, [isBoringV1ContextReady, signer]);
 
   const [shareValue, setShareValue] = React.useState<number>(0);
   useEffect(() => {
@@ -114,12 +123,22 @@ const VaultWidget = () => {
 
   const [userUnlockTime, setUserUnlockTime] = React.useState<number>(0);
   useEffect(() => {
-    if (!isBoringV1ContextReady) return;
-    fetchUserUnlockTime().then((time) => {
-      console.log("User Unlock time: ", time);
-      setUserUnlockTime(time);
-    });
-  }, [isBoringV1ContextReady]);
+    if (!isBoringV1ContextReady || !signer) return;
+
+    const fetchUnlockTime = async () => {
+      const address = await signer.getAddress();
+      fetchUserUnlockTime(address)
+        .then((unlockTime) => {
+          console.log("User unlock time: ", unlockTime);
+          setUserUnlockTime(unlockTime);
+        })
+        .catch((error) =>
+          console.error("Failed to fetch user unlock time:", error)
+        );
+    };
+
+    fetchUnlockTime();
+  }, [isBoringV1ContextReady, signer]);
 
   return (
     <>

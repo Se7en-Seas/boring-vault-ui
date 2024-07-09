@@ -39,6 +39,7 @@ import { Token } from "../../types";
 import { Contract, formatUnits } from "ethers";
 import { erc20Abi } from "viem";
 import { useEthersSigner } from "../../hooks/ethers";
+import { useAccount } from "wagmi";
 
 interface DepositButtonProps {
   buttonText: string;
@@ -70,8 +71,6 @@ const DepositButton: React.FC<DepositButtonProps> = ({
   const { isOpen, onOpen, onClose } = useDisclosure();
   const {
     depositTokens,
-    isConnected,
-    userAddress,
     ethersProvider,
     deposit,
     depositStatus,
@@ -88,7 +87,7 @@ const DepositButton: React.FC<DepositButtonProps> = ({
     async function fetchBalance() {
       console.log("Token:", selectedToken);
 
-      if (!userAddress || !selectedToken || !ethersProvider) return;
+      if (!signer || !selectedToken || !ethersProvider) return;
 
       try {
         const tokenContract = new Contract(
@@ -97,7 +96,7 @@ const DepositButton: React.FC<DepositButtonProps> = ({
           ethersProvider
         );
 
-        const tokenBalance = await tokenContract.balanceOf(userAddress);
+        const tokenBalance = await tokenContract.balanceOf(await signer.getAddress());
         const formattedBalance = parseFloat(
           formatUnits(tokenBalance, selectedToken.decimals)
         );
@@ -109,7 +108,7 @@ const DepositButton: React.FC<DepositButtonProps> = ({
     }
 
     fetchBalance();
-  }, [userAddress, selectedToken, ethersProvider]);
+  }, [signer, selectedToken, ethersProvider]);
 
   const handleSelectChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const newTokenAddress = event.target.value;
@@ -153,7 +152,7 @@ const DepositButton: React.FC<DepositButtonProps> = ({
 
   return (
     <>
-      <Button onClick={onOpen} isDisabled={!isConnected} {...buttonProps}>
+      <Button onClick={onOpen} isDisabled={!useAccount().isConnected} {...buttonProps}>
         {buttonText}
       </Button>
       <Modal isOpen={isOpen} onClose={onClose} isCentered {...modalProps}>

@@ -13,13 +13,14 @@ interface PendingWithdrawQueueStatusesProps {
 const PendingWithdrawQueueStatuses: React.FC<
   PendingWithdrawQueueStatusesProps
 > = ({ title, ...pendingWithdrawQueueProps }) => {
-  const { isConnected, userAddress, ethersProvider, withdrawQueueStatuses } =
-    useBoringVaultV1();
+  const { ethersProvider, withdrawQueueStatuses } = useBoringVaultV1();
   const [statuses, setStatuses] = useState<any[]>([]); // State to store fetched statuses
   const signer = useEthersSigner();
 
   useEffect(() => {
     const fetchStatuses = async () => {
+      if (!signer) return;
+
       const fetchedStatuses: WithdrawQueueStatus[] =
         await withdrawQueueStatuses(signer!);
       setStatuses(fetchedStatuses);

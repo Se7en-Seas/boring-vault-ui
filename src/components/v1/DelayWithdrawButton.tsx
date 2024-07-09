@@ -39,6 +39,7 @@ import { Token } from "../../types";
 import { Contract, formatUnits } from "ethers";
 import { erc20Abi } from "viem";
 import { useEthersSigner } from "../../hooks/ethers";
+import { useAccount } from "wagmi";
 
 interface DelayWithdrawButtonProps {
   buttonText: string;
@@ -70,8 +71,6 @@ const DelayWithdrawButton: React.FC<DelayWithdrawButtonProps> = ({
   const { isOpen, onOpen, onClose } = useDisclosure();
   const {
     withdrawTokens,
-    isConnected,
-    userAddress,
     ethersProvider,
     withdrawStatus,
     delayWithdraw,
@@ -88,10 +87,12 @@ const DelayWithdrawButton: React.FC<DelayWithdrawButtonProps> = ({
 
   useEffect(() => {
     async function fetchBalance() {
-      if (!userAddress || !ethersProvider) return;
+      if (!signer || !ethersProvider) return;
 
       try {
-        const shareBalance = await fetchUserShares();
+        const shareBalance = await fetchUserShares(
+          await signer.getAddress(),
+        );
         setBalance(shareBalance);
       } catch (error) {
         console.error("Failed to fetch share balance:", error);
@@ -100,7 +101,7 @@ const DelayWithdrawButton: React.FC<DelayWithdrawButtonProps> = ({
     }
 
     fetchBalance();
-  }, [userAddress, ethersProvider]);
+  }, [signer, ethersProvider]);
 
   const handleSelectChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const newTokenAddress = event.target.value;
@@ -144,7 +145,7 @@ const DelayWithdrawButton: React.FC<DelayWithdrawButtonProps> = ({
 
   return (
     <>
-      <Button onClick={onOpen} isDisabled={!isConnected} {...buttonProps}>
+      <Button onClick={onOpen} isDisabled={!useAccount().isConnected} {...buttonProps}>
         {buttonText}
       </Button>
       <Modal isOpen={isOpen} onClose={onClose} isCentered {...modalProps}>
