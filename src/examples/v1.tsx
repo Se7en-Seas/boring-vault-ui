@@ -244,7 +244,7 @@ const App = () => {
               tellerContract="0x221Ea02d409074546265CCD1123050F4D498ef64"
               accountantContract="0xc315D6e14DDCDC7407784e2Caf815d131Bc1D3E7"
               lensContract="0x5232bc0F5999f8dA604c42E1748A13a170F94A1B"
-              withdrawQueueContract="0xD45884B592E316eB816199615A95C182F75dea07"
+              withdrawQueueContract="0x7c12C550FE8857380B8F5A9e55D9145A0d7A7198"
               ethersProvider={ethersInfuraProvider}
               depositTokens={[
                 {
@@ -267,7 +267,7 @@ const App = () => {
                   displayName: "USDe",
                   image:
                     "https://s2.coinmarketcap.com/static/img/coins/64x64/29470.png",
-                  address: "0x9D39A5DE30e57443BfF2A8307A4256c8797A3497",
+                  address: "0x4c9EDD5852cd905f086C759E8383e09bff1E68B3",
                   decimals: 18,
                 },
               ]}
