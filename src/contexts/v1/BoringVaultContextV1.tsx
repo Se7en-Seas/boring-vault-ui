@@ -453,7 +453,7 @@ export const BoringVaultV1Provider: React.FC<{
             console.log("Approving token ...");
             const approveTx = await erc20Contract.approve(
               vaultContract,
-              amountDepositBaseDenom.toNumber()
+              amountDepositBaseDenom.toFixed(0)
             );
 
             // Wait for confirmation
@@ -487,7 +487,7 @@ export const BoringVaultV1Provider: React.FC<{
           // TODO: Allow for custom gas limits
           const depositTx = await tellerContractWithSigner.deposit(
             token.address,
-            amountDepositBaseDenom.toNumber(),
+            amountDepositBaseDenom.toFixed(0),
             0
           );
 
@@ -610,7 +610,7 @@ export const BoringVaultV1Provider: React.FC<{
             console.log("Approving token ...");
             const approveTx = await vaultContractWithSigner.approve(
               delayWithdrawContract,
-              amountWithdrawBaseDenom.toNumber()
+              amountWithdrawBaseDenom.toFixed(0)
             );
 
             // Wait for confirmation
@@ -647,8 +647,8 @@ export const BoringVaultV1Provider: React.FC<{
           const withdrawTx =
             await delayWithdrawContractWithSigner.requestWithdraw(
               tokenOut.address,
-              amountWithdrawBaseDenom.toNumber(),
-              maxLossBaseDenom.toNumber(),
+              amountWithdrawBaseDenom.toFixed(0),
+              maxLossBaseDenom.toFixed(0),
               thirdPartyClaimer
             );
 
@@ -1018,7 +1018,7 @@ export const BoringVaultV1Provider: React.FC<{
             console.log("Approving token ...");
             const approveTx = await vaultContractWithSigner.approve(
               withdrawQueueContract,
-              amountWithdrawBaseDenom.toNumber()
+              amountWithdrawBaseDenom.toFixed(0)
             );
 
             // Wait for confirmation
@@ -1079,13 +1079,13 @@ export const BoringVaultV1Provider: React.FC<{
               vaultContract, // offer
               token.address, // want
               [
-                deadline.toNumber(), // Deadline
+                deadline.toFixed(0), // Deadline
                 Number(0),//discountedSharePrice.toNumber(), // atomicPrice, this is actually overriden in safeUpdateAtomicRequest
-                amountWithdrawBaseDenom.toNumber(), // offerAmount
+                amountWithdrawBaseDenom.toFixed(0), // offerAmount
                 false, // inSolver
               ],
               accountantContract, // accountant
-              formattedDiscountPercent.toNumber()
+              formattedDiscountPercent.toFixed(0)
             );
 
           // Wait for confirmation
