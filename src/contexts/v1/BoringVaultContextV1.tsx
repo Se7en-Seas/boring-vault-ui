@@ -1639,7 +1639,6 @@ export const BoringVaultV1Provider: React.FC<{
 
           const metadata = request["metadata"];
 
-          // Update request with same token, but 0 amount
           const cancelTx =
             await boringQueueContractWithSigner.cancelOnChainWithdraw(
               [
