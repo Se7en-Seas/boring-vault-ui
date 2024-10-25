@@ -57,7 +57,7 @@ const PendingBoringQueueStatuses: React.FC<
                                         {withdrawStatus.tokenOut.displayName}
                                     </Text>
                                     <Text>
-                                        <strong>Expiration (unix seconds):</strong>{" "}
+                                        <strong>Seconds To Deadline (unix seconds):</strong>{" "}
                                         {withdrawStatus.secondsToDeadline}
                                     </Text>
                                 </VStack>
