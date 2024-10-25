@@ -1,4 +1,4 @@
-// src/examples/v2.tsx
+// src/examples/v3.tsx
 import React, { useEffect } from "react";
 import {
   ChakraProvider,
@@ -9,15 +9,15 @@ import {
   Text,
 } from "@chakra-ui/react";
 import DepositButton from "../components/v1/DepositButton";
-import PendingDelayedWithdraws from "../components/v1/PendingDelayedWithdraws";
-import DelayWithdrawButton from "../components/v1/DelayWithdrawButton";
+import BoringQueueButton from "../components/v1/BoringQueueButton";
+import PendingBoringQueueStatuses from "../components/v1/BoringQueuePendingStatuses";
 import { createRoot } from "react-dom/client";
 import {
   BoringVaultV1Provider,
   useBoringVaultV1,
 } from "../contexts/v1/BoringVaultContextV1";
 import { WagmiProvider, createConfig, http } from "wagmi";
-import { arbitrum } from "wagmi/chains";
+import { mainnet } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   ConnectKitButton,
@@ -30,11 +30,11 @@ import { useEthersSigner } from "../hooks/ethers";
 const config = createConfig(
   getDefaultConfig({
     // Your dApps chains
-    chains: [arbitrum],
+    chains: [mainnet],
     transports: {
       // RPC URL for each chain
-      [arbitrum.id]: http(
-        `https://arbitrum-mainnet.infura.io/v3/${process.env.INFURA_API_KEY}`
+      [mainnet.id]: http(
+        `https://mainnet.infura.io/v3/${process.env.INFURA_API_KEY}`
       ),
     },
 
@@ -51,7 +51,7 @@ const config = createConfig(
   })
 );
 const ethersInfuraProvider = new ethers.InfuraProvider(
-  "arbitrum",
+  "mainnet",
   process.env.INFURA_API_KEY
 );
 
@@ -191,10 +191,10 @@ const VaultWidget = () => {
                 },
               }}
             />
-            <DelayWithdrawButton
+            <BoringQueueButton
               title="Example Vault"
               bottomText="
-                  Once you request a withdraw you will be able to claim your shares after some time, please come back to check on the status of your withdraw and claim your funds when ready.
+                  Once you request a withdraw a solver will need to process your request. This can take some time depending on the current queue length and the gas price you are willing to pay. You can check the status of your withdraw request below.
                 "
               buttonText="Withdraw"
               popupText="Welcome to the delay withdraw interface!"
@@ -225,7 +225,7 @@ const VaultWidget = () => {
               }}
             />
           </HStack>
-          <PendingDelayedWithdraws title="Pending Delay Withdraws" />
+          <PendingBoringQueueStatuses title="Pending Withdraws" />
         </VStack>
       </Box>
     </>
@@ -240,19 +240,19 @@ const App = () => {
           <ConnectKitProvider>
             <ConnectKitButton />
             <BoringVaultV1Provider
-              chain="arbitrum"
-              vaultContract="0x289F7fA5B0f9064D904E83B8a125d1Ac3bf81547"
-              tellerContract="0x6BB4DC9d90cF4E9599bCf938233FAe7F78bfB9D1"
-              accountantContract="0xC0d0ef42a9183614Ceb84f87ABA8512dCCD45fF3"
-              lensContract="0x5232bc0F5999f8dA604c42E1748A13a170F94A1B"
-              delayWithdrawContract="0xB2F9C926B676CBD4fFd2bEE450d4aD9Adf8EAb6A"
+              chain="mainnet"
+              vaultContract="0x84Fd06FaA5a6B6b2386d84e42152d1A1147De558"
+              tellerContract="0x87A8cc52505142Ec289C5Ce28D665fC6F8c5d857"
+              accountantContract="0x175DfFe76295A11C7d4f32Ce0589a6c630ee49b1"
+              lensContract="0x73EF093847094114D59871c5929Bb0735FCf2429"
+              boringQueueContract="0x3CD067A9B958D36613bE176a02929973B6890eB7"
               ethersProvider={ethersInfuraProvider}
               depositTokens={[
                 {
                   displayName: "WETH",
                   image:
                     "https://cryptologos.cc/logos/ethereum-eth-logo.png?v=032",
-                  address: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+                  address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
                   decimals: 18,
                 },
               ]}
@@ -261,7 +261,7 @@ const App = () => {
                   displayName: "WETH",
                   image:
                     "https://cryptologos.cc/logos/ethereum-eth-logo.png?v=032",
-                  address: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+                  address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
                   decimals: 18,
                 },
               ]}
