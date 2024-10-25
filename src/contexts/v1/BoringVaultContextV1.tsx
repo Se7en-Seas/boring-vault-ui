@@ -1425,6 +1425,17 @@ export const BoringVaultV1Provider: React.FC<{
         const formattedDiscountPercent = new BigNumber(discountPercent).multipliedBy(
           new BigNumber(10000) // 1% = 10000
         )
+        
+        // Disct can be a min of 1 bps
+        if (formattedDiscountPercent.lt(1)) {
+          setWithdrawStatus({
+            initiated: false,
+            loading: false,
+            success: false,
+            error: "Discount percent must be at least 1 bps",
+          });
+          return withdrawStatus;
+        }
 
         // Generate permit data
         const userAddress = await signer.getAddress();
