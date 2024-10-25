@@ -13,21 +13,25 @@ import {
   DelayWithdrawStatus,
   WithdrawQueueStatus,
   Token,
+  BoringQueueStatus
 } from "../../types";
 import BoringVaultABI from "../../abis/v1/BoringVaultABI";
 import BoringTellerABI from "../../abis/v1/BoringTellerABI";
 import BoringAccountantABI from "../../abis/v1/BoringAccountantABI";
 import BoringLensABI from "../../abis/v1/BoringLensABI";
 import BoringWithdrawQueueContractABI from "../../abis/v1/BoringWithdrawQueueContractABI";
+import BoringQueueABI from "../../abis/v1/BoringQueueABI";
 import {
   Provider,
   Contract,
   JsonRpcSigner,
   ContractTransactionReceipt,
+  Signature,
 } from "ethers";
 import { erc20Abi } from "viem";
 import BigNumber from "bignumber.js";
 import BoringDelayWithdrawContractABI from "../../abis/v1/BoringDelayWithdrawContractABI";
+import { ethers } from 'ethers';
 
 const SEVEN_SEAS_BASE_API_URL = "https://api.sevenseas.capital";
 
@@ -39,6 +43,7 @@ interface BoringVaultV1ContextProps {
   lensEthersContract: Contract | null;
   delayWithdrawEthersContract: Contract | null;
   withdrawQueueEthersContract: Contract | null;
+  boringQueueEthersContract: Contract | null;
   depositTokens: Token[];
   withdrawTokens: Token[];
   // Any ethers provider
@@ -90,6 +95,21 @@ interface BoringVaultV1ContextProps {
   withdrawQueueStatuses: (
     Signer: JsonRpcSigner
   ) => Promise<WithdrawQueueStatus[]>;
+  /* Boring Queue */
+  queueBoringWithdraw: (
+    signer: JsonRpcSigner,
+    amount: string,
+    token: Token,
+    discountPercent: string,
+    daysValid: string
+  ) => Promise<WithdrawStatus>;
+  boringQueueCancel: (
+    signer: JsonRpcSigner,
+    token: Token
+  ) => Promise<WithdrawStatus>;
+  boringQueueStatuses: (
+    signer: JsonRpcSigner
+  ) => Promise<BoringQueueStatus[]>;
   /* Statuses */
   depositStatus: DepositStatus;
   withdrawStatus: WithdrawStatus;
@@ -109,6 +129,7 @@ export const BoringVaultV1Provider: React.FC<{
   lensContract: string;
   delayWithdrawContract?: string;
   withdrawQueueContract?: string;
+  boringQueueContract?: string;
   depositTokens: Token[];
   withdrawTokens: Token[];
   ethersProvider: Provider;
@@ -126,6 +147,7 @@ export const BoringVaultV1Provider: React.FC<{
   lensContract,
   delayWithdrawContract,
   withdrawQueueContract,
+  boringQueueContract,
   ethersProvider,
   vaultDecimals,
   baseAsset,
@@ -143,6 +165,8 @@ export const BoringVaultV1Provider: React.FC<{
     const [delayWithdrawEthersContract, setDelayWithdrawEthersContract] =
       useState<Contract | null>(null);
     const [withdrawQueueEthersContract, setWithdrawQueueEthersContract] =
+      useState<Contract | null>(null);
+    const [boringQueueEthersContract, setBoringQueueEthersContract] =
       useState<Contract | null>(null);
 
     const [baseToken, setBaseToken] = useState<Token | null>(null);
@@ -214,6 +238,15 @@ export const BoringVaultV1Provider: React.FC<{
             ethersProvider
           );
           setWithdrawQueueEthersContract(withdrawQueueEthersContract);
+        }
+
+        if (boringQueueContract) {
+          const boringQueueEthersContract = new Contract(
+            boringQueueContract,
+            BoringQueueABI,
+            ethersProvider
+          );
+          setBoringQueueEthersContract(boringQueueEthersContract);
         }
 
         setVaultEthersContract(vaultEthersContract);
@@ -1295,6 +1328,239 @@ export const BoringVaultV1Provider: React.FC<{
       ]
     );
 
+  /* boringQueue */
+  const queueBoringWithdraw = useCallback(
+    async (
+      signer: JsonRpcSigner,
+      amountHumanReadable: string,
+      token: Token,
+      discountPercent: string,
+      daysValid: string
+    ) => {
+      if (
+        !boringQueueEthersContract ||
+        !vaultEthersContract ||
+        !isBoringV1ContextReady ||
+        !lensEthersContract ||
+        !accountantContract ||
+        !decimals ||
+        !signer
+      ) {
+        console.error("Contracts or user not ready", {
+          boringQueueEthersContract,
+          isBoringV1ContextReady,
+          decimals,
+          signer,
+        });
+
+        setWithdrawStatus({
+          initiated: false,
+          loading: false,
+          success: false,
+          error: "Contracts or user not ready",
+        });
+
+        return withdrawStatus;
+      }
+
+      console.log("Queueing boring withdraw ...");
+      const boringQueueContractWithSigner = new Contract(
+        boringQueueContract!,
+        BoringQueueABI,
+        signer
+      );
+
+      setWithdrawStatus({
+        initiated: true,
+        loading: true,
+      });
+
+      // Get the amount in base denomination
+      const bigNumAmt = new BigNumber(amountHumanReadable);
+      console.warn(amountHumanReadable);
+      console.warn("Amount to withdraw: ", bigNumAmt.toNumber());
+      const amountWithdrawBaseDenom = bigNumAmt
+        .multipliedBy(new BigNumber(10).pow(vaultDecimals))
+        .decimalPlaces(0, BigNumber.ROUND_DOWN);
+
+      try {
+        // First check if the delay withdraw is approved for at least the amount
+        const vaultContractWithSigner = new Contract(
+          vaultContract,
+          BoringVaultABI,
+          signer
+        );
+
+        console.warn(
+          "Amount to withdraw: ",
+          amountWithdrawBaseDenom.toNumber()
+        );
+
+        // Get the current share price
+        const sharePrice = await lensEthersContract.exchangeRate(
+          accountantContract
+        );
+
+        // Discounted share price
+        /*
+        const discountedSharePrice = new BigNumber(sharePrice)
+          .multipliedBy(
+            new BigNumber(100)
+              .minus(new BigNumber(discountPercent))
+              .dividedBy(100)
+          )
+          .decimalPlaces(0, BigNumber.ROUND_DOWN);
+          */
+
+        // Get the days valid
+        const daysValidSeconds = new BigNumber(daysValid).multipliedBy(
+          new BigNumber(86400) // 1 day in seconds
+        );
+        // Get the current unix time seconds and add the days valid
+        const deadline = new BigNumber(
+          Math.floor(Date.now() / 1000) +
+          Math.floor(daysValidSeconds.toNumber())
+        ).decimalPlaces(0, BigNumber.ROUND_DOWN);
+
+        const formattedDiscountPercent = new BigNumber(discountPercent).multipliedBy(
+          new BigNumber(10000) // 1% = 10000
+        )
+
+        // Generate permit data
+        const userAddress = await signer.getAddress();
+        const nonce = await vaultContractWithSigner.nonces(userAddress);
+        const name = await vaultContractWithSigner.name();
+        const chainId = (await ethersProvider.getNetwork()).chainId;
+
+        const domain = {
+          name: name,
+          version: '1',
+          chainId: chainId,
+          verifyingContract: vaultContract
+        };
+
+        const types = {
+          Permit: [
+            { name: 'owner', type: 'address' },
+            { name: 'spender', type: 'address' },
+            { name: 'value', type: 'uint256' },
+            { name: 'nonce', type: 'uint256' },
+            { name: 'deadline', type: 'uint256' }
+          ]
+        };
+
+        const value = {
+          owner: userAddress,
+          spender: boringQueueContract,
+          value: amountWithdrawBaseDenom.toFixed(0),
+          nonce: nonce.toString(),
+          deadline: deadline.toFixed(0)
+        };
+
+        setWithdrawStatus({
+          initiated: true,
+          loading: true,
+        });
+
+        // Sign the permit
+        let v: number;
+        let r: string;
+        let s: string;
+        try {
+          const signature = await signer.signTypedData(domain, types, value);
+          const sig = Signature.from(signature);
+          v = sig.v;
+          r = sig.r;
+          s = sig.s;
+        } catch (error) {
+          console.error("Error signing permit", error);
+          setWithdrawStatus({
+            initiated: false,
+            loading: false,
+            success: false,
+            error: "Error signing permit",
+          });
+          return withdrawStatus;
+        }
+
+        // Execute the transaction with the permit
+        const queueTx =
+          await boringQueueContractWithSigner.requestOnChainWithdrawWithPermit(
+            token.address, // assetOut
+            amountWithdrawBaseDenom.toFixed(0), // amountOfShares
+            formattedDiscountPercent.toFixed(0), // Discount in bps
+            daysValidSeconds.toFixed(0), // secondsToDeadline
+            deadline.toFixed(0), // permitDeadline (keep permit valid as duration of withdraw)
+            v, // permit v
+            r, // permit r
+            s  // permit s
+          );
+
+        // Wait for confirmation
+        const queueReceipt: ContractTransactionReceipt = await queueTx.wait();
+
+        console.log("Withdraw Queued in tx: ", queueReceipt);
+        if (!queueReceipt.hash) {
+          console.error("Withdraw Queue failed");
+          setWithdrawStatus({
+            initiated: false,
+            loading: false,
+            success: false,
+            error: "Withdraw Queue reverted",
+          });
+          return withdrawStatus;
+        }
+        console.log("Withdraw Queue hash: ", queueReceipt.hash);
+
+        // Set status
+        setWithdrawStatus({
+          initiated: false,
+          loading: false,
+          success: true,
+          tx_hash: queueReceipt.hash,
+        });
+      } catch (error: any) {
+        console.error("Error queueing withdraw", error);
+        setWithdrawStatus({
+          initiated: false,
+          loading: false,
+          success: false,
+          error: (error as Error).message,
+        });
+        return withdrawStatus;
+      }
+
+      return withdrawStatus;
+    },
+    [
+      boringQueueEthersContract,
+      vaultEthersContract,
+      lensEthersContract,
+      decimals,
+      ethersProvider,
+      isBoringV1ContextReady,
+      accountantContract,
+      boringQueueContract,
+      vaultContract
+    ]
+  );
+
+  // TODO
+  const boringQueueCancel = useCallback(
+    async (signer: JsonRpcSigner, token: Token) => {
+      return Promise.resolve({} as WithdrawStatus);
+    },
+    []
+  );
+
+  // TODO
+  const boringQueueStatuses = useCallback(
+    async (signer: JsonRpcSigner) => {
+      return [];
+    },
+    []
+  );
+
     return (
       <BoringVaultV1Context.Provider
         value={{
@@ -1305,6 +1571,7 @@ export const BoringVaultV1Provider: React.FC<{
           lensEthersContract,
           delayWithdrawEthersContract,
           withdrawQueueEthersContract,
+          boringQueueEthersContract,
           depositTokens: depositTokens,
           withdrawTokens: withdrawTokens,
           ethersProvider: ethersProvider,
@@ -1322,6 +1589,9 @@ export const BoringVaultV1Provider: React.FC<{
           queueWithdraw,
           withdrawQueueCancel,
           withdrawQueueStatuses,
+          queueBoringWithdraw,
+          boringQueueCancel,
+          boringQueueStatuses,
           depositStatus,
           withdrawStatus,
           isBoringV1ContextReady,
@@ -1340,3 +1610,4 @@ export const useBoringVaultV1 = () => {
   }
   return context;
 };
+

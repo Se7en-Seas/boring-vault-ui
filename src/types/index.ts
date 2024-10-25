@@ -51,3 +51,16 @@ export interface WithdrawQueueStatus {
   transactionHashOpened: string;
   tokenOut: Token;
 }
+
+export interface BoringQueueStatus {
+  nonce: number;
+  user: string;
+  tokenOut: Token;
+  sharesWithdrawing: number;
+  assetsWithdrawing: number;
+  creationTime: number;
+  secondsToMaturity: number;
+  secondsToDeadline: number;
+  errorCode: number;
+  transactionHashOpened: string;
+}
