@@ -62,6 +62,10 @@ interface BoringVaultV1ContextProps {
     amount: string,
     token: Token
   ) => Promise<DepositStatus>;
+  previewDeposit: (
+    amount: string,
+    token: Token
+  ) => Promise<string>;
   /* Delay Withdraws */
   delayWithdraw: (
     signer: JsonRpcSigner,
@@ -584,6 +588,65 @@ export const BoringVaultV1Provider: React.FC<{
         decimals,
         ethersProvider,
         isBoringV1ContextReady,
+      ]
+    );
+
+    const previewDeposit = useCallback(
+      async (
+        amountHumanReadable: string,
+        token: Token
+      ) => {
+        if (
+          !vaultEthersContract ||
+          !isBoringV1ContextReady ||
+          !lensEthersContract ||
+          !decimals
+        ) {
+          console.error("Contracts or user not ready", {
+            /* Dependencies here */
+          });
+          return Promise.reject("Contracts or user not ready");
+        }
+
+        try {
+          const bigNumAmt = new BigNumber(amountHumanReadable);
+          console.warn(amountHumanReadable);
+          console.warn("Amount to deposit: ", bigNumAmt.toNumber());
+          const amountDepositBaseDenom = bigNumAmt.multipliedBy(
+            new BigNumber(10).pow(token.decimals)
+          );
+          console.warn("Amount to deposit: ", amountDepositBaseDenom.toNumber());
+
+          // Preview the deposit
+          console.log(token.address);
+          console.log(amountDepositBaseDenom.toFixed(0));
+          console.log(vaultContract);
+          console.log(accountantContract);
+          const depositPreviewAmt = await lensEthersContract.previewDeposit(
+            token.address,
+            amountDepositBaseDenom.toFixed(0),
+            outputTokenContract ? outputTokenContract : vaultContract,
+            accountantContract
+          );
+          console.log("Deposit preview: ", depositPreviewAmt);
+
+          const humanReadablePreviewAmt = Number(depositPreviewAmt) / Math.pow(10, decimals);
+
+          console.log("Deposit preview: ", humanReadablePreviewAmt);
+          return String(humanReadablePreviewAmt);
+        } catch (error: any) {
+          console.error("Error previewing deposit: ", error);
+          return Promise.reject("Error previewing deposit");
+        }
+      },
+      [
+        vaultEthersContract,
+        tellerEthersContract,
+        decimals,
+        ethersProvider,
+        isBoringV1ContextReady,
+        lensEthersContract,
+        outputTokenContract,
       ]
     );
 
@@ -1810,6 +1873,7 @@ export const BoringVaultV1Provider: React.FC<{
           fetchShareValue,
           fetchUserUnlockTime,
           deposit,
+          previewDeposit,
           delayWithdraw,
           delayWithdrawStatuses,
           delayWithdrawCancel,
