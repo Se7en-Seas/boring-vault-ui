@@ -38,6 +38,7 @@ const SEVEN_SEAS_BASE_API_URL = "https://api.sevenseas.capital";
 interface BoringVaultV1ContextProps {
   chain: string;
   vaultEthersContract: Contract | null;
+  outputTokenEthersContract: Contract | null;
   tellerEthersContract: Contract | null;
   accountantEthersContract: Contract | null;
   lensEthersContract: Contract | null;
@@ -123,6 +124,7 @@ const BoringVaultV1Context = createContext<BoringVaultV1ContextProps | null>(
 
 export const BoringVaultV1Provider: React.FC<{
   chain: string;
+  outputTokenContract?: string;
   vaultContract: string;
   tellerContract: string;
   accountantContract: string;
@@ -139,6 +141,7 @@ export const BoringVaultV1Provider: React.FC<{
 }> = ({
   children,
   chain,
+  outputTokenContract,
   depositTokens,
   withdrawTokens,
   vaultContract,
@@ -167,6 +170,8 @@ export const BoringVaultV1Provider: React.FC<{
     const [withdrawQueueEthersContract, setWithdrawQueueEthersContract] =
       useState<Contract | null>(null);
     const [boringQueueEthersContract, setBoringQueueEthersContract] =
+      useState<Contract | null>(null);
+    const [outputTokenEthersContract, setOutputTokenEthersContract] =
       useState<Contract | null>(null);
 
     const [baseToken, setBaseToken] = useState<Token | null>(null);
@@ -249,6 +254,15 @@ export const BoringVaultV1Provider: React.FC<{
           setBoringQueueEthersContract(boringQueueEthersContract);
         }
 
+        if (outputTokenContract) {
+          const outputTokenEthersContract = new Contract(
+            outputTokenContract,
+            erc20Abi,
+            ethersProvider
+          );
+          setOutputTokenEthersContract(outputTokenEthersContract);
+        }
+
         setVaultEthersContract(vaultEthersContract);
         setTellerContract(tellerEthersContract);
         setAccountantEthersContract(accountantEthersContract);
@@ -284,6 +298,7 @@ export const BoringVaultV1Provider: React.FC<{
       depositTokens,
       withdrawTokens,
       delayWithdrawContract,
+      outputTokenContract,
     ]);
 
     // Effect to handle updates on acceptedTokens if needed
@@ -313,7 +328,9 @@ export const BoringVaultV1Provider: React.FC<{
 
       try {
         const assets = await lensEthersContract.totalAssets(
-          vaultContract,
+          outputTokenEthersContract
+            ? outputTokenEthersContract
+            : vaultEthersContract,
           accountantContract
         );
         console.log("Total assets from contract: ", assets);
@@ -353,7 +370,7 @@ export const BoringVaultV1Provider: React.FC<{
         try {
           const balance = await lensEthersContract.balanceOf(
             userAddress,
-            vaultContract
+            outputTokenContract ? outputTokenContract : vaultContract
           );
           console.log("User balance from contract: ", balance);
           return Number(balance) / Math.pow(10, decimals!);
@@ -613,7 +630,7 @@ export const BoringVaultV1Provider: React.FC<{
         try {
           // First check if the delay withdraw is approved for at least the amount
           const vaultContractWithSigner = new Contract(
-            vaultContract,
+            outputTokenContract ? outputTokenContract : vaultContract,
             BoringVaultABI,
             signer
           );
@@ -1031,7 +1048,7 @@ export const BoringVaultV1Provider: React.FC<{
         try {
           // First check if the delay withdraw is approved for at least the amount
           const vaultContractWithSigner = new Contract(
-            vaultContract,
+            outputTokenContract ? outputTokenContract : vaultContract,
             BoringVaultABI,
             signer
           );
@@ -1109,7 +1126,7 @@ export const BoringVaultV1Provider: React.FC<{
 
           const queueTx =
             await withdrawQueueContractWithSigner.safeUpdateAtomicRequest(
-              vaultContract, // offer
+              outputTokenContract ? outputTokenContract : vaultContract, // offer
               token.address, // want
               [
                 deadline.toFixed(0), // Deadline
@@ -1208,7 +1225,7 @@ export const BoringVaultV1Provider: React.FC<{
           // Update request with same token, but 0 amount
           const cancelTx =
             await withdrawQueueContractWithSigner.updateAtomicRequest(
-              vaultContract, // Offer
+              outputTokenContract ? outputTokenContract : vaultContract, // Offer
               token.address, // Want
               [
                 0, // Deadline
@@ -1391,7 +1408,7 @@ export const BoringVaultV1Provider: React.FC<{
         try {
           // First check if the delay withdraw is approved for at least the amount
           const vaultContractWithSigner = new Contract(
-            vaultContract,
+            outputTokenContract ? outputTokenContract : vaultContract,
             BoringVaultABI,
             signer
           );
@@ -1452,7 +1469,7 @@ export const BoringVaultV1Provider: React.FC<{
             name: name,
             version: '1',
             chainId: chainId,
-            verifyingContract: vaultContract
+            verifyingContract: outputTokenContract ? outputTokenContract : vaultContract
           };
 
           const types = {
@@ -1557,7 +1574,8 @@ export const BoringVaultV1Provider: React.FC<{
         isBoringV1ContextReady,
         accountantContract,
         boringQueueContract,
-        vaultContract
+        vaultContract,
+        outputTokenContract,
       ]
     );
 
@@ -1775,6 +1793,7 @@ export const BoringVaultV1Provider: React.FC<{
         value={{
           chain,
           vaultEthersContract,
+          outputTokenEthersContract,
           tellerEthersContract,
           accountantEthersContract,
           lensEthersContract,

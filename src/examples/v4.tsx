@@ -1,4 +1,4 @@
-// src/examples/v3.tsx
+// src/examples/v2.tsx
 import React, { useEffect } from "react";
 import {
   ChakraProvider,
@@ -9,8 +9,8 @@ import {
   Text,
 } from "@chakra-ui/react";
 import DepositButton from "../components/v1/DepositButton";
-import BoringQueueButton from "../components/v1/BoringQueueButton";
-import PendingBoringQueueStatuses from "../components/v1/BoringQueuePendingStatuses";
+import PendingDelayedWithdraws from "../components/v1/PendingDelayedWithdraws";
+import DelayWithdrawButton from "../components/v1/DelayWithdrawButton";
 import { createRoot } from "react-dom/client";
 import {
   BoringVaultV1Provider,
@@ -43,7 +43,7 @@ const config = createConfig(
     walletConnectProjectId: process.env.WALLETCONNECT_PROJECT_ID!,
 
     // Required App Info
-    appName: "Boring Vault Arbitrm Example App with Direct Withdraws",
+    appName: "Boring Vault Alt Token Example App with Direct Withdraws",
 
     // Optional App Info
     appDescription: "An example app for the Boring Vault V1",
@@ -191,13 +191,13 @@ const VaultWidget = () => {
                 },
               }}
             />
-            <BoringQueueButton
+            <DelayWithdrawButton
               title="Example Vault"
               bottomText="
-                  Once you request a withdraw a solver will need to process your request. This can take some time depending on the current queue length and the gas price you are willing to pay. You can check the status of your withdraw request below.
+                  Once you request a withdraw you will be able to claim your shares after some time, please come back to check on the status of your withdraw and claim your funds when ready.
                 "
               buttonText="Withdraw"
-              popupText="Welcome to the withdraw interface!"
+              popupText="Welcome to the delay withdraw interface!"
               buttonProps={{
                 colorScheme: "teal",
                 size: "lg",
@@ -225,7 +225,7 @@ const VaultWidget = () => {
               }}
             />
           </HStack>
-          <PendingBoringQueueStatuses title="Pending Withdraws" />
+          <PendingDelayedWithdraws title="Pending Delay Withdraws" />
         </VStack>
       </Box>
     </>
@@ -240,36 +240,37 @@ const App = () => {
           <ConnectKitProvider>
             <ConnectKitButton />
             <BoringVaultV1Provider
-              chain="mainnet"
-              vaultContract="0x84Fd06FaA5a6B6b2386d84e42152d1A1147De558"
-              tellerContract="0x87A8cc52505142Ec289C5Ce28D665fC6F8c5d857"
-              accountantContract="0x175DfFe76295A11C7d4f32Ce0589a6c630ee49b1"
-              lensContract="0x73EF093847094114D59871c5929Bb0735FCf2429"
-              boringQueueContract="0x3CD067A9B958D36613bE176a02929973B6890eB7"
+              chain="ethereum"
+              outputTokenContract="0xE6829d9a7eE3040e1276Fa75293Bde931859e8fA"
+              vaultContract="0x33272D40b247c4cd9C646582C9bbAD44e85D4fE4"
+              tellerContract="0xB6f7D38e3EAbB8f69210AFc2212fe82e0f1912b0"
+              accountantContract="0x6049Bd892F14669a4466e46981ecEd75D610a2eC"
+              lensContract="0x5232bc0F5999f8dA604c42E1748A13a170F94A1B"
+              delayWithdrawContract="0x12Be34bE067Ebd201f6eAf78a861D90b2a66B113"
               ethersProvider={ethersInfuraProvider}
               depositTokens={[
                 {
-                  displayName: "WETH",
+                  displayName: "mETH",
                   image:
-                    "https://cryptologos.cc/logos/ethereum-eth-logo.png?v=032",
-                  address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+                    "https://cryptologos.cc/logos/mantle-mnt-logo.png?v=035",
+                  address: "0xd5F7838F5C461fefF7FE49ea5ebaF7728bB0ADfa",
                   decimals: 18,
                 },
               ]}
               withdrawTokens={[
                 {
-                  displayName: "WETH",
+                  displayName: "mETH",
                   image:
-                    "https://cryptologos.cc/logos/ethereum-eth-logo.png?v=032",
-                  address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+                    "https://cryptologos.cc/logos/mantle-mnt-logo.png?v=035",
+                  address: "0xd5F7838F5C461fefF7FE49ea5ebaF7728bB0ADfa",
                   decimals: 18,
                 },
               ]}
               baseAsset={{
-                displayName: "WETH",
+                displayName: "mETH",
                 image:
-                  "https://cryptologos.cc/logos/ethereum-eth-logo.png?v=032",
-                address: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+                  "https://cryptologos.cc/logos/mantle-mnt-logo.png?v=035",
+                address: "0xd5F7838F5C461fefF7FE49ea5ebaF7728bB0ADfa",
                 decimals: 18,
               }}
               vaultDecimals={18}
