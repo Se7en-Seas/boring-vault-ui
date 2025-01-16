@@ -1370,7 +1370,7 @@ export const BoringVaultV1Provider: React.FC<{
             chainName = "ethereum";
           }
 
-          const withdrawURL = `${SEVEN_SEAS_BASE_API_URL}/withdrawRequests/${chainName}/${vaultContract}/${await signer.getAddress()}`;
+          const withdrawURL = `${SEVEN_SEAS_BASE_API_URL}/withdrawRequests/${chainName}/${vaultContract}/${await signer.getAddress()}?string_values=true`;
           const response = await fetch(withdrawURL)
             .then((response) => {
               return response.json();
@@ -1688,7 +1688,7 @@ export const BoringVaultV1Provider: React.FC<{
 
           const userAddress = await signer.getAddress();
 
-          const withdrawURL = `${SEVEN_SEAS_BASE_API_URL}/boringQueue/${chainName}/${vaultContract}/${userAddress}`;
+          const withdrawURL = `${SEVEN_SEAS_BASE_API_URL}/boringQueue/${chainName}/${vaultContract}/${userAddress}?string_values=true`;
           console.log("Fetching withdraw queue statuses from: ", withdrawURL);
           const response = await fetch(withdrawURL)
             .then((response) => {
@@ -1805,7 +1805,7 @@ export const BoringVaultV1Provider: React.FC<{
             chainName = "ethereum";
           }
 
-          const withdrawURL = `${SEVEN_SEAS_BASE_API_URL}/boringQueue/${chainName}/${vaultContract}/${await signer.getAddress()}`;
+          const withdrawURL = `${SEVEN_SEAS_BASE_API_URL}/boringQueue/${chainName}/${vaultContract}/${await signer.getAddress()}?string_values=true`;
           console.log("Fetching withdraw queue statuses from: ", withdrawURL);
           const response = await fetch(withdrawURL)
             .then((response) => {

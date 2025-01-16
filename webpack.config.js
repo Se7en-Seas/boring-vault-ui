@@ -86,7 +86,7 @@ module.exports = {
 };
 */
 
-/* Uncomment for ethereum example with withdraw queue 
+/* Uncomment for ethereum example with withdraw queue */
 
 module.exports = {
   entry: "./src/examples/v1.tsx", // Entry point for your React app
@@ -124,9 +124,9 @@ module.exports = {
     children: true, // Display information about child compilations
   },
 };
-*/
 
-/* Uncomment for eth example with direct withdraws & an alternative vault token*/
+
+/* Uncomment for eth example with direct withdraws & an alternative vault token
 module.exports = {
   entry: "./src/examples/v4.tsx", // Entry point for your React app
   output: {
@@ -163,3 +163,4 @@ module.exports = {
     children: true, // Display information about child compilations
   },
 };
+*/
