@@ -64,3 +64,11 @@ export interface BoringQueueStatus {
   errorCode: number;
   transactionHashOpened: string;
 }
+
+export interface MerkleClaimStatus {
+  initiated: boolean;
+  loading: boolean;
+  success?: boolean;
+  error?: string;
+  tx_hash?: string;
+};

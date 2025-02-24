@@ -13,7 +13,8 @@ import {
   DelayWithdrawStatus,
   WithdrawQueueStatus,
   Token,
-  BoringQueueStatus
+  BoringQueueStatus,
+  MerkleClaimStatus
 } from "../../types";
 import BoringVaultABI from "../../abis/v1/BoringVaultABI";
 import BoringTellerABI from "../../abis/v1/BoringTellerABI";
@@ -21,6 +22,7 @@ import BoringAccountantABI from "../../abis/v1/BoringAccountantABI";
 import BoringLensABI from "../../abis/v1/BoringLensABI";
 import BoringWithdrawQueueContractABI from "../../abis/v1/BoringWithdrawQueueContractABI";
 import BoringQueueABI from "../../abis/v1/BoringQueueABI";
+import IncentiveDistributorABI from "../../abis/v1/IncentiveDistributorABI";
 import {
   Provider,
   Contract,
@@ -45,6 +47,7 @@ interface BoringVaultV1ContextProps {
   delayWithdrawEthersContract: Contract | null;
   withdrawQueueEthersContract: Contract | null;
   boringQueueEthersContract: Contract | null;
+  incentiveDistributorEthersContract: Contract | null;
   depositTokens: Token[];
   withdrawTokens: Token[];
   // Any ethers provider
@@ -120,6 +123,21 @@ interface BoringVaultV1ContextProps {
   withdrawStatus: WithdrawStatus;
   isBoringV1ContextReady: boolean;
   children: ReactNode;
+  merkleClaim: (
+    signer: JsonRpcSigner,
+    merkleData: {
+      rootHashes: string[];
+      tokens: string[];
+      balances: string[];
+      merkleProofs: string[][];
+    }
+  ) => Promise<MerkleClaimStatus>;
+  merkleClaimStatus: MerkleClaimStatus;
+  checkClaimStatuses: (
+    address: string,
+    rootHashes: string[],
+    balances: string[]
+  ) => Promise<Array<{ rootHash: string; claimed: boolean; balance: string }>>;
 }
 
 const BoringVaultV1Context = createContext<BoringVaultV1ContextProps | null>(
@@ -135,6 +153,7 @@ export const BoringVaultV1Provider: React.FC<{
   lensContract: string;
   delayWithdrawContract?: string;
   withdrawQueueContract?: string;
+  incentiveDistributorContract?: string;
   boringQueueContract?: string;
   depositTokens: Token[];
   withdrawTokens: Token[];
@@ -155,6 +174,7 @@ export const BoringVaultV1Provider: React.FC<{
   delayWithdrawContract,
   withdrawQueueContract,
   boringQueueContract,
+  incentiveDistributorContract,
   ethersProvider,
   vaultDecimals,
   baseAsset,
@@ -177,6 +197,8 @@ export const BoringVaultV1Provider: React.FC<{
       useState<Contract | null>(null);
     const [outputTokenEthersContract, setOutputTokenEthersContract] =
       useState<Contract | null>(null);
+    const [incentiveDistributorEthersContract, setIncentiveDistributorEthersContract] =
+      useState<Contract | null>(null);
 
     const [baseToken, setBaseToken] = useState<Token | null>(null);
 
@@ -193,6 +215,12 @@ export const BoringVaultV1Provider: React.FC<{
       loading: false,
     });
     const [withdrawStatus, setWithdrawStatus] = useState<WithdrawStatus>({
+      initiated: false,
+      loading: false,
+    });
+
+    // Add new state for merkle claim status
+    const [merkleClaimStatus, setMerkleClaimStatus] = useState<MerkleClaimStatus>({
       initiated: false,
       loading: false,
     });
@@ -249,6 +277,15 @@ export const BoringVaultV1Provider: React.FC<{
           setWithdrawQueueEthersContract(withdrawQueueEthersContract);
         }
 
+        if (incentiveDistributorContract) {
+          const incentiveDistributorEthersContract = new Contract(
+            incentiveDistributorContract,
+            IncentiveDistributorABI,
+            ethersProvider
+          );
+          setIncentiveDistributorEthersContract(incentiveDistributorEthersContract);
+        }
+
         if (boringQueueContract) {
           const boringQueueEthersContract = new Contract(
             boringQueueContract,
@@ -288,6 +325,7 @@ export const BoringVaultV1Provider: React.FC<{
           decimals,
           depositTokens,
           withdrawTokens,
+          incentiveDistributorContract,
         });
       }
     }, [
@@ -303,6 +341,7 @@ export const BoringVaultV1Provider: React.FC<{
       withdrawTokens,
       delayWithdrawContract,
       outputTokenContract,
+      incentiveDistributorContract,
     ]);
 
     // Effect to handle updates on acceptedTokens if needed
@@ -1851,6 +1890,123 @@ export const BoringVaultV1Provider: React.FC<{
       ]
     );
 
+    // Add the new merkleClaim method
+    const merkleClaim = useCallback(
+      async (
+        signer: JsonRpcSigner,
+        merkleData: {
+          rootHashes: string[];
+          tokens: string[];
+          balances: string[];
+          merkleProofs: string[][];
+        }
+      ) => {
+        if (!isBoringV1ContextReady || !signer || !incentiveDistributorEthersContract) {
+          console.error("Contracts or signer not ready for merkle claim");
+          setMerkleClaimStatus({
+            initiated: false,
+            loading: false,
+            success: false,
+            error: "Contracts or signer not ready",
+          });
+          return merkleClaimStatus;
+        }
+
+        console.log("Claiming merkle rewards...");
+        setMerkleClaimStatus({
+          initiated: true,
+          loading: true,
+        });
+
+        try {
+          const userAddress = await signer.getAddress();
+
+          const incentiveDistributorContractWithSigner = new Contract(
+            incentiveDistributorEthersContract,
+            IncentiveDistributorABI,
+            signer
+          );
+          
+          const ensureHexPrefix = (value: string) =>
+            value?.startsWith("0x") ? value : `0x${value}`;
+
+          const rootHashes = merkleData.rootHashes.map((hash: string) => {
+            const prefixedHash = ensureHexPrefix(hash);
+            return prefixedHash;
+          });
+
+          const merkleProofs = merkleData.merkleProofs.map((proofArray: string[]) =>
+            proofArray.map((proof: string) => ensureHexPrefix(proof))
+          );
+
+          const tx = await incentiveDistributorContractWithSigner.claim(
+            userAddress,
+            rootHashes,
+            merkleData.tokens,
+            merkleData.balances,
+            merkleProofs
+          );
+
+          const receipt = await tx.wait();
+
+          console.log("Merkle claimed in tx: ", receipt);
+          if (!receipt.hash) {
+            console.error("Merkle claim failed");
+            setMerkleClaimStatus({
+              initiated: false,
+              loading: false,
+              success: false,
+              error: "Merkle claim reverted",
+            });
+            return merkleClaimStatus;
+          }
+
+          setMerkleClaimStatus({
+            initiated: false,
+            loading: false,
+            success: true,
+            tx_hash: receipt.hash,
+          });
+        } catch (error: any) {
+          console.error("Error claiming merkle rewards", error);
+          setMerkleClaimStatus({
+            initiated: false,
+            loading: false,
+            success: false,
+            error: (error as Error).message,
+          });
+        }
+
+        return merkleClaimStatus;
+      },
+      [isBoringV1ContextReady, incentiveDistributorEthersContract]
+    );
+
+    // Add this new method
+    const checkClaimStatuses = useCallback(
+      async (
+        address: string,
+        rootHashes: string[],
+        balances: string[]
+      ): Promise<Array<{ rootHash: string; claimed: boolean; balance: string }>> => {
+        if (!incentiveDistributorEthersContract) {
+          throw new Error("Incentive distributor contract not initialized");
+        }
+
+        return Promise.all(
+          rootHashes.map(async (rootHash: string, index: number) => ({
+            rootHash,
+            claimed: await incentiveDistributorEthersContract.claimed(
+              ethers.zeroPadValue("0x" + rootHash.replace("0x", ""), 32),
+              address
+            ),
+            balance: balances[index]
+          }))
+        );
+      },
+      [incentiveDistributorEthersContract]
+    );
+
     return (
       <BoringVaultV1Context.Provider
         value={{
@@ -1863,6 +2019,7 @@ export const BoringVaultV1Provider: React.FC<{
           delayWithdrawEthersContract,
           withdrawQueueEthersContract,
           boringQueueEthersContract,
+          incentiveDistributorEthersContract,
           depositTokens: depositTokens,
           withdrawTokens: withdrawTokens,
           ethersProvider: ethersProvider,
@@ -1888,6 +2045,9 @@ export const BoringVaultV1Provider: React.FC<{
           withdrawStatus,
           isBoringV1ContextReady,
           children,
+          merkleClaim,
+          merkleClaimStatus,
+          checkClaimStatuses,
         }}
       >
         {children}
