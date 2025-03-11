@@ -7,7 +7,6 @@ const dotenv = require("dotenv");
 dotenv.config({ path: path.resolve(__dirname, ".env") });
 
 /* Uncomment for ethereum example with boring queue  */
-/*
 module.exports = {
   entry: "./src/examples/v3.tsx", // Entry point for your React app
   output: {
@@ -16,7 +15,7 @@ module.exports = {
   },
   plugins: [
     new HtmlWebpackPlugin({
-      template: "./src/examples/v1.html", // Path to your HTML template
+      template: "./src/examples/v3.html", // Path to your HTML template
     }),
     new webpack.DefinePlugin({
       "process.env": JSON.stringify(process.env), // Defines it on process.env
@@ -44,7 +43,6 @@ module.exports = {
     children: true, // Display information about child compilations
   },
 };
-*/
 
 /* Uncomment for arbitrum example with direct withdraws */
 /*
@@ -165,8 +163,7 @@ module.exports = {
 };
 */
 
-/* Uncomment for ethereum example with merkle claim */
-
+/* Uncomment for ethereum example with merkle claim
 module.exports = {
   entry: "./src/examples/merkleClaimExample.tsx", // Entry point for your React app
   output: {
@@ -203,3 +200,4 @@ module.exports = {
     children: true, // Display information about child compilations
   },
 };
+*/

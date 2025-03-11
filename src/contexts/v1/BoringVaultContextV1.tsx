@@ -1738,11 +1738,15 @@ export const BoringVaultV1Provider: React.FC<{
               return [];
             });
           console.log("Response from Withdraw API: ", response);
-          // Parse on ["Response"]["open_requests"]
+          // Parse on ["Response"]["open_requests"] and ["Response"]["expired_requests"]
           const openRequests = response["Response"]["open_requests"];
+          const expiredRequests = response["Response"]["expired_requests"];
+
+          // Concatenate the requests
+          const allRequests = [...openRequests, ...expiredRequests];
 
           // Filter the requests on the token
-          const request = openRequests.find((request: any) => {
+          const request = allRequests.find((request: any) => {
             return request["wantToken"].toLowerCase() === token.address.toLowerCase();
           });
 
@@ -1857,9 +1861,11 @@ export const BoringVaultV1Provider: React.FC<{
           console.log("Response from Withdraw API: ", response);
           // Parse on ["Response"]["open_requests"]
           const openRequests = response["Response"]["open_requests"];
+          const expiredRequests = response["Response"]["expired_requests"];
+          const allRequests = [...openRequests, ...expiredRequests];
 
           // Format the status object
-          return openRequests.map((request: any) => {
+          return allRequests.map((request: any) => {
             return {
               nonce: Number(request["metadata"]["nonce"]),
               user: request["user"],

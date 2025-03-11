@@ -55,6 +55,8 @@ const ethersInfuraProvider = new ethers.InfuraProvider(
   process.env.INFURA_API_KEY
 );
 
+console.warn(process.env.WALLETCONNECT_PROJECT_ID);
+
 const queryClient = new QueryClient();
 
 // Customize the theme to fit your branding or design needs
@@ -153,8 +155,8 @@ const VaultWidget = () => {
           <Text fontSize="xl" fontWeight={"bold"}>
             Boring Vault Example
           </Text>
-          <Text fontSize="l">{`TVL (ETH): ${assets}`}</Text>
-          <Text fontSize="md">{`Share (1 unit) Value (ETH): ${shareValue}`}</Text>
+          <Text fontSize="l">{`TVL (WBTC): ${assets}`}</Text>
+          <Text fontSize="md">{`Share (1 unit) Value (WBTC): ${shareValue}`}</Text>
           <Text fontSize="md">{`User Share Balance: ${userShares}`}</Text>
           <Text fontSize="md">{`User Share Unlock Unix seconds timestamp: ${userUnlockTime}`}</Text>
           <HStack spacing="2" paddingBottom={"2em"}>
@@ -241,38 +243,45 @@ const App = () => {
             <ConnectKitButton />
             <BoringVaultV1Provider
               chain="mainnet"
-              vaultContract="0x84Fd06FaA5a6B6b2386d84e42152d1A1147De558"
-              tellerContract="0x87A8cc52505142Ec289C5Ce28D665fC6F8c5d857"
-              accountantContract="0x175DfFe76295A11C7d4f32Ce0589a6c630ee49b1"
-              lensContract="0x73EF093847094114D59871c5929Bb0735FCf2429"
-              boringQueueContract="0x3CD067A9B958D36613bE176a02929973B6890eB7"
+              vaultContract="0xAF135099ab69024701CEC9D726f26F508bd05837"
+              tellerContract="0xe6a0E8DFe6017bD6161cd98e0AE02A04FDe90de2"
+              accountantContract="0xB647Ed8F3292F3a53e0D451F5A9f8A2d89D80F95"
+              lensContract="0x5232bc0F5999f8dA604c42E1748A13a170F94A1B"
+              boringQueueContract="0xb14C9d0beC7f3732c826f77362dDDa6A23c09F73"
               ethersProvider={ethersInfuraProvider}
               depositTokens={[
                 {
-                  displayName: "WETH",
+                  displayName: "WBTC",
                   image:
-                    "https://cryptologos.cc/logos/ethereum-eth-logo.png?v=032",
-                  address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-                  decimals: 18,
+                    "https://cryptologos.cc/logos/bitcoin-btc-logo.png?v=002",
+                  address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+                  decimals: 8,
                 },
               ]}
               withdrawTokens={[
                 {
-                  displayName: "WETH",
+                  displayName: "WBTC",
                   image:
-                    "https://cryptologos.cc/logos/ethereum-eth-logo.png?v=032",
-                  address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-                  decimals: 18,
+                    "https://cryptologos.cc/logos/bitcoin-btc-logo.png?v=002",
+                  address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+                  decimals: 8,
+                },
+                {
+                  displayName: "LBTC",
+                  image:
+                    "https://cryptologos.cc/logos/bitcoin-btc-logo.png?v=002",
+                  address: "0x8236a87084f8B84306f72007F36F2618A5634494",
+                  decimals: 8,
                 },
               ]}
               baseAsset={{
-                displayName: "WETH",
+                displayName: "WBTC",
                 image:
-                  "https://cryptologos.cc/logos/ethereum-eth-logo.png?v=032",
-                address: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
-                decimals: 18,
+                  "https://cryptologos.cc/logos/bitcoin-btc-logo.png?v=002",
+                address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+                decimals: 8,
               }}
-              vaultDecimals={18}
+              vaultDecimals={8}
             >
               <VaultWidget />
             </BoringVaultV1Provider>
