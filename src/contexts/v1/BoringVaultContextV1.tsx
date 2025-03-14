@@ -505,21 +505,22 @@ export const BoringVaultV1Provider: React.FC<{
             /* Dependencies here */
           });
 
-          setDepositStatus({
+          const temp = {
             initiated: false,
             loading: false,
             success: false,
             error: "Contracts or user not ready",
-          });
-
-          return depositStatus;
+          };
+          setDepositStatus(temp);
+          return temp;
         }
         console.log("Depositing ...");
 
-        setDepositStatus({
+        const temp = {
           initiated: true,
           loading: true,
-        });
+        };
+        setDepositStatus(temp);
 
         try {
           // First check if the token is approved for at least the amount
@@ -539,10 +540,11 @@ export const BoringVaultV1Provider: React.FC<{
           console.warn("Amount to deposit: ", amountDepositBaseDenom.toNumber());
 
           if (allowance < amountDepositBaseDenom.toNumber()) {
-            setDepositStatus({
+            const tempApproving = {
               initiated: true,
               loading: true,
-            });
+            };
+            setDepositStatus(tempApproving);
             console.log("Approving token ...");
             const approveTx = await erc20Contract.approve(
               vaultContract,
@@ -556,13 +558,14 @@ export const BoringVaultV1Provider: React.FC<{
 
             if (!approvedReceipt.hash) {
               console.error("Token approval failed");
-              setDepositStatus({
+              const tempError = {
                 initiated: false,
                 loading: false,
                 success: false,
                 error: "Token approval reverted",
-              });
-              return depositStatus;
+              };
+              setDepositStatus(tempError);
+              return tempError;
             }
             console.log("Approved hash: ", approvedReceipt.hash);
           }
@@ -591,35 +594,37 @@ export const BoringVaultV1Provider: React.FC<{
           console.log("Token deposited in tx: ", depositReceipt);
           if (!depositReceipt.hash) {
             console.error("Deposit failed");
-            setDepositStatus({
+            const tempError = {
               initiated: false,
               loading: false,
               success: false,
               error: "Deposit reverted",
-            });
-            return depositStatus;
+            };
+            setDepositStatus(tempError);
+            return tempError;
           }
           console.log("Deposit hash: ", depositReceipt.hash);
 
           // Set status
-          setDepositStatus({
+          const tempSuccess = {
             initiated: false,
             loading: false,
             success: true,
             tx_hash: depositReceipt.hash,
-          });
+          };
+          setDepositStatus(tempSuccess);
+          return tempSuccess;
         } catch (error: any) {
           console.error("Error depositing", error);
-          setDepositStatus({
+          const tempError = {
             initiated: false,
             loading: false,
             success: false,
             error: (error as Error).message,
-          });
-          return depositStatus;
+          };
+          setDepositStatus(tempError);
+          return tempError;
         }
-
-        return depositStatus;
       },
       [
         vaultEthersContract,
@@ -713,21 +718,22 @@ export const BoringVaultV1Provider: React.FC<{
             signer,
           });
 
-          setWithdrawStatus({
+          const temp = {
             initiated: false,
             loading: false,
             success: false,
             error: "Contracts or user not ready",
-          });
-
-          return withdrawStatus;
+          };
+          setWithdrawStatus(temp);
+          return temp;
         }
         console.log("Beginning delay withdraw ...");
 
-        setWithdrawStatus({
+        const temp = {
           initiated: true,
           loading: true,
-        });
+        };
+        setWithdrawStatus(temp);
 
         try {
           // First check if the delay withdraw is approved for at least the amount
@@ -755,10 +761,11 @@ export const BoringVaultV1Provider: React.FC<{
           );
 
           if (allowance < amountWithdrawBaseDenom.toNumber()) {
-            setWithdrawStatus({
+            const tempApproving = {
               initiated: true,
               loading: true,
-            });
+            };
+            setWithdrawStatus(tempApproving);
             console.log("Approving token ...");
             const approveTx = await vaultContractWithSigner.approve(
               delayWithdrawContract,
@@ -772,13 +779,14 @@ export const BoringVaultV1Provider: React.FC<{
 
             if (!approvedReceipt.hash) {
               console.error("Token approval failed");
-              setWithdrawStatus({
+              const tempError = {
                 initiated: false,
                 loading: false,
                 success: false,
                 error: "Token approval reverted",
-              });
-              return withdrawStatus;
+              };
+              setWithdrawStatus(tempError);
+              return tempError;
             }
             console.log("Approved hash: ", approvedReceipt.hash);
           }
@@ -811,35 +819,37 @@ export const BoringVaultV1Provider: React.FC<{
           console.log("Withdraw Requested in tx: ", withdrawReceipt);
           if (!withdrawReceipt.hash) {
             console.error("Withdraw Request failed");
-            setWithdrawStatus({
+            const tempError = {
               initiated: false,
               loading: false,
               success: false,
               error: "Withdraw reverted",
-            });
-            return withdrawStatus;
+            };
+            setWithdrawStatus(tempError);
+            return tempError;
           }
           console.log("Withdraw Request hash: ", withdrawReceipt.hash);
 
           // Set status
-          setWithdrawStatus({
+          const tempSuccess = {
             initiated: false,
             loading: false,
             success: true,
             tx_hash: withdrawReceipt.hash,
-          });
+          };
+          setWithdrawStatus(tempSuccess);
+          return tempSuccess;
         } catch (error: any) {
           console.error("Error withdrawing", error);
-          setWithdrawStatus({
+          const tempError = {
             initiated: false,
             loading: false,
             success: false,
             error: (error as Error).message,
-          });
-          return withdrawStatus;
+          };
+          setWithdrawStatus(tempError);
+          return tempError;
         }
-
-        return withdrawStatus;
       },
       [
         vaultEthersContract,
@@ -931,14 +941,14 @@ export const BoringVaultV1Provider: React.FC<{
             signer,
           });
 
-          setWithdrawStatus({
+          const temp = {
             initiated: false,
             loading: false,
             success: false,
             error: "Contracts or user not ready",
-          });
-
-          return withdrawStatus;
+          };
+          setWithdrawStatus(temp);
+          return temp;
         }
 
         console.log("Cancelling delay withdraw ...");
@@ -948,10 +958,11 @@ export const BoringVaultV1Provider: React.FC<{
           signer
         );
 
-        setWithdrawStatus({
+        const temp = {
           initiated: true,
           loading: true,
-        });
+        };
+        setWithdrawStatus(temp);
 
         try {
           const cancelTx = await delayWithdrawContractWithSigner.cancelWithdraw(
@@ -964,34 +975,37 @@ export const BoringVaultV1Provider: React.FC<{
           console.log("Withdraw Cancelled in tx: ", cancelReceipt);
           if (!cancelReceipt.hash) {
             console.error("Withdraw Cancel failed");
-            setWithdrawStatus({
+            const tempError = {
               initiated: false,
               loading: false,
               success: false,
               error: "Withdraw Cancel reverted",
-            });
-            return withdrawStatus;
+            };
+            setWithdrawStatus(tempError);
+            return tempError;
           }
           console.log("Withdraw Cancel hash: ", cancelReceipt.hash);
 
           // Set status
-          setWithdrawStatus({
+          const tempSuccess = {
             initiated: false,
             loading: false,
             success: true,
             tx_hash: cancelReceipt.hash,
-          });
+          };
+          setWithdrawStatus(tempSuccess);
+          return tempSuccess;
         } catch (error: any) {
           console.error("Error cancelling withdraw", error);
-          setWithdrawStatus({
+          const tempError = {
             initiated: false,
             loading: false,
             success: false,
             error: (error as Error).message,
-          });
-          return withdrawStatus;
+          };
+          setWithdrawStatus(tempError);
+          return tempError;
         }
-        return withdrawStatus;
       },
       [
         delayWithdrawEthersContract,
@@ -1016,14 +1030,14 @@ export const BoringVaultV1Provider: React.FC<{
             signer,
           });
 
-          setWithdrawStatus({
+          const temp = {
             initiated: false,
             loading: false,
             success: false,
             error: "Contracts or user not ready",
-          });
-
-          return withdrawStatus;
+          };
+          setWithdrawStatus(temp);
+          return temp;
         }
 
         try {
@@ -1035,10 +1049,11 @@ export const BoringVaultV1Provider: React.FC<{
 
           console.log("Completing delay withdraw ...");
 
-          setWithdrawStatus({
+          const temp = {
             initiated: true,
             loading: true,
-          });
+          };
+          setWithdrawStatus(temp);
 
           const completeTx =
             await delayWithdrawContractWithSigner.completeWithdraw(
@@ -1054,35 +1069,38 @@ export const BoringVaultV1Provider: React.FC<{
 
           if (!completeReceipt.hash) {
             console.error("Withdraw Complete failed");
-            setWithdrawStatus({
+            const tempError = {
               initiated: false,
               loading: false,
               success: false,
               error: "Withdraw Complete reverted",
-            });
-            return withdrawStatus;
+            };
+            setWithdrawStatus(tempError);
+            return tempError;
           }
 
           console.log("Withdraw Complete hash: ", completeReceipt.hash);
 
           // Set status
-          setWithdrawStatus({
+          const tempSuccess = {
             initiated: false,
             loading: false,
             success: true,
             tx_hash: completeReceipt.hash,
-          });
+          };
+          setWithdrawStatus(tempSuccess);
+          return tempSuccess;
         } catch (error: any) {
           console.error("Error completing withdraw", error);
-          setWithdrawStatus({
+          const tempError = {
             initiated: false,
             loading: false,
             success: false,
             error: (error as Error).message,
-          });
-          return withdrawStatus;
+          };
+          setWithdrawStatus(tempError);
+          return tempError;
         }
-        return withdrawStatus;
       },
       [
         delayWithdrawEthersContract,
@@ -1117,14 +1135,14 @@ export const BoringVaultV1Provider: React.FC<{
             signer,
           });
 
-          setWithdrawStatus({
+          const temp = {
             initiated: false,
             loading: false,
             success: false,
             error: "Contracts or user not ready",
-          });
-
-          return withdrawStatus;
+          };
+          setWithdrawStatus(temp);
+          return temp;
         }
 
         console.log("Queueing withdraw ...");
@@ -1134,10 +1152,11 @@ export const BoringVaultV1Provider: React.FC<{
           signer
         );
 
-        setWithdrawStatus({
+        const temp = {
           initiated: true,
           loading: true,
-        });
+        };
+        setWithdrawStatus(temp);
 
         // Get the amount in base denomination
         const bigNumAmt = new BigNumber(amountHumanReadable);
@@ -1163,10 +1182,11 @@ export const BoringVaultV1Provider: React.FC<{
           );
 
           if (allowance < amountWithdrawBaseDenom.toNumber()) {
-            setWithdrawStatus({
+            const tempApproving = {
               initiated: true,
               loading: true,
-            });
+            };
+            setWithdrawStatus(tempApproving);
             console.log("Approving token ...");
             const approveTx = await vaultContractWithSigner.approve(
               withdrawQueueContract,
@@ -1180,13 +1200,14 @@ export const BoringVaultV1Provider: React.FC<{
 
             if (!approvedReceipt.hash) {
               console.error("Token approval failed");
-              setWithdrawStatus({
+              const tempError = {
                 initiated: false,
                 loading: false,
                 success: false,
                 error: "Token approval reverted",
-              });
-              return withdrawStatus;
+              };
+              setWithdrawStatus(tempError);
+              return tempError;
             }
             console.log("Approved hash: ", approvedReceipt.hash);
           }
@@ -1246,35 +1267,37 @@ export const BoringVaultV1Provider: React.FC<{
           console.log("Withdraw Queued in tx: ", queueReceipt);
           if (!queueReceipt.hash) {
             console.error("Withdraw Queue failed");
-            setWithdrawStatus({
+            const tempError = {
               initiated: false,
               loading: false,
               success: false,
               error: "Withdraw Queue reverted",
-            });
-            return withdrawStatus;
+            };
+            setWithdrawStatus(tempError);
+            return tempError;
           }
           console.log("Withdraw Queue hash: ", queueReceipt.hash);
 
           // Set status
-          setWithdrawStatus({
+          const tempSuccess = {
             initiated: false,
             loading: false,
             success: true,
             tx_hash: queueReceipt.hash,
-          });
+          };
+          setWithdrawStatus(tempSuccess);
+          return tempSuccess;
         } catch (error: any) {
           console.error("Error queueing withdraw", error);
-          setWithdrawStatus({
+          const tempError = {
             initiated: false,
             loading: false,
             success: false,
             error: (error as Error).message,
-          });
-          return withdrawStatus;
+          };
+          setWithdrawStatus(tempError);
+          return tempError;
         }
-
-        return withdrawStatus;
       },
       [
         withdrawQueueEthersContract,
@@ -1301,14 +1324,14 @@ export const BoringVaultV1Provider: React.FC<{
             signer,
           });
 
-          setWithdrawStatus({
+          const temp = {
             initiated: false,
             loading: false,
             success: false,
             error: "Contracts or user not ready",
-          });
-
-          return withdrawStatus;
+          };
+          setWithdrawStatus(temp);
+          return temp;
         }
 
         console.log("Cancelling withdraw queue ...");
@@ -1318,10 +1341,11 @@ export const BoringVaultV1Provider: React.FC<{
           signer
         );
 
-        setWithdrawStatus({
+        const temp = {
           initiated: true,
           loading: true,
-        });
+        };
+        setWithdrawStatus(temp);
 
         try {
           // Update request with same token, but 0 amount
@@ -1344,35 +1368,37 @@ export const BoringVaultV1Provider: React.FC<{
           console.log("Withdraw Cancelled in tx: ", cancelReceipt);
           if (!cancelReceipt.hash) {
             console.error("Withdraw Cancel failed");
-            setWithdrawStatus({
+            const tempError = {
               initiated: false,
               loading: false,
               success: false,
               error: "Withdraw Cancel reverted",
-            });
-            return withdrawStatus;
+            };
+            setWithdrawStatus(tempError);
+            return tempError;
           }
           console.log("Withdraw Cancel hash: ", cancelReceipt.hash);
 
           // Set status
-          setWithdrawStatus({
+          const tempSuccess = {
             initiated: false,
             loading: false,
             success: true,
             tx_hash: cancelReceipt.hash,
-          });
+          };
+          setWithdrawStatus(tempSuccess);
+          return tempSuccess;
         } catch (error: any) {
           console.error("Error cancelling withdraw", error);
-          setWithdrawStatus({
+          const tempError = {
             initiated: false,
             loading: false,
             success: false,
             error: (error as Error).message,
-          });
-          return withdrawStatus;
+          };
+          setWithdrawStatus(tempError);
+          return tempError;
         }
-
-        return withdrawStatus;
       },
       [
         withdrawQueueEthersContract,
@@ -1477,14 +1503,14 @@ export const BoringVaultV1Provider: React.FC<{
             signer,
           });
 
-          setWithdrawStatus({
+          const temp = {
             initiated: false,
             loading: false,
             success: false,
             error: "Contracts or user not ready",
-          });
-
-          return withdrawStatus;
+          };
+          setWithdrawStatus(temp);
+          return temp;
         }
 
         console.log("Queueing boring withdraw ...");
@@ -1494,10 +1520,11 @@ export const BoringVaultV1Provider: React.FC<{
           signer
         );
 
-        setWithdrawStatus({
+        const temp = {
           initiated: true,
           loading: true,
-        });
+        };
+        setWithdrawStatus(temp);
 
         // Get the amount in base denomination
         const bigNumAmt = new BigNumber(amountHumanReadable);
@@ -1552,13 +1579,14 @@ export const BoringVaultV1Provider: React.FC<{
 
           // Disct can be a min of 1 bps
           if (formattedDiscountPercent.lt(1)) {
-            setWithdrawStatus({
+            const tempError = {
               initiated: false,
               loading: false,
               success: false,
               error: "Discount percent must be at least 1 bps",
-            });
-            return withdrawStatus;
+            };
+            setWithdrawStatus(tempError);
+            return tempError;
           }
 
           // Generate permit data
@@ -1592,10 +1620,11 @@ export const BoringVaultV1Provider: React.FC<{
             deadline: deadline.toFixed(0)
           };
 
-          setWithdrawStatus({
+          const tempSigning = {
             initiated: true,
             loading: true,
-          });
+          };
+          setWithdrawStatus(tempSigning);
 
           // Sign the permit
           let v: number;
@@ -1609,13 +1638,14 @@ export const BoringVaultV1Provider: React.FC<{
             s = sig.s;
           } catch (error) {
             console.error("Error signing permit", error);
-            setWithdrawStatus({
+            const tempError = {
               initiated: false,
               loading: false,
               success: false,
               error: "Error signing permit",
-            });
-            return withdrawStatus;
+            };
+            setWithdrawStatus(tempError);
+            return tempError;
           }
 
           // Execute the transaction with the permit
@@ -1637,35 +1667,37 @@ export const BoringVaultV1Provider: React.FC<{
           console.log("Withdraw Queued in tx: ", queueReceipt);
           if (!queueReceipt.hash) {
             console.error("Withdraw Queue failed");
-            setWithdrawStatus({
+            const tempError = {
               initiated: false,
               loading: false,
               success: false,
               error: "Withdraw Queue reverted",
-            });
-            return withdrawStatus;
+            };
+            setWithdrawStatus(tempError);
+            return tempError;
           }
           console.log("Withdraw Queue hash: ", queueReceipt.hash);
 
           // Set status
-          setWithdrawStatus({
+          const tempSuccess = {
             initiated: false,
             loading: false,
             success: true,
             tx_hash: queueReceipt.hash,
-          });
+          };
+          setWithdrawStatus(tempSuccess);
+          return tempSuccess;
         } catch (error: any) {
           console.error("Error queueing withdraw", error);
-          setWithdrawStatus({
+          const tempError = {
             initiated: false,
             loading: false,
             success: false,
             error: (error as Error).message,
-          });
-          return withdrawStatus;
+          };
+          setWithdrawStatus(tempError);
+          return tempError;
         }
-
-        return withdrawStatus;
       },
       [
         boringQueueEthersContract,
@@ -1696,14 +1728,14 @@ export const BoringVaultV1Provider: React.FC<{
             signer,
           });
 
-          setWithdrawStatus({
+          const temp = {
             initiated: false,
             loading: false,
             success: false,
             error: "Contracts or user not ready",
-          });
-
-          return withdrawStatus;
+          };
+          setWithdrawStatus(temp);
+          return temp;
         }
 
         console.log("Cancelling withdraw queue ...");
@@ -1713,10 +1745,11 @@ export const BoringVaultV1Provider: React.FC<{
           signer
         );
 
-        setWithdrawStatus({
+        const temp = {
           initiated: true,
           loading: true,
-        });
+        };
+        setWithdrawStatus(temp);
 
         try {
           // Call API for relevant metadata
@@ -1752,13 +1785,14 @@ export const BoringVaultV1Provider: React.FC<{
 
           if (!request) {
             console.error("No request found for token", token.address);
-            setWithdrawStatus({
+            const tempError = {
               initiated: false,
               loading: false,
               success: false,
               error: "No request found for token",
-            });
-            return withdrawStatus;
+            };
+            setWithdrawStatus(tempError);
+            return tempError;
           }
 
           const metadata = request["metadata"];
@@ -1783,35 +1817,37 @@ export const BoringVaultV1Provider: React.FC<{
           console.log("Withdraw Cancelled in tx: ", cancelReceipt);
           if (!cancelReceipt.hash) {
             console.error("Withdraw Cancel failed");
-            setWithdrawStatus({
+            const tempError = {
               initiated: false,
               loading: false,
               success: false,
               error: "Withdraw Cancel reverted",
-            });
-            return withdrawStatus;
+            };
+            setWithdrawStatus(tempError);
+            return tempError;
           }
           console.log("Withdraw Cancel hash: ", cancelReceipt.hash);
 
           // Set status
-          setWithdrawStatus({
+          const tempSuccess = {
             initiated: false,
             loading: false,
             success: true,
             tx_hash: cancelReceipt.hash,
-          });
+          };
+          setWithdrawStatus(tempSuccess);
+          return tempSuccess;
         } catch (error: any) {
           console.error("Error cancelling withdraw", error);
-          setWithdrawStatus({
+          const tempError = {
             initiated: false,
             loading: false,
             success: false,
             error: (error as Error).message,
-          });
-          return withdrawStatus;
+          };
+          setWithdrawStatus(tempError);
+          return tempError;
         }
-
-        return withdrawStatus;
       },
       [
         boringQueueEthersContract,
@@ -1909,20 +1945,22 @@ export const BoringVaultV1Provider: React.FC<{
       ) => {
         if (!isBoringV1ContextReady || !signer || !incentiveDistributorEthersContract) {
           console.error("Contracts or signer not ready for merkle claim");
-          setMerkleClaimStatus({
+          const temp = {
             initiated: false,
             loading: false,
             success: false,
             error: "Contracts or signer not ready",
-          });
-          return merkleClaimStatus;
+          };
+          setMerkleClaimStatus(temp);
+          return temp;
         }
 
         console.log("Claiming merkle rewards...");
-        setMerkleClaimStatus({
+        const temp = {
           initiated: true,
           loading: true,
-        });
+        };
+        setMerkleClaimStatus(temp);
 
         try {
           const userAddress = await signer.getAddress();
@@ -1958,32 +1996,35 @@ export const BoringVaultV1Provider: React.FC<{
           console.log("Merkle claimed in tx: ", receipt);
           if (!receipt.hash) {
             console.error("Merkle claim failed");
-            setMerkleClaimStatus({
+            const tempError = {
               initiated: false,
               loading: false,
               success: false,
               error: "Merkle claim reverted",
-            });
-            return merkleClaimStatus;
+            };
+            setMerkleClaimStatus(tempError);
+            return tempError;
           }
 
-          setMerkleClaimStatus({
+          const tempSuccess = {
             initiated: false,
             loading: false,
             success: true,
             tx_hash: receipt.hash,
-          });
+          };
+          setMerkleClaimStatus(tempSuccess);
+          return tempSuccess;
         } catch (error: any) {
           console.error("Error claiming merkle rewards", error);
-          setMerkleClaimStatus({
+          const tempError = {
             initiated: false,
             loading: false,
             success: false,
             error: (error as Error).message,
-          });
+          };
+          setMerkleClaimStatus(tempError);
+          return tempError;
         }
-
-        return merkleClaimStatus;
       },
       [isBoringV1ContextReady, incentiveDistributorEthersContract]
     );
