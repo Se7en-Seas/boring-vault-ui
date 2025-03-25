@@ -247,8 +247,8 @@ const BoringQueueButton: React.FC<BoringQueueButtonProps> = ({
                 }
                 isDisabled={
                   !withdrawAmount ||
-                  !discountPercent ||
-                  !daysValid ||
+                  //? !discountPercent ||
+                  //? !daysValid ||
                   parseFloat(withdrawAmount) > balance
                 }
                 {...withdrawButtonProps}

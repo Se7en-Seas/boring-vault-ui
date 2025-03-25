@@ -109,8 +109,8 @@ interface BoringVaultV1ContextProps {
     signer: JsonRpcSigner,
     amount: string,
     token: Token,
-    discountPercent: string,
-    daysValid: string
+    discountPercent?: string,
+    daysValid?: string
   ) => Promise<WithdrawStatus>;
   boringQueueCancel: (
     signer: JsonRpcSigner,
@@ -1488,8 +1488,8 @@ export const BoringVaultV1Provider: React.FC<{
         signer: JsonRpcSigner,
         amountHumanReadable: string,
         token: Token,
-        discountPercent: string,
-        daysValid: string
+        discountPercent?: string,
+        daysValid?: string
       ) => {
 
         if (
@@ -1539,11 +1539,7 @@ export const BoringVaultV1Provider: React.FC<{
         const assetParams = await fetchBoringQueueAssetParams(token);
         console.log("Asset params: ", assetParams);
 
-
-
-
-        // !!!! VERIFY DISCOUNT LOOKS GUCCI and verify expiration is gucci
-        // Verify minimumShares is gucci
+        //! Verify minimumShares is gucci
         if (Number(assetParams.minimumShares) > Number(amountHumanReadable) * 10 ** vaultDecimals) {
           console.error("Minimum shares is greater than amount to withdraw");
           const tempError = {
@@ -1556,8 +1552,12 @@ export const BoringVaultV1Provider: React.FC<{
           return tempError;
         }
 
-        // Verify minimumSecondsToDeadline
-        if (Number(daysValid) * 86400 < assetParams.minimumSecondsToDeadline) {
+        //! Verify minimumSecondsToDeadline
+        // Use default days valid from asset params if none was set
+        if (!daysValid) {
+          daysValid = (BigNumber(assetParams.minimumSecondsToDeadline).dividedBy(86400)).toString();
+          console.warn("No days valid set, using default minimum seconds to deadline: ", daysValid, "days");
+        } else if (Number(daysValid) * 86400 < assetParams.minimumSecondsToDeadline) {
           console.error(`Minimum seconds to deadline is too low, must be ${assetParams.minimumSecondsToDeadline} seconds (${assetParams.minimumSecondsToDeadline / 86400} days).`);
           const tempError = {
             initiated: false,
@@ -1569,7 +1569,13 @@ export const BoringVaultV1Provider: React.FC<{
           return tempError;
         }
 
-        // Verify discount
+        //! Verify discount
+        // Use default min discount from asset params if none was set
+        if (!discountPercent) {
+          discountPercent = (BigNumber(assetParams.minDiscount).dividedBy(100)).toString();
+          console.warn("No discount percent set, using default min discount: ", discountPercent, "%");
+        }
+
         let formattedDiscountPercent = new BigNumber(discountPercent).multipliedBy(
           new BigNumber(100) // 1% = 100
         )
