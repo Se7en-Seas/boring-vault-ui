@@ -14,7 +14,8 @@ import {
   WithdrawQueueStatus,
   Token,
   BoringQueueStatus,
-  MerkleClaimStatus
+  MerkleClaimStatus,
+  BoringQueueAssetParams
 } from "../../types";
 import BoringVaultABI from "../../abis/v1/BoringVaultABI";
 import BoringTellerABI from "../../abis/v1/BoringTellerABI";
@@ -118,6 +119,9 @@ interface BoringVaultV1ContextProps {
   boringQueueStatuses: (
     signer: JsonRpcSigner
   ) => Promise<BoringQueueStatus[]>;
+  fetchBoringQueueAssetParams: (
+    token: Token
+  ) => Promise<BoringQueueAssetParams>;
   /* Statuses */
   depositStatus: DepositStatus;
   withdrawStatus: WithdrawStatus;
@@ -1487,6 +1491,7 @@ export const BoringVaultV1Provider: React.FC<{
         discountPercent: string,
         daysValid: string
       ) => {
+
         if (
           !boringQueueEthersContract ||
           !vaultEthersContract ||
@@ -1513,7 +1518,82 @@ export const BoringVaultV1Provider: React.FC<{
           return temp;
         }
 
-        console.log("Queueing boring withdraw ...");
+        // Check if user unlock time has passed
+        const userUnlockTime = await fetchUserUnlockTime(await signer.getAddress());
+        console.log("User unlock time: ", userUnlockTime);
+        // Compare to current time
+        const currentTime = new Date().getTime() / 1000;
+        console.log("Current time: ", currentTime);
+        if (currentTime <= userUnlockTime) {
+          console.log(`User shares are locked until ${new Date(userUnlockTime * 1000).toLocaleString()}`);
+          const tempError = {
+            initiated: false,
+            loading: false,
+            success: false,
+            error: `User shares are locked until ${new Date(userUnlockTime * 1000).toLocaleString()}`,
+          };
+          setWithdrawStatus(tempError);
+          return tempError;
+        }
+
+        const assetParams = await fetchBoringQueueAssetParams(token);
+        console.log("Asset params: ", assetParams);
+
+
+
+
+        // !!!! VERIFY DISCOUNT LOOKS GUCCI and verify expiration is gucci
+        // Verify minimumShares is gucci
+        if (Number(assetParams.minimumShares) > Number(amountHumanReadable) * 10 ** vaultDecimals) {
+          console.error("Minimum shares is greater than amount to withdraw");
+          const tempError = {
+            initiated: false,
+            loading: false,
+            success: false,
+            error: `You must withdraw at least ${assetParams.minimumShares / 10 ** vaultDecimals} shares (vault tokens)`,
+          };
+          setWithdrawStatus(tempError);
+          return tempError;
+        }
+
+        // Verify minimumSecondsToDeadline
+        if (Number(daysValid) * 86400 < assetParams.minimumSecondsToDeadline) {
+          console.error(`Minimum seconds to deadline is too low, must be ${assetParams.minimumSecondsToDeadline} seconds (${assetParams.minimumSecondsToDeadline / 86400} days).`);
+          const tempError = {
+            initiated: false,
+            loading: false,
+            success: false,
+            error: `Days valid must be at least ${assetParams.minimumSecondsToDeadline} seconds (${assetParams.minimumSecondsToDeadline / 86400} days).`,
+          };
+          setWithdrawStatus(tempError);
+          return tempError;
+        }
+
+        // Verify discount
+        let formattedDiscountPercent = new BigNumber(discountPercent).multipliedBy(
+          new BigNumber(100) // 1% = 100
+        )
+
+        // Disct must be a min of 1 bps
+        if (formattedDiscountPercent.lt(1)) {
+          // Set discount to 1 bps, and warn it was too low
+          console.warn("Discount percent was too low, setting to 1 bps");
+          formattedDiscountPercent = new BigNumber(1);
+        }
+
+        // Verify min and max otherwise
+        if (formattedDiscountPercent.lt(assetParams.minDiscount) || formattedDiscountPercent.gt(assetParams.maxDiscount)) {
+          console.error(`Discount percent must be between ${assetParams.minDiscount} and ${assetParams.maxDiscount}`);
+          const tempError = {
+            initiated: false,
+            loading: false,
+            success: false,
+            error: `Discount percent must be between ${assetParams.minDiscount / 100}% and ${assetParams.maxDiscount / 100}% (currently ${formattedDiscountPercent.toNumber() / 100}%)`,
+          };
+          setWithdrawStatus(tempError);
+          return tempError;
+        }
+
         const boringQueueContractWithSigner = new Contract(
           boringQueueContract!,
           BoringQueueABI,
@@ -1572,22 +1652,6 @@ export const BoringVaultV1Provider: React.FC<{
             Math.floor(Date.now() / 1000) +
             Math.floor(daysValidSeconds.toNumber())
           ).decimalPlaces(0, BigNumber.ROUND_DOWN);
-
-          const formattedDiscountPercent = new BigNumber(discountPercent).multipliedBy(
-            new BigNumber(10000) // 1% = 10000
-          )
-
-          // Disct can be a min of 1 bps
-          if (formattedDiscountPercent.lt(1)) {
-            const tempError = {
-              initiated: false,
-              loading: false,
-              success: false,
-              error: "Discount percent must be at least 1 bps",
-            };
-            setWithdrawStatus(tempError);
-            return tempError;
-          }
 
           // Generate permit data
           const userAddress = await signer.getAddress();
@@ -1970,7 +2034,7 @@ export const BoringVaultV1Provider: React.FC<{
             IncentiveDistributorABI,
             signer
           );
-          
+
           const ensureHexPrefix = (value: string) =>
             value?.startsWith("0x") ? value : `0x${value}`;
 
@@ -2027,6 +2091,35 @@ export const BoringVaultV1Provider: React.FC<{
         }
       },
       [isBoringV1ContextReady, incentiveDistributorEthersContract]
+    );
+
+    const fetchBoringQueueAssetParams = useCallback(
+      async (token: Token) => {
+        if (!boringQueueEthersContract) {
+          console.error("Boring queue contract not initialized");
+          return Promise.reject("Boring queue contract not initialized");
+        }
+        const rawAssetParams = await boringQueueEthersContract.withdrawAssets(token.address);
+
+        if (!rawAssetParams || rawAssetParams.length === 0) {
+          console.error("Asset not supported for queue");
+          return Promise.reject("Asset not supported for queue");
+        }
+
+        // Destructure and name the values for clarity
+        const assetParams = {
+          allowWithdraws: rawAssetParams[0],
+          secondsToMaturity: Number(rawAssetParams[1]),
+          minimumSecondsToDeadline: Number(rawAssetParams[2]),
+          minDiscount: Number(rawAssetParams[3]),
+          maxDiscount: Number(rawAssetParams[4]),
+          minimumShares: Number(rawAssetParams[5]),
+        } as BoringQueueAssetParams;
+
+        console.log("Asset params: ", assetParams);
+        return assetParams;
+      },
+      [boringQueueEthersContract]
     );
 
     // Add this new method
@@ -2088,6 +2181,7 @@ export const BoringVaultV1Provider: React.FC<{
           queueBoringWithdraw,
           boringQueueCancel,
           boringQueueStatuses,
+          fetchBoringQueueAssetParams,
           depositStatus,
           withdrawStatus,
           isBoringV1ContextReady,

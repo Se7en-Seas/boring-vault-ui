@@ -72,3 +72,12 @@ export interface MerkleClaimStatus {
   error?: string;
   tx_hash?: string;
 };
+
+export interface BoringQueueAssetParams {
+  allowWithdraws: boolean,
+  secondsToMaturity: number,
+  minimumSecondsToDeadline: number,
+  minDiscount: number,
+  maxDiscount: number,
+  minimumShares: number
+}
