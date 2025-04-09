@@ -654,14 +654,14 @@ export const BoringVaultV1Provider: React.FC<{
       value,
       signer,
       spender,
-      tokenAddress,
       deadline,
+      tokenAddress,
     }: {
+      value: number;
+      deadline: number;
+      spender: string;
       signer: JsonRpcSigner;
       tokenAddress: `0x${string}`;
-      value: string;
-      spender: string;
-      deadline: string;
     }): Promise<{ v: number; r: string; s: string }> => {
       const userAddress = await signer.getAddress();
 
@@ -672,14 +672,13 @@ export const BoringVaultV1Provider: React.FC<{
       );
 
       const name = await vaultContractWithSigner.name();
-      const rawNonce = await vaultContractWithSigner.nonces(userAddress);
       const chainId = await signer.provider.getNetwork().then(network => Number(network.chainId));
 
       const domain: TypedDataDomain = {
         name,
         chainId,
         version: "1",
-        verifyingContract: tokenAddress,
+        verifyingContract: tokenAddress as `0x${string}`,
       };
 
       const types = {
@@ -687,23 +686,26 @@ export const BoringVaultV1Provider: React.FC<{
           { name: "owner", type: "address" },
           { name: "spender", type: "address" },
           { name: "value", type: "uint256" },
-          { name: "nonce", type: "uint256" },
           { name: "deadline", type: "uint256" },
         ],
       };
 
-      const nonce = String(rawNonce);
       const message = {
         owner: userAddress,
         spender,
         value,
-        nonce,
         deadline,
       };
 
+      console.log('\n ~ name:', name);
+      console.log('\n ~ chainId:', chainId);
+      console.log('\n ~ domain:', domain);
+      console.log('\n ~ types:', types);
+      console.log('\n ~ message:', message);
+
       try {
         const signature = await signer.signTypedData(domain, types, message);
-        return Signature.from(signature);
+        return splitSignature(signature);
       } catch (error) {
         console.error("Error signing EIP-2612 permit:", error);
         throw new Error(`Failed to sign permit: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -718,55 +720,27 @@ export const BoringVaultV1Provider: React.FC<{
         signer: JsonRpcSigner,
         amountHumanReadable: string,
         token: Token,
-        deadline?: number
+        initialDeadline?: number
       ): Promise<DepositStatus> => {
         console.log("DEPOSIT WITH PERMIT");
 
         // Calculate maximum deadline as current timestamp + 15 minutes (900 seconds)
         const MAX_DEADLINE = Math.floor(Date.now() / 1000) + 900;
-
-        // Use provided deadline or fall back to maximum deadline
-        const resolvedDeadline = deadline ?? MAX_DEADLINE;
+        const deadline = initialDeadline ?? MAX_DEADLINE;
 
         // Validate context and inputs
-        if (!vaultEthersContract || !isBoringV1ContextReady || !decimals || !signer || !tellerContract) {
+        if (!vaultEthersContract || !isBoringV1ContextReady || !decimals || !signer || !tellerContract || !vaultContract) {
           const error = {
             initiated: false,
             loading: false,
             success: false,
-            error: "Contracts, user, or teller contract not ready",
-          };
-          setDepositStatus(error);
-          return error;
-        }
-
-        // Ensure amount is a valid positive number
-        if (!amountHumanReadable || isNaN(parseFloat(amountHumanReadable)) || parseFloat(amountHumanReadable) <= 0) {
-          const error = {
-            initiated: false,
-            loading: false,
-            success: false,
-            error: "Invalid deposit amount"
-          };
-          setDepositStatus(error);
-          return error;
-        }
-
-        // Validate that the deadline is in the future to prevent immediate transaction failure
-        const currentTime = Math.floor(Date.now() / 1000);
-        if (resolvedDeadline <= currentTime) {
-          const error = {
-            initiated: false,
-            loading: false,
-            success: false,
-            error: "Deadline must be in the future",
+            error: "Contracts, or user not ready",
           };
           setDepositStatus(error);
           return error;
         }
 
         try {
-          // Set the status to loading
           setDepositStatus({
             initiated: true,
             loading: true,
@@ -793,16 +767,15 @@ export const BoringVaultV1Provider: React.FC<{
           const amountBN = parseUnits(amountHumanReadable, token.decimals);
 
           // Format amount and deadline as strings without decimals
-          const value = Number(amountBN).toFixed(0);
-          const deadline = resolvedDeadline.toFixed(0);
+          const value = Number(amountBN);
 
-          // Generate EIP-2612 permit signature to authorize token spending without a separate approval transaction
+          // Generate EIP-2612 permit signature
           const { v, r, s } = await signPermit({
+            value,
             signer,
             spender: tellerContract,
-            tokenAddress: token.address as `0x${string}`,
-            value,
             deadline,
+            tokenAddress: token.address as `0x${string}`,
           });
 
           // Set up Teller contract
@@ -823,11 +796,10 @@ export const BoringVaultV1Provider: React.FC<{
             r,
             s
           );
-          console.log('\n ~ depositWithPermitTx:', depositWithPermitTx)
 
           // Wait for confirmation
-          const receipt: ContractTransactionReceipt = await depositWithPermitTx.wait();
-          console.log('\n ~ receipt:', receipt)
+          const receipt = await depositWithPermitTx.wait();
+          console.log("Deposit with permit tx: ", receipt);
 
           if (!receipt.hash) {
             const error = {
@@ -840,15 +812,15 @@ export const BoringVaultV1Provider: React.FC<{
             return error;
           }
 
-          const tmpSuccess = {
+          const success = {
             initiated: false,
             loading: false,
             success: true,
             tx_hash: receipt.hash,
           };
 
-          setDepositStatus(tmpSuccess);
-          return tmpSuccess;
+          setDepositStatus(success);
+          return success;
         } catch (e: unknown) {
           const errorMessage = e instanceof Error ? e.message : "Unknown error";
           console.error("depositWithPermit failed:", errorMessage);
@@ -868,8 +840,7 @@ export const BoringVaultV1Provider: React.FC<{
         decimals,
         ethersProvider,
         isBoringV1ContextReady,
-        vaultContract,
-        deposit,
+        vaultContract
       ]
     );
 
