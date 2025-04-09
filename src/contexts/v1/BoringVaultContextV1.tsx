@@ -725,8 +725,8 @@ export const BoringVaultV1Provider: React.FC<{
       ): Promise<DepositStatus> => {
         console.log("DEPOSIT WITH PERMIT");
 
-        // Calculate maximum deadline as current timestamp + 1 hour (3600 seconds)
-        const MAX_DEADLINE = Math.floor(Date.now() / 1000) + 3600;
+        // Calculate maximum deadline as current timestamp + 15 minutes (900 seconds)
+        const MAX_DEADLINE = Math.floor(Date.now() / 1000) + 900;
 
         // Use provided deadline or fall back to maximum deadline
         const resolvedDeadline = deadline ?? MAX_DEADLINE;
