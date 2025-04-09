@@ -659,31 +659,29 @@ export const BoringVaultV1Provider: React.FC<{
     }: {
       signer: JsonRpcSigner;
       tokenAddress: `0x${string}`;
-      value: bigint;
+      value: string;
       spender: string;
-      deadline: number;
+      deadline: string;
     }): Promise<{ v: number; r: string; s: string }> => {
       const userAddress = await signer.getAddress();
+      const verifyingContract = vaultContract;
 
-      const erc20ContractWithSigner = new Contract(
-        tokenAddress,
-        [
-          'function name() view returns (string)',
-          'function nonces(address owner) view returns (uint256)',
-          'function permit(address owner,address spender,uint256 value,uint256 deadline,uint8 v,bytes32 r,bytes32 s)',
-        ],
+      const vaultContractWithSigner = new Contract(
+        tokenAddress, // or verifyingContract,
+        BoringVaultABI,
         signer
       );
 
-      const name = await erc20ContractWithSigner.name();
-      const nonce = await erc20ContractWithSigner.nonces(userAddress);
+      const name = await vaultContractWithSigner.name();
+      const rawNonce = await vaultContractWithSigner.nonces(userAddress);
       const chainId = await signer.provider.getNetwork().then(network => Number(network.chainId));
 
       const domain: TypedDataDomain = {
         name,
         chainId,
         version: "1",
-        verifyingContract: tokenAddress
+        verifyingContract: tokenAddress,
+        // verifyingContract: verifyingContract as `0x${string}` // or verifyingContract
       };
 
       const types = {
@@ -696,12 +694,13 @@ export const BoringVaultV1Provider: React.FC<{
         ],
       };
 
+      const nonce = String(rawNonce);
       const message = {
+        owner: userAddress,
+        spender,
         value,
         nonce,
-        spender,
         deadline,
-        owner: userAddress,
       };
 
       try {
@@ -795,17 +794,20 @@ export const BoringVaultV1Provider: React.FC<{
             return error;
           }
 
-          // Generate permit signature
+          // Format amount and deadline as strings without decimals
+          const value = Number(amountBN).toFixed(0);
+          const deadline = resolvedDeadline.toFixed(0);
+
+          // Generate EIP-2612 permit signature to authorize token spending without a separate approval transaction
           const { v, r, s } = await signPermit({
             signer,
             spender: tellerContract,
             tokenAddress: token.address as `0x${string}`,
-            value: amountBN,
-            deadline: resolvedDeadline,
+            value,
+            deadline,
           });
 
           // Set up Teller contract
-          const minimumMint = BigInt(0);
           const tellerContractWithSigner = new Contract(
             tellerContract,
             BoringTellerABI,
@@ -813,16 +815,15 @@ export const BoringVaultV1Provider: React.FC<{
           );
 
           // Deposit with permit
+          const minimumMint = 0;
           const depositWithPermitTx = await tellerContractWithSigner.depositWithPermit(
             token.address,
-            amountBN,
+            value,
             minimumMint,
-            resolvedDeadline,
+            deadline,
             v,
             r,
-            s, {
-              gasLimit: 1000000
-            }
+            s
           );
           console.log('\n ~ depositWithPermitTx:', depositWithPermitTx)
 
