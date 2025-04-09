@@ -665,7 +665,7 @@ export const BoringVaultV1Provider: React.FC<{
     }): Promise<{ v: number; r: string; s: string }> => {
       const userAddress = await signer.getAddress();
 
-      const vaultContractWithSigner = new Contract(
+      const erc20ContractWithSigner = new Contract(
         tokenAddress,
         [
           'function name() view returns (string)',
@@ -675,8 +675,8 @@ export const BoringVaultV1Provider: React.FC<{
         signer
       );
 
-      const name = await vaultContractWithSigner.name();
-      const nonce = await vaultContractWithSigner.nonces(userAddress);
+      const name = await erc20ContractWithSigner.name();
+      const nonce = await erc20ContractWithSigner.nonces(userAddress);
       const chainId = await signer.provider.getNetwork().then(network => Number(network.chainId));
 
       const domain: TypedDataDomain = {
@@ -745,7 +745,12 @@ export const BoringVaultV1Provider: React.FC<{
 
         // Ensure amount is a valid positive number
         if (!amountHumanReadable || isNaN(parseFloat(amountHumanReadable)) || parseFloat(amountHumanReadable) <= 0) {
-          const error = { initiated: false, loading: false, success: false, error: "Invalid deposit amount" };
+          const error = {
+            initiated: false,
+            loading: false,
+            success: false,
+            error: "Invalid deposit amount"
+          };
           setDepositStatus(error);
           return error;
         }
@@ -763,9 +768,17 @@ export const BoringVaultV1Provider: React.FC<{
           return error;
         }
 
-        setDepositStatus({ initiated: true, loading: true });
 
         try {
+          // Set the status to loading
+          setDepositStatus({
+            initiated: true,
+            loading: true,
+            success: false,
+            error: undefined
+          });
+
+          // Parse the amount with decimals
           const amountBN = parseUnits(amountHumanReadable, token.decimals);
 
           // Check if the token supports EIP-2612 permits
