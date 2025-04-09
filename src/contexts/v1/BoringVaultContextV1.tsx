@@ -755,7 +755,7 @@ export const BoringVaultV1Provider: React.FC<{
           return error;
         }
 
-        // Current time in seconds + buffer to ensure deadline is future
+        // Validate that the deadline is in the future to prevent immediate transaction failure
         const currentTime = Math.floor(Date.now() / 1000);
         if (resolvedDeadline <= currentTime) {
           const error = {
@@ -768,7 +768,6 @@ export const BoringVaultV1Provider: React.FC<{
           return error;
         }
 
-
         try {
           // Set the status to loading
           setDepositStatus({
@@ -778,24 +777,22 @@ export const BoringVaultV1Provider: React.FC<{
             error: undefined
           });
 
-          // Parse the amount with decimals
+          // Convert human-readable amount to token's base units
           const amountBN = parseUnits(amountHumanReadable, token.decimals);
 
           // Check if the token supports EIP-2612 permits
           const { hasPermit } = await checkContractForPermit(signer.provider, token);
-          console.log('\n ~ hasPermit:', hasPermit)
 
-          // Token does not support EIP-2612 permits
+          // Token doesn't implement EIP-2612 permit functionality, return error
           if (hasPermit === 'No') {
-            console.error("Token does not support EIP-2612 permits, falling back to regular deposit");
-            const tempError = {
+            const error = {
               initiated: false,
               loading: false,
               success: false,
               error: "Token does not support EIP-2612 permits",
             };
-            setDepositStatus(tempError);
-            return tempError;
+            setDepositStatus(error);
+            return error;
           }
 
           // Generate permit signature
@@ -806,9 +803,6 @@ export const BoringVaultV1Provider: React.FC<{
             value: amountBN,
             deadline: resolvedDeadline,
           });
-          console.log('\n ~ v:', v)
-          console.log('\n ~ r:', r)
-          console.log('\n ~ s:', s)
 
           // Set up Teller contract
           const minimumMint = BigInt(0);
