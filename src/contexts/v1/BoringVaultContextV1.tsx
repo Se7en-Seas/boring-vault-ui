@@ -672,13 +672,15 @@ export const BoringVaultV1Provider: React.FC<{
         [
           'function name() view returns (string)',
           'function version() view returns (string)',
+          'function nonces(address owner) view returns (uint256)',
         ],
         signer
       );
 
       // Get token details
-      const [name, version, chainId] = await Promise.all([
+      const [name, nonce, version, chainId] = await Promise.all([
         tokenContract.name(),
+        tokenContract.nonces(userAddress),
         tokenContract.version().catch(() => '1'),
         signer.provider.getNetwork().then(network => Number(network.chainId))
       ]);
@@ -697,6 +699,7 @@ export const BoringVaultV1Provider: React.FC<{
           { name: "owner", type: "address" },
           { name: "spender", type: "address" },
           { name: "value", type: "uint256" },
+          { name: 'nonce', type: 'uint256' },
           { name: "deadline", type: "uint256" },
         ],
       };
@@ -705,15 +708,9 @@ export const BoringVaultV1Provider: React.FC<{
         owner: userAddress,
         spender,
         value,
+        nonce,
         deadline,
       };
-
-      console.log("name", name);
-      console.log("version", version);
-      console.log("chainId", chainId);
-      console.log("domain", domain);
-      console.log("types", types);
-      console.log("message", message);
 
       try {
         const signature = await signer.signTypedData(domain, types, message);
@@ -734,8 +731,6 @@ export const BoringVaultV1Provider: React.FC<{
         token: Token,
         initialDeadline?: number
       ): Promise<DepositStatus> => {
-        console.log("DEPOSIT WITH PERMIT");
-
         // Calculate maximum deadline as current timestamp + 15 minutes (900 seconds)
         const MAX_DEADLINE = Math.floor(Date.now() / 1000) + 900;
         const deadline = initialDeadline ?? MAX_DEADLINE;
@@ -786,9 +781,6 @@ export const BoringVaultV1Provider: React.FC<{
             spender: vaultContract,
             tokenAddress: token.address as `0x${string}`,
           });
-          console.log("v", v);
-          console.log("r", r);
-          console.log("s", s);
 
           // Set up Teller contract
           const tellerContractWithSigner = new Contract(
