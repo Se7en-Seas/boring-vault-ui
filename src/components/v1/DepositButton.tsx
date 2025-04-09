@@ -74,6 +74,7 @@ const DepositButton: React.FC<DepositButtonProps> = ({
     ethersProvider,
     deposit,
     depositStatus,
+    depositWithPermit
   } = useBoringVaultV1();
 
   const [selectedToken, setSelectedToken] = React.useState<Token>(
@@ -204,12 +205,20 @@ const DepositButton: React.FC<DepositButtonProps> = ({
               <Button
                 mt={4}
                 onClick={() => deposit(signer!, depositAmount, selectedToken)}
-                isDisabled={
-                  !depositAmount || parseFloat(depositAmount) > balance
-                }
+                isDisabled={!depositAmount || parseFloat(depositAmount) > balance}
                 {...depositButtonProps}
               >
                 Deposit
+              </Button>
+
+              <Button
+                mt={4}
+                onClick={() => depositWithPermit(signer!, depositAmount, selectedToken)}
+                isDisabled={!depositAmount || parseFloat(depositAmount) > balance}
+                {...depositButtonProps}
+
+              >
+                Deposit with Permit
               </Button>
             </Flex>
           </ModalBody>

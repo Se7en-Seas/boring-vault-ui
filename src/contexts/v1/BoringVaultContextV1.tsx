@@ -37,6 +37,7 @@ import BoringDelayWithdrawContractABI from "../../abis/v1/BoringDelayWithdrawCon
 import { ethers } from 'ethers';
 import { splitSignature } from "@ethersproject/bytes";
 import { checkContractForPermit } from "../../utils/permit/check-contract-for-pemit";
+import { USDC_ABI } from "./USDC-abi";
 
 const SEVEN_SEAS_BASE_API_URL = "https://api.sevenseas.capital";
 
@@ -665,8 +666,6 @@ export const BoringVaultV1Provider: React.FC<{
     }): Promise<{ v: number; r: string; s: string }> => {
       const userAddress = await signer.getAddress();
 
-      // THOUGHT 💡 -> Maybe define an implementation based on token address? Or different depositWithPermit for different tokens?
-
       // Get token contract
       const tokenContract = new Contract(
         tokenAddress,
@@ -784,9 +783,12 @@ export const BoringVaultV1Provider: React.FC<{
             value,
             signer,
             deadline,
-            spender: tellerContract,
+            spender: vaultContract,
             tokenAddress: token.address as `0x${string}`,
           });
+          console.log("v", v);
+          console.log("r", r);
+          console.log("s", s);
 
           // Set up Teller contract
           const tellerContractWithSigner = new Contract(
