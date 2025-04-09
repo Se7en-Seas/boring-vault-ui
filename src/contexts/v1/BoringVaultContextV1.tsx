@@ -657,7 +657,7 @@ export const BoringVaultV1Provider: React.FC<{
       deadline,
       tokenAddress,
     }: {
-      value: number;
+      value: bigint;
       deadline: number;
       spender: string;
       signer: JsonRpcSigner;
@@ -665,22 +665,34 @@ export const BoringVaultV1Provider: React.FC<{
     }): Promise<{ v: number; r: string; s: string }> => {
       const userAddress = await signer.getAddress();
 
-      const vaultContractWithSigner = new Contract(
+      // THOUGHT 💡 -> Maybe define an implementation based on token address? Or different depositWithPermit for different tokens?
+
+      // Get token contract
+      const tokenContract = new Contract(
         tokenAddress,
-        BoringVaultABI,
+        [
+          'function name() view returns (string)',
+          'function version() view returns (string)',
+        ],
         signer
       );
 
-      const name = await vaultContractWithSigner.name();
-      const chainId = await signer.provider.getNetwork().then(network => Number(network.chainId));
+      // Get token details
+      const [name, version, chainId] = await Promise.all([
+        tokenContract.name(),
+        tokenContract.version().catch(() => '1'),
+        signer.provider.getNetwork().then(network => Number(network.chainId))
+      ]);
 
+      // Build domain separator
       const domain: TypedDataDomain = {
         name,
+        version,
         chainId,
-        version: "1",
-        verifyingContract: tokenAddress as `0x${string}`,
+        verifyingContract: tokenAddress,
       };
 
+      // Standard EIP-2612 types
       const types = {
         Permit: [
           { name: "owner", type: "address" },
@@ -697,11 +709,12 @@ export const BoringVaultV1Provider: React.FC<{
         deadline,
       };
 
-      console.log('\n ~ name:', name);
-      console.log('\n ~ chainId:', chainId);
-      console.log('\n ~ domain:', domain);
-      console.log('\n ~ types:', types);
-      console.log('\n ~ message:', message);
+      console.log("name", name);
+      console.log("version", version);
+      console.log("chainId", chainId);
+      console.log("domain", domain);
+      console.log("types", types);
+      console.log("message", message);
 
       try {
         const signature = await signer.signTypedData(domain, types, message);
@@ -764,17 +777,14 @@ export const BoringVaultV1Provider: React.FC<{
           }
 
           // Convert human-readable amount to token's base units
-          const amountBN = parseUnits(amountHumanReadable, token.decimals);
-
-          // Format amount and deadline as strings without decimals
-          const value = Number(amountBN);
+          const value = parseUnits(amountHumanReadable, token.decimals);
 
           // Generate EIP-2612 permit signature
           const { v, r, s } = await signPermit({
             value,
             signer,
-            spender: tellerContract,
             deadline,
+            spender: tellerContract,
             tokenAddress: token.address as `0x${string}`,
           });
 
@@ -824,14 +834,15 @@ export const BoringVaultV1Provider: React.FC<{
         } catch (e: unknown) {
           const errorMessage = e instanceof Error ? e.message : "Unknown error";
           console.error("depositWithPermit failed:", errorMessage);
-          const tempError = {
+
+          const error = {
             initiated: false,
             loading: false,
             success: false,
             error: errorMessage,
           };
-          setDepositStatus(tempError);
-          return tempError;
+          setDepositStatus(error);
+          return error;
         }
       },
       [
