@@ -732,12 +732,12 @@ export const BoringVaultV1Provider: React.FC<{
         const resolvedDeadline = deadline ?? MAX_DEADLINE;
 
         // Validate context and inputs
-        if (!vaultEthersContract || !isBoringV1ContextReady || !decimals || !signer) {
+        if (!vaultEthersContract || !isBoringV1ContextReady || !decimals || !signer || !tellerContract) {
           const error = {
             initiated: false,
             loading: false,
             success: false,
-            error: "Contracts, user, or lens not ready",
+            error: "Contracts, user, or teller contract not ready",
           };
           setDepositStatus(error);
           return error;
