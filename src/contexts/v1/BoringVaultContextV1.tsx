@@ -664,10 +664,9 @@ export const BoringVaultV1Provider: React.FC<{
       deadline: string;
     }): Promise<{ v: number; r: string; s: string }> => {
       const userAddress = await signer.getAddress();
-      const verifyingContract = vaultContract;
 
       const vaultContractWithSigner = new Contract(
-        tokenAddress, // or verifyingContract,
+        tokenAddress,
         BoringVaultABI,
         signer
       );
@@ -681,7 +680,6 @@ export const BoringVaultV1Provider: React.FC<{
         chainId,
         version: "1",
         verifyingContract: tokenAddress,
-        // verifyingContract: verifyingContract as `0x${string}` // or verifyingContract
       };
 
       const types = {
@@ -705,7 +703,7 @@ export const BoringVaultV1Provider: React.FC<{
 
       try {
         const signature = await signer.signTypedData(domain, types, message);
-        return splitSignature(signature);
+        return Signature.from(signature);
       } catch (error) {
         console.error("Error signing EIP-2612 permit:", error);
         throw new Error(`Failed to sign permit: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -776,9 +774,6 @@ export const BoringVaultV1Provider: React.FC<{
             error: undefined
           });
 
-          // Convert human-readable amount to token's base units
-          const amountBN = parseUnits(amountHumanReadable, token.decimals);
-
           // Check if the token supports EIP-2612 permits
           const { hasPermit } = await checkContractForPermit(signer.provider, token);
 
@@ -793,6 +788,9 @@ export const BoringVaultV1Provider: React.FC<{
             setDepositStatus(error);
             return error;
           }
+
+          // Convert human-readable amount to token's base units
+          const amountBN = parseUnits(amountHumanReadable, token.decimals);
 
           // Format amount and deadline as strings without decimals
           const value = Number(amountBN).toFixed(0);
