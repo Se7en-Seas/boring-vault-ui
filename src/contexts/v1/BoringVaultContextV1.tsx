@@ -31,10 +31,12 @@ import {
   ContractTransactionReceipt,
   Signature,
 } from "ethers";
-import { erc20Abi } from "viem";
+import { erc20Abi, parseUnits, type TypedDataDomain } from "viem";
 import BigNumber from "bignumber.js";
 import BoringDelayWithdrawContractABI from "../../abis/v1/BoringDelayWithdrawContractABI";
 import { ethers } from 'ethers';
+import { splitSignature } from "@ethersproject/bytes";
+import { checkContractForPermit } from "../../utils/permit/check-contract-for-pemit";
 
 const SEVEN_SEAS_BASE_API_URL = "https://api.sevenseas.capital";
 
@@ -65,6 +67,12 @@ interface BoringVaultV1ContextProps {
     signer: JsonRpcSigner,
     amount: string,
     token: Token
+  ) => Promise<DepositStatus>;
+  depositWithPermit: (
+    signer: JsonRpcSigner,
+    amountHumanReadable: string,
+    token: Token,
+    deadline?: number
   ) => Promise<DepositStatus>;
   previewDeposit: (
     amount: string,
@@ -636,6 +644,226 @@ export const BoringVaultV1Provider: React.FC<{
         decimals,
         ethersProvider,
         isBoringV1ContextReady,
+      ]
+    );
+
+    /**
+     * Creates an EIP-2612 permit signature to authorize token spending without a separate approve transaction
+     */
+    const signPermit = async ({
+      value,
+      signer,
+      spender,
+      tokenAddress,
+      deadline,
+    }: {
+      signer: JsonRpcSigner;
+      tokenAddress: `0x${string}`;
+      value: bigint;
+      spender: string;
+      deadline: number;
+    }): Promise<{ v: number; r: string; s: string }> => {
+      const userAddress = await signer.getAddress();
+
+      const vaultContractWithSigner = new Contract(
+        tokenAddress,
+        [
+          'function name() view returns (string)',
+          'function nonces(address owner) view returns (uint256)',
+          'function permit(address owner,address spender,uint256 value,uint256 deadline,uint8 v,bytes32 r,bytes32 s)',
+        ],
+        signer
+      );
+
+      const name = await vaultContractWithSigner.name();
+      const nonce = await vaultContractWithSigner.nonces(userAddress);
+      const chainId = await signer.provider.getNetwork().then(network => Number(network.chainId));
+
+      const domain: TypedDataDomain = {
+        name,
+        chainId,
+        version: "1",
+        verifyingContract: tokenAddress
+      };
+
+      const types = {
+        Permit: [
+          { name: "owner", type: "address" },
+          { name: "spender", type: "address" },
+          { name: "value", type: "uint256" },
+          { name: "nonce", type: "uint256" },
+          { name: "deadline", type: "uint256" },
+        ],
+      };
+
+      const message = {
+        value,
+        nonce,
+        spender,
+        deadline,
+        owner: userAddress,
+      };
+
+      try {
+        const signature = await signer.signTypedData(domain, types, message);
+        return splitSignature(signature);
+      } catch (error) {
+        console.error("Error signing EIP-2612 permit:", error);
+        throw new Error(`Failed to sign permit: ${error instanceof Error ? error.message : "Unknown error"}`);
+      }
+    };
+
+    /**
+     * Deposits funds using a permit signature to avoid a separate approval transaction
+     */
+    const depositWithPermit = useCallback(
+      async (
+        signer: JsonRpcSigner,
+        amountHumanReadable: string,
+        token: Token,
+        deadline?: number
+      ): Promise<DepositStatus> => {
+        console.log("DEPOSIT WITH PERMIT");
+
+        // Calculate maximum deadline as current timestamp + 1 hour (3600 seconds)
+        const MAX_DEADLINE = Math.floor(Date.now() / 1000) + 3600;
+
+        // Use provided deadline or fall back to maximum deadline
+        const resolvedDeadline = deadline ?? MAX_DEADLINE;
+
+        // Validate context and inputs
+        if (!vaultEthersContract || !isBoringV1ContextReady || !decimals || !signer) {
+          const error = {
+            initiated: false,
+            loading: false,
+            success: false,
+            error: "Contracts, user, or lens not ready",
+          };
+          setDepositStatus(error);
+          return error;
+        }
+
+        // Ensure amount is a valid positive number
+        if (!amountHumanReadable || isNaN(parseFloat(amountHumanReadable)) || parseFloat(amountHumanReadable) <= 0) {
+          const error = { initiated: false, loading: false, success: false, error: "Invalid deposit amount" };
+          setDepositStatus(error);
+          return error;
+        }
+
+        // Current time in seconds + buffer to ensure deadline is future
+        const currentTime = Math.floor(Date.now() / 1000);
+        if (resolvedDeadline <= currentTime) {
+          const error = {
+            initiated: false,
+            loading: false,
+            success: false,
+            error: "Deadline must be in the future",
+          };
+          setDepositStatus(error);
+          return error;
+        }
+
+        setDepositStatus({ initiated: true, loading: true });
+
+        try {
+          const amountBN = parseUnits(amountHumanReadable, token.decimals);
+
+          // Check if the token supports EIP-2612 permits
+          const { hasPermit } = await checkContractForPermit(signer.provider, token);
+          console.log('\n ~ hasPermit:', hasPermit)
+
+          // Token does not support EIP-2612 permits
+          if (hasPermit === 'No') {
+            console.error("Token does not support EIP-2612 permits, falling back to regular deposit");
+            const tempError = {
+              initiated: false,
+              loading: false,
+              success: false,
+              error: "Token does not support EIP-2612 permits",
+            };
+            setDepositStatus(tempError);
+            return tempError;
+          }
+
+          // Generate permit signature
+          const { v, r, s } = await signPermit({
+            signer,
+            spender: tellerContract,
+            tokenAddress: token.address as `0x${string}`,
+            value: amountBN,
+            deadline: resolvedDeadline,
+          });
+          console.log('\n ~ v:', v)
+          console.log('\n ~ r:', r)
+          console.log('\n ~ s:', s)
+
+          // Set up Teller contract
+          const minimumMint = BigInt(0);
+          const tellerContractWithSigner = new Contract(
+            tellerContract,
+            BoringTellerABI,
+            signer
+          );
+
+          // Deposit with permit
+          const depositWithPermitTx = await tellerContractWithSigner.depositWithPermit(
+            token.address,
+            amountBN,
+            minimumMint,
+            resolvedDeadline,
+            v,
+            r,
+            s, {
+              gasLimit: 1000000
+            }
+          );
+          console.log('\n ~ depositWithPermitTx:', depositWithPermitTx)
+
+          // Wait for confirmation
+          const receipt: ContractTransactionReceipt = await depositWithPermitTx.wait();
+          console.log('\n ~ receipt:', receipt)
+
+          if (!receipt.hash) {
+            const error = {
+              initiated: false,
+              loading: false,
+              success: false,
+              error: "Deposit transaction reverted",
+            };
+            setDepositStatus(error);
+            return error;
+          }
+
+          const tmpSuccess = {
+            initiated: false,
+            loading: false,
+            success: true,
+            tx_hash: receipt.hash,
+          };
+
+          setDepositStatus(tmpSuccess);
+          return tmpSuccess;
+        } catch (e: unknown) {
+          const errorMessage = e instanceof Error ? e.message : "Unknown error";
+          console.error("depositWithPermit failed:", errorMessage);
+          const tempError = {
+            initiated: false,
+            loading: false,
+            success: false,
+            error: errorMessage,
+          };
+          setDepositStatus(tempError);
+          return tempError;
+        }
+      },
+      [
+        vaultEthersContract,
+        tellerEthersContract,
+        decimals,
+        ethersProvider,
+        isBoringV1ContextReady,
+        vaultContract,
+        deposit,
       ]
     );
 
@@ -2176,6 +2404,7 @@ export const BoringVaultV1Provider: React.FC<{
           fetchShareValue,
           fetchUserUnlockTime,
           deposit,
+          depositWithPermit,
           previewDeposit,
           delayWithdraw,
           delayWithdrawStatuses,
