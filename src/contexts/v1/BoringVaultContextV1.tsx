@@ -731,7 +731,7 @@ export const BoringVaultV1Provider: React.FC<{
 
     /**
      * Deposits tokens using EIP-2612 permit for gasless approvals
-     * List of tested tokens that support EIP-2612 permits: USDC, USDe, LBTC, cbBTC
+     * List of tested tokens that support EIP-2612 permits: USDC, USDe, deUSD, LBTC, cbBTC
      * @throws If token doesn't support permits or transaction fails
      */
     const depositWithPermit = useCallback(
