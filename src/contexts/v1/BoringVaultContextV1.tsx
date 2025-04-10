@@ -650,6 +650,7 @@ export const BoringVaultV1Provider: React.FC<{
 
     /**
      * Creates an EIP-2612 permit signature for gasless token approvals
+     * Read more about EIP-2612 here: https://eips.ethereum.org/EIPS/eip-2612
      * @throws If signature fails or token contract is invalid
      */
     const signPermit = async ({
@@ -730,6 +731,7 @@ export const BoringVaultV1Provider: React.FC<{
 
     /**
      * Deposits tokens using EIP-2612 permit for gasless approvals
+     * List of tested tokens that support EIP-2612 permits: USDC, USDe, LBTC, cbBTC
      * @throws If token doesn't support permits or transaction fails
      */
     const depositWithPermit = useCallback(
