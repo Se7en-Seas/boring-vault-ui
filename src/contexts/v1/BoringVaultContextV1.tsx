@@ -719,6 +719,9 @@ export const BoringVaultV1Provider: React.FC<{
         const signature = await signer.signTypedData(domain, types, message);
         return splitSignature(signature);
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        console.error("signPermit failed:", errorMessage);
+
         throw new Error(
           `Permit signing failed: ${error instanceof Error ? error.message : "Unknown error"}`
         );
@@ -726,8 +729,8 @@ export const BoringVaultV1Provider: React.FC<{
     };
 
     /**
-     * Deposits funds using a permit signature to avoid a separate approval transaction
-     * The only caveat is that the token must support EIP-2612 permits
+     * Deposits tokens using EIP-2612 permit for gasless approvals
+     * @throws If token doesn't support permits or transaction fails
      */
     const depositWithPermit = useCallback(
       async (
@@ -737,8 +740,8 @@ export const BoringVaultV1Provider: React.FC<{
         initialDeadline?: number
       ): Promise<DepositStatus> => {
         // Calculate maximum deadline as current timestamp + 15 minutes (900 seconds)
-        const MAX_DEADLINE = Math.floor(Date.now() / 1000) + 900;
-        const deadline = initialDeadline ?? MAX_DEADLINE;
+        const FIFTEEN_MINUTES = 900;
+        const deadline = initialDeadline ?? Math.floor(Date.now() / 1000) + FIFTEEN_MINUTES;
 
         // Validate context and inputs
         if (!vaultEthersContract || !isBoringV1ContextReady || !decimals || !signer || !tellerContract || !vaultContract) {
@@ -830,18 +833,18 @@ export const BoringVaultV1Provider: React.FC<{
 
           setDepositStatus(success);
           return success;
-        } catch (e: unknown) {
-          const errorMessage = e instanceof Error ? e.message : "Unknown error";
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : "Unknown error";
           console.error("depositWithPermit failed:", errorMessage);
 
-          const error = {
+          const tempError = {
             initiated: false,
             loading: false,
             success: false,
             error: errorMessage,
           };
-          setDepositStatus(error);
-          return error;
+          setDepositStatus(tempError);
+          return tempError;
         }
       },
       [
