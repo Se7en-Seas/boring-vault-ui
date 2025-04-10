@@ -741,7 +741,7 @@ export const BoringVaultV1Provider: React.FC<{
         token: Token,
         initialDeadline?: number
       ): Promise<DepositStatus> => {
-        // Calculate maximum deadline as current timestamp + 15 minutes (900 seconds)
+        // Calculate maximum deadline as current timestamp + 15 minutes
         const FIFTEEN_MINUTES = 900;
         const deadline = initialDeadline ?? Math.floor(Date.now() / 1000) + FIFTEEN_MINUTES;
 
