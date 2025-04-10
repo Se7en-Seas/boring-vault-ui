@@ -8,14 +8,14 @@ dotenv.config({ path: path.resolve(__dirname, ".env") });
 
 /* Uncomment for ethereum example with boring queue  */
 module.exports = {
-  entry: "./src/examples/v1.tsx", // Entry point for your React app
+  entry: "./src/examples/v4.tsx", // Entry point for your React app
   output: {
     path: path.resolve(__dirname, "dist"), // Output directory
-    filename: "v1.js", // Output file
+    filename: "v4.js", // Output file
   },
   plugins: [
     new HtmlWebpackPlugin({
-      template: "./src/examples/v1.html", // Path to your HTML template
+      template: "./src/examples/v4.html", // Path to your HTML template
     }),
     new webpack.DefinePlugin({
       "process.env": JSON.stringify(process.env), // Defines it on process.env
