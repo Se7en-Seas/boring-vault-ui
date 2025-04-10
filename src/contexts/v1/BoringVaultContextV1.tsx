@@ -723,6 +723,7 @@ export const BoringVaultV1Provider: React.FC<{
 
     /**
      * Deposits funds using a permit signature to avoid a separate approval transaction
+     * The only caveat is that the token must support EIP-2612 permits
      */
     const depositWithPermit = useCallback(
       async (
