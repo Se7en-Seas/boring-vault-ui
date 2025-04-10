@@ -649,7 +649,8 @@ export const BoringVaultV1Provider: React.FC<{
     );
 
     /**
-     * Creates an EIP-2612 permit signature to authorize token spending without a separate approve transaction
+     * Creates an EIP-2612 permit signature for gasless token approvals
+     * @throws If signature fails or token contract is invalid
      */
     const signPermit = async ({
       value,
@@ -664,60 +665,63 @@ export const BoringVaultV1Provider: React.FC<{
       signer: JsonRpcSigner;
       tokenAddress: `0x${string}`;
     }): Promise<{ v: number; r: string; s: string }> => {
-      const userAddress = await signer.getAddress();
-
-      // Get token contract
-      const tokenContract = new Contract(
-        tokenAddress,
-        [
+      try {
+        // Minimal ABI for EIP-2612 permit
+        const PERMIT_ABI = [
           'function name() view returns (string)',
           'function version() view returns (string)',
-          'function nonces(address owner) view returns (uint256)',
-        ],
-        signer
-      );
+          'function nonces(address) view returns (uint256)',
+        ] as const;
 
-      // Get token details
-      const [name, nonce, version, chainId] = await Promise.all([
-        tokenContract.name(),
-        tokenContract.nonces(userAddress),
-        tokenContract.version().catch(() => '1'),
-        signer.provider.getNetwork().then(network => Number(network.chainId))
-      ]);
+        const tokenContract = new Contract(
+          tokenAddress,
+          PERMIT_ABI,
+          signer
+        );
 
-      // Build domain separator
-      const domain: TypedDataDomain = {
-        name,
-        version,
-        chainId,
-        verifyingContract: tokenAddress,
-      };
+        const userAddress = await signer.getAddress();
 
-      // Standard EIP-2612 types
-      const types = {
-        Permit: [
-          { name: "owner", type: "address" },
-          { name: "spender", type: "address" },
-          { name: "value", type: "uint256" },
-          { name: 'nonce', type: 'uint256' },
-          { name: "deadline", type: "uint256" },
-        ],
-      };
+        // Get token details
+        const [name, nonce, version, chainId] = await Promise.all([
+          tokenContract.name(),
+          tokenContract.nonces(userAddress),
+          tokenContract.version().catch(() => '1'),
+          signer.provider.getNetwork().then(network => Number(network.chainId))
+        ]);
 
-      const message = {
-        owner: userAddress,
-        spender,
-        value,
-        nonce,
-        deadline,
-      };
+        // Build domain separator
+        const domain: TypedDataDomain = {
+          name,
+          version,
+          chainId,
+          verifyingContract: tokenAddress,
+        };
 
-      try {
+        // Standard EIP-2612 types
+        const types = {
+          Permit: [
+            { name: "owner", type: "address" },
+            { name: "spender", type: "address" },
+            { name: "value", type: "uint256" },
+            { name: 'nonce', type: 'uint256' },
+            { name: "deadline", type: "uint256" },
+          ],
+        };
+
+        const message = {
+          owner: userAddress,
+          spender,
+          value,
+          nonce,
+          deadline,
+        };
+
         const signature = await signer.signTypedData(domain, types, message);
         return splitSignature(signature);
       } catch (error) {
-        console.error("Error signing EIP-2612 permit:", error);
-        throw new Error(`Failed to sign permit: ${error instanceof Error ? error.message : "Unknown error"}`);
+        throw new Error(
+          `Permit signing failed: ${error instanceof Error ? error.message : "Unknown error"}`
+        );
       }
     };
 
