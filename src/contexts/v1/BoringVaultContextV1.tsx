@@ -743,7 +743,7 @@ export const BoringVaultV1Provider: React.FC<{
       ): Promise<DepositStatus> => {
         // Check if the token is in our list of known EIP-2612 compatible tokens
         // and warn if it isn't, since the permit operation might fail
-        const ALLOWED_TOKENS = [
+        const KNOWN_TOKENS_WITH_PERMITS = [
           { name: "USDC", address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" },
           { name: "USDe", address: "0x4c9EDD5852cd905f086C759E8383e09bff1E68B3" },
           { name: "deUSD", address: "0x15700B564Ca08D9439C58cA5053166E8317aa138" },
@@ -752,10 +752,10 @@ export const BoringVaultV1Provider: React.FC<{
           { name: "tBTC", address: "0x236aa50979D5f3De3Bd1Eeb40E81137F22ab794b" },
         ]
 
-        const isKnownToken = ALLOWED_TOKENS.some(allowedToken => allowedToken.address === token.address);
+        const isKnownToken = KNOWN_TOKENS_WITH_PERMITS.some(knownToken => knownToken.address === token.address);
 
         if (!isKnownToken) {
-          console.warn("Token is not known to work with EIP-2612 permits, be aware that this might fail");
+          console.warn("Token is not known to be compatible, be aware that this might fail");
         }
 
         // Calculate maximum deadline as current timestamp + 15 minutes
