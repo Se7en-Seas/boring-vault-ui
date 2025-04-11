@@ -100,7 +100,7 @@ const VaultWidget = () => {
   const [userShares, setUserShares] = React.useState<number>(0);
   useEffect(() => {
     if (!isBoringV1ContextReady || !signer) return;
-    
+
     const fetchShares = async () => {
       const address = await signer.getAddress();
       fetchUserShares(address)
@@ -240,19 +240,26 @@ const App = () => {
             <ConnectKitButton />
             <BoringVaultV1Provider
               chain="ethereum"
-              vaultContract="0x08c6F91e2B681FaF5e17227F2a44C307b3C1364C"
-              tellerContract="0x221Ea02d409074546265CCD1123050F4D498ef64"
-              accountantContract="0xc315D6e14DDCDC7407784e2Caf815d131Bc1D3E7"
+              vaultContract="0xbc0f3B23930fff9f4894914bD745ABAbA9588265"
+              tellerContract="0xc8c58d1567e1db8c02542e6df5241A0d71f91Fe2"
+              accountantContract="0x95fE19b324bE69250138FE8EE50356e9f6d17Cfe"
               lensContract="0x5232bc0F5999f8dA604c42E1748A13a170F94A1B"
-              withdrawQueueContract="0x7c12C550FE8857380B8F5A9e55D9145A0d7A7198"
+              withdrawQueueContract="0x7c12c550fe8857380b8f5a9e55d9145a0d7a7198"
               ethersProvider={ethersInfuraProvider}
               depositTokens={[
                 {
                   displayName: "USDC",
                   image:
                     "https://cryptologos.cc/logos/usd-coin-usdc-logo.png?v=031",
-                  address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+                  address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
                   decimals: 6,
+                },
+                {
+                  displayName: "DAI",
+                  image:
+                    "https://s2.coinmarketcap.com/static/img/coins/64x64/29470.png",
+                  address: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+                  decimals: 18,
                 },
               ]}
               withdrawTokens={[
