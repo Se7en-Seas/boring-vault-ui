@@ -31,10 +31,13 @@ import {
   ContractTransactionReceipt,
   Signature,
 } from "ethers";
-import { erc20Abi } from "viem";
+import { erc20Abi, parseUnits, type TypedDataDomain } from "viem";
 import BigNumber from "bignumber.js";
 import BoringDelayWithdrawContractABI from "../../abis/v1/BoringDelayWithdrawContractABI";
 import { ethers } from 'ethers';
+import { splitSignature } from "@ethersproject/bytes";
+import { checkContractForPermit } from "../../utils/permit/check-contract-for-pemit";
+import { USDC_ABI } from "./USDC-abi";
 
 const SEVEN_SEAS_BASE_API_URL = "https://api.sevenseas.capital";
 
@@ -65,6 +68,12 @@ interface BoringVaultV1ContextProps {
     signer: JsonRpcSigner,
     amount: string,
     token: Token
+  ) => Promise<DepositStatus>;
+  depositWithPermit: (
+    signer: JsonRpcSigner,
+    amountHumanReadable: string,
+    token: Token,
+    deadline?: number
   ) => Promise<DepositStatus>;
   previewDeposit: (
     amount: string,
@@ -636,6 +645,234 @@ export const BoringVaultV1Provider: React.FC<{
         decimals,
         ethersProvider,
         isBoringV1ContextReady,
+      ]
+    );
+
+    /**
+     * Creates an EIP-2612 permit signature for gasless token approvals
+     * Read more about EIP-2612 here: https://eips.ethereum.org/EIPS/eip-2612
+     * @throws If signature fails or token contract is invalid
+     */
+    const signPermit = async ({
+      value,
+      signer,
+      spender,
+      deadline,
+      tokenAddress,
+    }: {
+      value: bigint;
+      deadline: number;
+      spender: string;
+      signer: JsonRpcSigner;
+      tokenAddress: `0x${string}`;
+    }): Promise<{ v: number; r: string; s: string }> => {
+      try {
+        // Minimal ABI for EIP-2612 permit
+        const PERMIT_ABI = [
+          'function name() view returns (string)',
+          'function version() view returns (string)',
+          'function nonces(address) view returns (uint256)',
+        ] as const;
+
+        const tokenContract = new Contract(
+          tokenAddress,
+          PERMIT_ABI,
+          signer
+        );
+
+        const userAddress = await signer.getAddress();
+
+        // Get token details
+        const [name, nonce, version, chainId] = await Promise.all([
+          tokenContract.name(),
+          tokenContract.nonces(userAddress),
+          tokenContract.version().catch(() => '1'),
+          signer.provider.getNetwork().then(network => Number(network.chainId))
+        ]);
+
+        // Build domain separator
+        const domain: TypedDataDomain = {
+          name,
+          version,
+          chainId,
+          verifyingContract: tokenAddress,
+        };
+
+        // Standard EIP-2612 types
+        const types = {
+          Permit: [
+            { name: "owner", type: "address" },
+            { name: "spender", type: "address" },
+            { name: "value", type: "uint256" },
+            { name: 'nonce', type: 'uint256' },
+            { name: "deadline", type: "uint256" },
+          ],
+        };
+
+        const message = {
+          owner: userAddress,
+          spender,
+          value,
+          nonce,
+          deadline,
+        };
+
+        const signature = await signer.signTypedData(domain, types, message);
+        return splitSignature(signature);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        console.error("signPermit failed:", errorMessage);
+
+        throw new Error(
+          `Permit signing failed: ${error instanceof Error ? error.message : "Unknown error"}`
+        );
+      }
+    };
+
+    /**
+     * Deposits tokens using EIP-2612 permit for gasless approvals
+     * List of known tokens that support EIP-2612 permits: USDC, USDe, deUSD, LBTC, cbBTC, tBTC
+     * @throws If token doesn't support permits or transaction fails
+     */
+    const depositWithPermit = useCallback(
+      async (
+        signer: JsonRpcSigner,
+        amountHumanReadable: string,
+        token: Token,
+        initialDeadline?: number
+      ): Promise<DepositStatus> => {
+        // Check if the token is in our list of known EIP-2612 compatible tokens
+        // and warn if it isn't, since the permit operation might fail
+        const KNOWN_TOKENS_WITH_PERMITS = [
+          { name: "USDC", address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" },
+          { name: "USDe", address: "0x4c9EDD5852cd905f086C759E8383e09bff1E68B3" },
+          { name: "deUSD", address: "0x15700B564Ca08D9439C58cA5053166E8317aa138" },
+          { name: "LBTC", address: "0x8236a87084f8B84306f72007F36F2618A5634494" },
+          { name: "cbBTC", address: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf" },
+          { name: "tBTC", address: "0x236aa50979D5f3De3Bd1Eeb40E81137F22ab794b" },
+        ]
+
+        const isKnownToken = KNOWN_TOKENS_WITH_PERMITS.some(knownToken => knownToken.address === token.address);
+
+        if (!isKnownToken) {
+          console.warn("Token is not known to be compatible, be aware that this might fail");
+        }
+
+        // Calculate maximum deadline as current timestamp + 15 minutes
+        const FIFTEEN_MINUTES = 900;
+        const deadline = initialDeadline ?? Math.floor(Date.now() / 1000) + FIFTEEN_MINUTES;
+
+        // Validate context and inputs
+        if (!vaultEthersContract || !isBoringV1ContextReady || !decimals || !signer || !tellerContract || !vaultContract) {
+          const error = {
+            initiated: false,
+            loading: false,
+            success: false,
+            error: "Contracts, or user not ready",
+          };
+          setDepositStatus(error);
+          return error;
+        }
+
+        try {
+          setDepositStatus({
+            initiated: true,
+            loading: true,
+            success: false,
+            error: undefined
+          });
+
+          // Check if the token supports EIP-2612 permits
+          const { hasPermit } = await checkContractForPermit(signer.provider, token);
+
+          // Token doesn't implement EIP-2612 permit functionality, return error
+          if (hasPermit === 'No') {
+            const error = {
+              initiated: false,
+              loading: false,
+              success: false,
+              error: "Token does not support EIP-2612 permits",
+            };
+            setDepositStatus(error);
+            return error;
+          }
+
+          // Convert human-readable amount to token's base units
+          const value = parseUnits(amountHumanReadable, token.decimals);
+
+          // Generate EIP-2612 permit signature
+          const { v, r, s } = await signPermit({
+            value,
+            signer,
+            deadline,
+            spender: vaultContract,
+            tokenAddress: token.address as `0x${string}`,
+          });
+
+          // Set up Teller contract
+          const tellerContractWithSigner = new Contract(
+            tellerContract,
+            BoringTellerABI,
+            signer
+          );
+
+          // Deposit with permit
+          const minimumMint = 0;
+          const depositWithPermitTx = await tellerContractWithSigner.depositWithPermit(
+            token.address,
+            value,
+            minimumMint,
+            deadline,
+            v,
+            r,
+            s
+          );
+
+          // Wait for confirmation
+          const receipt = await depositWithPermitTx.wait();
+          console.log("Deposit with permit tx: ", receipt);
+
+          if (!receipt.hash) {
+            const error = {
+              initiated: false,
+              loading: false,
+              success: false,
+              error: "Deposit transaction reverted",
+            };
+            setDepositStatus(error);
+            return error;
+          }
+
+          const success = {
+            initiated: false,
+            loading: false,
+            success: true,
+            tx_hash: receipt.hash,
+          };
+
+          setDepositStatus(success);
+          return success;
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : "Unknown error";
+          console.error("depositWithPermit failed:", errorMessage);
+
+          const tempError = {
+            initiated: false,
+            loading: false,
+            success: false,
+            error: errorMessage,
+          };
+          setDepositStatus(tempError);
+          return tempError;
+        }
+      },
+      [
+        vaultEthersContract,
+        tellerEthersContract,
+        decimals,
+        ethersProvider,
+        isBoringV1ContextReady,
+        vaultContract
       ]
     );
 
@@ -2176,6 +2413,7 @@ export const BoringVaultV1Provider: React.FC<{
           fetchShareValue,
           fetchUserUnlockTime,
           deposit,
+          depositWithPermit,
           previewDeposit,
           delayWithdraw,
           delayWithdrawStatuses,
