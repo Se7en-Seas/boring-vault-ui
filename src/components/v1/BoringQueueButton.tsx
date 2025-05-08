@@ -242,7 +242,7 @@ const BoringQueueButton: React.FC<BoringQueueButtonProps> = ({
                     withdrawAmount,
                     selectedToken,
                     discountPercent,
-                    daysValid
+                    daysValid,
                   )
                 }
                 isDisabled={

@@ -37,7 +37,6 @@ import BoringDelayWithdrawContractABI from "../../abis/v1/BoringDelayWithdrawCon
 import { ethers } from 'ethers';
 import { splitSignature } from "@ethersproject/bytes";
 import { checkContractForPermit } from "../../utils/permit/check-contract-for-pemit";
-import { USDC_ABI } from "./USDC-abi";
 
 const SEVEN_SEAS_BASE_API_URL = "https://api.sevenseas.capital";
 
@@ -119,7 +118,8 @@ interface BoringVaultV1ContextProps {
     amount: string,
     token: Token,
     discountPercent?: string,
-    daysValid?: string
+    daysValid?: string,
+    useAllowance?: boolean
   ) => Promise<WithdrawStatus>;
   boringQueueCancel: (
     signer: JsonRpcSigner,
@@ -1726,7 +1726,8 @@ export const BoringVaultV1Provider: React.FC<{
         amountHumanReadable: string,
         token: Token,
         discountPercent?: string,
-        daysValid?: string
+        daysValid?: string,
+        useAllowance?: boolean
       ) => {
 
         if (
@@ -1896,94 +1897,143 @@ export const BoringVaultV1Provider: React.FC<{
             Math.floor(daysValidSeconds.toNumber())
           ).decimalPlaces(0, BigNumber.ROUND_DOWN);
 
-          // Generate permit data
-          const userAddress = await signer.getAddress();
-          const nonce = await vaultContractWithSigner.nonces(userAddress);
-          const name = await vaultContractWithSigner.name();
-          const chainId = (await ethersProvider.getNetwork()).chainId;
+          let queueReceipt: ContractTransactionReceipt;
 
-          const domain = {
-            name: name,
-            version: '1',
-            chainId: chainId,
-            verifyingContract: outputTokenContract ? outputTokenContract : vaultContract
-          };
+          // If useAllowance is false or undefined, we want to generate permit data
+          if (useAllowance === false || useAllowance === undefined) {
+            // Generate permit data
+            const userAddress = await signer.getAddress();
+            const nonce = await vaultContractWithSigner.nonces(userAddress);
+            const name = await vaultContractWithSigner.name();
+            const chainId = (await ethersProvider.getNetwork()).chainId;
 
-          const types = {
-            Permit: [
-              { name: 'owner', type: 'address' },
-              { name: 'spender', type: 'address' },
-              { name: 'value', type: 'uint256' },
-              { name: 'nonce', type: 'uint256' },
-              { name: 'deadline', type: 'uint256' }
-            ]
-          };
-
-          const value = {
-            owner: userAddress,
-            spender: boringQueueContract,
-            value: amountWithdrawBaseDenom.toFixed(0),
-            nonce: nonce.toString(),
-            deadline: deadline.toFixed(0)
-          };
-
-          const tempSigning = {
-            initiated: true,
-            loading: true,
-          };
-          setWithdrawStatus(tempSigning);
-
-          // Sign the permit
-          let v: number;
-          let r: string;
-          let s: string;
-          try {
-            const signature = await signer.signTypedData(domain, types, value);
-            const sig = Signature.from(signature);
-            v = sig.v;
-            r = sig.r;
-            s = sig.s;
-          } catch (error) {
-            console.error("Error signing permit", error);
-            const tempError = {
-              initiated: false,
-              loading: false,
-              success: false,
-              error: "Error signing permit",
+            const domain = {
+              name: name,
+              version: '1',
+              chainId: chainId,
+              verifyingContract: outputTokenContract ? outputTokenContract : vaultContract
             };
-            setWithdrawStatus(tempError);
-            return tempError;
-          }
 
-          // Execute the transaction with the permit
-          const queueTx =
-            await boringQueueContractWithSigner.requestOnChainWithdrawWithPermit(
-              token.address, // assetOut
-              amountWithdrawBaseDenom.toFixed(0), // amountOfShares
-              formattedDiscountPercent.toFixed(0), // Discount in bps
-              daysValidSeconds.toFixed(0), // secondsToDeadline
-              deadline.toFixed(0), // permitDeadline (keep permit valid as duration of withdraw)
-              v, // permit v
-              r, // permit r
-              s  // permit s
+            const types = {
+              Permit: [
+                { name: 'owner', type: 'address' },
+                { name: 'spender', type: 'address' },
+                { name: 'value', type: 'uint256' },
+                { name: 'nonce', type: 'uint256' },
+                { name: 'deadline', type: 'uint256' }
+              ]
+            };
+
+            const value = {
+              owner: userAddress,
+              spender: boringQueueContract,
+              value: amountWithdrawBaseDenom.toFixed(0),
+              nonce: nonce.toString(),
+              deadline: deadline.toFixed(0)
+            };
+
+            const tempSigning = {
+              initiated: true,
+              loading: true,
+            };
+            setWithdrawStatus(tempSigning);
+
+            // Sign the permit
+            let v: number;
+            let r: string;
+            let s: string;
+            try {
+              const signature = await signer.signTypedData(domain, types, value);
+              const sig = Signature.from(signature);
+              v = sig.v;
+              r = sig.r;
+              s = sig.s;
+            } catch (error) {
+              console.error("Error signing permit", error);
+              const tempError = {
+                initiated: false,
+                loading: false,
+                success: false,
+                error: "Error signing permit",
+              };
+              setWithdrawStatus(tempError);
+              return tempError;
+            }
+
+            // Execute the transaction with the permit
+            const queueTx =
+              await boringQueueContractWithSigner.requestOnChainWithdrawWithPermit(
+                token.address, // assetOut
+                amountWithdrawBaseDenom.toFixed(0), // amountOfShares
+                formattedDiscountPercent.toFixed(0), // Discount in bps
+                daysValidSeconds.toFixed(0), // secondsToDeadline
+                deadline.toFixed(0), // permitDeadline (keep permit valid as duration of withdraw)
+                v, // permit v
+                r, // permit r
+                s  // permit s
+              );
+
+            // Wait for confirmation
+            queueReceipt = await queueTx.wait();
+
+            console.log("Withdraw Queued in tx: ", queueReceipt);
+            if (!queueReceipt.hash) {
+              console.error("Withdraw Queue failed");
+              const tempError = {
+                initiated: false,
+                loading: false,
+                success: false,
+                error: "Withdraw Queue reverted",
+              };
+              setWithdrawStatus(tempError);
+              return tempError;
+            }
+            console.log("Withdraw Queue hash: ", queueReceipt.hash);
+          } else {
+            // If useAllowance is true, fall back to the classic allowance flow.
+            // 1. Ensure the vault (share) token allowance for the BoringQueue contract is sufficient.
+            const allowance = Number(
+              await vaultContractWithSigner.allowance(
+                await signer.getAddress(),
+                boringQueueContract
+              )
             );
 
-          // Wait for confirmation
-          const queueReceipt: ContractTransactionReceipt = await queueTx.wait();
+            if (allowance < amountWithdrawBaseDenom.toNumber()) {
+              console.log("Approving shares for BoringQueue …");
+              const approveTx = await vaultContractWithSigner.approve(
+                boringQueueContract,
+                amountWithdrawBaseDenom.toFixed(0)
+              );
+              await approveTx.wait();
+              console.log("Approval confirmed");
+            }
 
-          console.log("Withdraw Queued in tx: ", queueReceipt);
-          if (!queueReceipt.hash) {
-            console.error("Withdraw Queue failed");
-            const tempError = {
-              initiated: false,
-              loading: false,
-              success: false,
-              error: "Withdraw Queue reverted",
-            };
-            setWithdrawStatus(tempError);
-            return tempError;
+            // 2. Queue the withdraw using the allowance (no permit).
+            const queueTx = await boringQueueContractWithSigner.requestOnChainWithdraw(
+              token.address, // assetOut
+              amountWithdrawBaseDenom.toFixed(0), // amountOfShares
+              formattedDiscountPercent.toFixed(0), // discount (bps)
+              daysValidSeconds.toFixed(0) // secondsToDeadline
+            );
+
+            // 3. Wait for confirmation and capture the receipt.
+            queueReceipt = await queueTx.wait();
+
+            console.log("Withdraw Queued in tx: ", queueReceipt);
+            if (!queueReceipt.hash) {
+              console.error("Withdraw Queue failed");
+              const tempError = {
+                initiated: false,
+                loading: false,
+                success: false,
+                error: "Withdraw Queue reverted",
+              } as const;
+              setWithdrawStatus(tempError);
+              return tempError;
+            }
+            console.log("Withdraw Queue hash: ", queueReceipt.hash);
           }
-          console.log("Withdraw Queue hash: ", queueReceipt.hash);
 
           // Set status
           const tempSuccess = {
