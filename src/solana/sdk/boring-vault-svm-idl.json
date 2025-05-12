@@ -1,0 +1,2072 @@
+{
+    "address": "5ZRnXG4GsUMLaN7w2DtJV1cgLgcXHmuHCmJ2MxoorWCE",
+    "metadata": {
+      "name": "boring_vault_svm",
+      "version": "0.1.0",
+      "spec": "0.1.0",
+      "description": "Created with Anchor"
+    },
+    "instructions": [
+      {
+        "name": "accept_authority",
+        "docs": [
+          "Accepts authority from a pending authority",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `vault_id` - The vault id"
+        ],
+        "discriminator": [107, 86, 198, 91, 33, 12, 107, 160],
+        "accounts": [
+          {
+            "name": "signer",
+            "signer": true
+          },
+          {
+            "name": "boring_vault_state",
+            "writable": true
+          }
+        ],
+        "args": [
+          {
+            "name": "vault_id",
+            "type": "u64"
+          }
+        ]
+      },
+      {
+        "name": "claim_fees_in_base",
+        "docs": [
+          "Claims accumulated fees in base asset",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `vault_id` - The vault ID",
+          "* `sub_account` - The sub-account to claim from",
+          "",
+          "# Errors",
+          "* `BoringErrorCode::InvalidTokenProgram` - If token program doesn't match mint"
+        ],
+        "discriminator": [189, 160, 186, 244, 248, 13, 244, 198],
+        "accounts": [
+          {
+            "name": "signer",
+            "signer": true
+          },
+          {
+            "name": "base_mint"
+          },
+          {
+            "name": "boring_vault_state",
+            "writable": true
+          },
+          {
+            "name": "boring_vault"
+          },
+          {
+            "name": "payout_ata",
+            "docs": ["Payout's Token associated token account"],
+            "writable": true
+          },
+          {
+            "name": "vault_ata",
+            "docs": ["Vault's Token associated token account"],
+            "writable": true
+          },
+          {
+            "name": "token_program",
+            "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          },
+          {
+            "name": "token_program_2022",
+            "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+          },
+          {
+            "name": "system_program",
+            "address": "11111111111111111111111111111111"
+          }
+        ],
+        "args": [
+          {
+            "name": "vault_id",
+            "type": "u64"
+          },
+          {
+            "name": "sub_account",
+            "type": "u8"
+          }
+        ]
+      },
+      {
+        "name": "close_cpi_digest",
+        "docs": [
+          "Closes a CPI digest account",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `_args` - Used to derive account"
+        ],
+        "discriminator": [222, 229, 29, 88, 144, 101, 61, 79],
+        "accounts": [
+          {
+            "name": "signer",
+            "writable": true,
+            "signer": true
+          },
+          {
+            "name": "boring_vault_state"
+          },
+          {
+            "name": "cpi_digest",
+            "writable": true
+          }
+        ],
+        "args": [
+          {
+            "name": "vault_id",
+            "type": "u64"
+          },
+          {
+            "name": "digest",
+            "type": {
+              "array": ["u8", 32]
+            }
+          }
+        ]
+      },
+      {
+        "name": "configure_exchange_rate_update_bounds",
+        "docs": [
+          "Configures the exchange rate update bounds",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `vault_id` - The vault ID",
+          "* `args` - Configuration arguments including:",
+          "* `upper_bound` - Maximum allowed increase in exchange rate (in bps)",
+          "* `lower_bound` - Maximum allowed decrease in exchange rate (in bps)",
+          "* `minimum_update_delay` - Minimum time between updates",
+          "",
+          "# Errors",
+          "* `BoringErrorCode::NotAuthorized` - If signer is not the vault authority",
+          "* `BoringErrorCode::InvalidAllowedExchangeRateChangeUpperBound` - If upper bound is invalid",
+          "* `BoringErrorCode::InvalidAllowedExchangeRateChangeLowerBound` - If lower bound is invalid"
+        ],
+        "discriminator": [255, 144, 53, 50, 163, 209, 159, 102],
+        "accounts": [
+          {
+            "name": "signer",
+            "signer": true
+          },
+          {
+            "name": "boring_vault_state",
+            "writable": true
+          }
+        ],
+        "args": [
+          {
+            "name": "vault_id",
+            "type": "u64"
+          },
+          {
+            "name": "args",
+            "type": {
+              "defined": {
+                "name": "ConfigureExchangeRateUpdateBoundsArgs"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "deploy",
+        "docs": [
+          "Deploys a new vault instance",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `args` - Deployment arguments including:",
+          "* `authority` - The vault authority who can manage vault settings",
+          "* `base_asset` - The base asset mint address for the vault",
+          "* `exchange_rate_provider` - Provider of exchange rates",
+          "* `exchange_rate` - Initial exchange rate between base asset and shares",
+          "* `strategist` - Address of the strategist who can execute vault strategies",
+          "* `payout_address` - Address where fees will be sent",
+          "* `decimals` - Decimals for the share token mint",
+          "* `allowed_exchange_rate_change_upper_bound` - Maximum allowed increase in exchange rate (in bps)",
+          "* `allowed_exchange_rate_change_lower_bound` - Maximum allowed decrease in exchange rate (in bps)",
+          "* `minimum_update_delay_in_seconds` - Minimum time between exchange rate updates",
+          "* `platform_fee_bps` - Platform fee in basis points",
+          "* `performance_fee_bps` - Performance fee in basis points",
+          "",
+          "# Errors",
+          "* `BoringErrorCode::InvalidExchangeRateProvider` - If exchange rate provider is zero address",
+          "* `BoringErrorCode::InvalidPayoutAddress` - If payout address is zero address",
+          "* `BoringErrorCode::InvalidAllowedExchangeRateChangeUpperBound` - If upper bound is invalid",
+          "* `BoringErrorCode::InvalidAllowedExchangeRateChangeLowerBound` - If lower bound is invalid",
+          "* `BoringErrorCode::InvalidPlatformFeeBps` - If platform fee exceeds maximum",
+          "* `BoringErrorCode::InvalidPerformanceFeeBps` - If performance fee exceeds maximum"
+        ],
+        "discriminator": [67, 36, 143, 118, 36, 164, 92, 217],
+        "accounts": [
+          {
+            "name": "signer",
+            "writable": true,
+            "signer": true
+          },
+          {
+            "name": "config",
+            "writable": true,
+            "pda": {
+              "seeds": [
+                {
+                  "kind": "const",
+                  "value": [99, 111, 110, 102, 105, 103]
+                }
+              ]
+            }
+          },
+          {
+            "name": "boring_vault_state",
+            "writable": true
+          },
+          {
+            "name": "share_mint",
+            "docs": ["The mint of the share token."],
+            "writable": true,
+            "pda": {
+              "seeds": [
+                {
+                  "kind": "const",
+                  "value": [115, 104, 97, 114, 101, 45, 116, 111, 107, 101, 110]
+                },
+                {
+                  "kind": "account",
+                  "path": "boring_vault_state"
+                }
+              ]
+            }
+          },
+          {
+            "name": "base_asset"
+          },
+          {
+            "name": "system_program",
+            "address": "11111111111111111111111111111111"
+          },
+          {
+            "name": "token_program",
+            "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+          }
+        ],
+        "args": [
+          {
+            "name": "args",
+            "type": {
+              "defined": {
+                "name": "DeployArgs"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "deposit",
+        "docs": [
+          "Deposits tokens into the vault",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `args` - Deposit arguments including:",
+          "* `deposit_amount` - Amount of tokens to deposit",
+          "* `min_mint_amount` - Minimum amount of shares to mint",
+          "",
+          "# Returns",
+          "* `u64` - Amount of shares minted",
+          "",
+          "# Errors",
+          "* `BoringErrorCode::VaultPaused` - If vault is paused",
+          "* `BoringErrorCode::AssetNotAllowed` - If deposits are not allowed",
+          "* `BoringErrorCode::InvalidTokenProgram` - If token program doesn't match mint"
+        ],
+        "discriminator": [242, 35, 198, 137, 82, 225, 242, 182],
+        "accounts": [
+          {
+            "name": "signer",
+            "writable": true,
+            "signer": true
+          },
+          {
+            "name": "boring_vault_state"
+          },
+          {
+            "name": "boring_vault"
+          },
+          {
+            "name": "deposit_mint"
+          },
+          {
+            "name": "asset_data",
+            "pda": {
+              "seeds": [
+                {
+                  "kind": "const",
+                  "value": [97, 115, 115, 101, 116, 45, 100, 97, 116, 97]
+                },
+                {
+                  "kind": "account",
+                  "path": "boring_vault_state"
+                },
+                {
+                  "kind": "account",
+                  "path": "deposit_mint"
+                }
+              ]
+            }
+          },
+          {
+            "name": "user_ata",
+            "docs": ["User's Token associated token account"],
+            "writable": true
+          },
+          {
+            "name": "vault_ata",
+            "docs": ["Vault's Token associated token account"],
+            "writable": true
+          },
+          {
+            "name": "token_program",
+            "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          },
+          {
+            "name": "token_program_2022",
+            "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+          },
+          {
+            "name": "system_program",
+            "address": "11111111111111111111111111111111"
+          },
+          {
+            "name": "associated_token_program",
+            "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+          },
+          {
+            "name": "share_mint",
+            "docs": ["The vault's share mint"],
+            "writable": true,
+            "pda": {
+              "seeds": [
+                {
+                  "kind": "const",
+                  "value": [115, 104, 97, 114, 101, 45, 116, 111, 107, 101, 110]
+                },
+                {
+                  "kind": "account",
+                  "path": "boring_vault_state"
+                }
+              ]
+            }
+          },
+          {
+            "name": "user_shares",
+            "docs": ["The user's share token 2022 account"],
+            "writable": true,
+            "pda": {
+              "seeds": [
+                {
+                  "kind": "account",
+                  "path": "signer"
+                },
+                {
+                  "kind": "account",
+                  "path": "token_program_2022"
+                },
+                {
+                  "kind": "account",
+                  "path": "share_mint"
+                }
+              ],
+              "program": {
+                "kind": "const",
+                "value": [
+                  140, 151, 37, 143, 78, 36, 137, 241, 187, 61, 16, 41, 20, 142,
+                  13, 131, 11, 90, 19, 153, 218, 255, 16, 132, 4, 142, 123, 216,
+                  219, 233, 248, 89
+                ]
+              }
+            }
+          },
+          {
+            "name": "price_feed"
+          }
+        ],
+        "args": [
+          {
+            "name": "args",
+            "type": {
+              "defined": {
+                "name": "DepositArgs"
+              }
+            }
+          }
+        ],
+        "returns": "u64"
+      },
+      {
+        "name": "deposit_sol",
+        "docs": [
+          "Deposits SOL into the vault",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `args` - Deposit arguments including:",
+          "* `deposit_amount` - Amount of SOL to deposit",
+          "* `min_mint_amount` - Minimum amount of shares to mint",
+          "",
+          "# Returns",
+          "* `u64` - Amount of shares minted",
+          "",
+          "# Errors",
+          "* `BoringErrorCode::VaultPaused` - If vault is paused",
+          "* `BoringErrorCode::AssetNotAllowed` - If deposits are not allowed",
+          "* `BoringErrorCode::SlippageExceeded` - If min share amount is not met"
+        ],
+        "discriminator": [108, 81, 78, 117, 125, 155, 56, 200],
+        "accounts": [
+          {
+            "name": "signer",
+            "writable": true,
+            "signer": true
+          },
+          {
+            "name": "token_program_2022",
+            "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+          },
+          {
+            "name": "system_program",
+            "address": "11111111111111111111111111111111"
+          },
+          {
+            "name": "associated_token_program",
+            "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+          },
+          {
+            "name": "boring_vault_state"
+          },
+          {
+            "name": "boring_vault",
+            "writable": true
+          },
+          {
+            "name": "asset_data",
+            "pda": {
+              "seeds": [
+                {
+                  "kind": "const",
+                  "value": [97, 115, 115, 101, 116, 45, 100, 97, 116, 97]
+                },
+                {
+                  "kind": "account",
+                  "path": "boring_vault_state"
+                },
+                {
+                  "kind": "const",
+                  "value": [
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "name": "share_mint",
+            "docs": ["The vault's share mint"],
+            "writable": true,
+            "pda": {
+              "seeds": [
+                {
+                  "kind": "const",
+                  "value": [115, 104, 97, 114, 101, 45, 116, 111, 107, 101, 110]
+                },
+                {
+                  "kind": "account",
+                  "path": "boring_vault_state"
+                }
+              ]
+            }
+          },
+          {
+            "name": "user_shares",
+            "docs": ["The user's share token 2022 account"],
+            "writable": true,
+            "pda": {
+              "seeds": [
+                {
+                  "kind": "account",
+                  "path": "signer"
+                },
+                {
+                  "kind": "account",
+                  "path": "token_program_2022"
+                },
+                {
+                  "kind": "account",
+                  "path": "share_mint"
+                }
+              ],
+              "program": {
+                "kind": "const",
+                "value": [
+                  140, 151, 37, 143, 78, 36, 137, 241, 187, 61, 16, 41, 20, 142,
+                  13, 131, 11, 90, 19, 153, 218, 255, 16, 132, 4, 142, 123, 216,
+                  219, 233, 248, 89
+                ]
+              }
+            }
+          },
+          {
+            "name": "price_feed"
+          }
+        ],
+        "args": [
+          {
+            "name": "args",
+            "type": {
+              "defined": {
+                "name": "DepositArgs"
+              }
+            }
+          }
+        ],
+        "returns": "u64"
+      },
+      {
+        "name": "get_rate",
+        "docs": [
+          "Gets the current exchange rate",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `vault_id` - The vault ID",
+          "",
+          "# Returns",
+          "* `u64` - The current exchange rate"
+        ],
+        "discriminator": [177, 72, 238, 202, 231, 17, 128, 243],
+        "accounts": [
+          {
+            "name": "boring_vault_state"
+          }
+        ],
+        "args": [
+          {
+            "name": "_vault_id",
+            "type": "u64"
+          }
+        ],
+        "returns": "u64"
+      },
+      {
+        "name": "get_rate_in_quote",
+        "docs": [
+          "Gets the exchange rate in terms of quote asset",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `vault_id` - The vault ID",
+          "",
+          "# Returns",
+          "* `u64` - The exchange rate in quote asset",
+          "# Note",
+          "To get the rate in SOL, pass in wSOL (Wrapped SOL) as the quote_mint"
+        ],
+        "discriminator": [65, 171, 137, 184, 253, 193, 43, 246],
+        "accounts": [
+          {
+            "name": "boring_vault_state"
+          },
+          {
+            "name": "quote_mint"
+          },
+          {
+            "name": "asset_data",
+            "pda": {
+              "seeds": [
+                {
+                  "kind": "const",
+                  "value": [97, 115, 115, 101, 116, 45, 100, 97, 116, 97]
+                },
+                {
+                  "kind": "account",
+                  "path": "boring_vault_state"
+                },
+                {
+                  "kind": "account",
+                  "path": "quote_mint"
+                }
+              ]
+            }
+          },
+          {
+            "name": "price_feed"
+          }
+        ],
+        "args": [
+          {
+            "name": "_vault_id",
+            "type": "u64"
+          }
+        ],
+        "returns": "u64"
+      },
+      {
+        "name": "get_rate_in_quote_safe",
+        "docs": [
+          "Gets the exchange rate in terms of quote asset (safe version)",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `vault_id` - The vault ID",
+          "",
+          "# Returns",
+          "* `u64` - The exchange rate in quote asset",
+          "",
+          "# Note",
+          "To get the rate in SOL, pass in wSOL (Wrapped SOL) as the quote_mint",
+          "",
+          "# Errors",
+          "* `BoringErrorCode::VaultPaused` - If vault is paused"
+        ],
+        "discriminator": [39, 184, 226, 184, 233, 97, 126, 152],
+        "accounts": [
+          {
+            "name": "boring_vault_state"
+          },
+          {
+            "name": "quote_mint"
+          },
+          {
+            "name": "asset_data",
+            "pda": {
+              "seeds": [
+                {
+                  "kind": "const",
+                  "value": [97, 115, 115, 101, 116, 45, 100, 97, 116, 97]
+                },
+                {
+                  "kind": "account",
+                  "path": "boring_vault_state"
+                },
+                {
+                  "kind": "account",
+                  "path": "quote_mint"
+                }
+              ]
+            }
+          },
+          {
+            "name": "price_feed"
+          }
+        ],
+        "args": [
+          {
+            "name": "_vault_id",
+            "type": "u64"
+          }
+        ],
+        "returns": "u64"
+      },
+      {
+        "name": "get_rate_safe",
+        "docs": [
+          "Gets the current exchange rate (safe version)",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `vault_id` - The vault ID",
+          "",
+          "# Returns",
+          "* `u64` - The current exchange rate",
+          "",
+          "# Errors",
+          "* `BoringErrorCode::VaultPaused` - If vault is paused"
+        ],
+        "discriminator": [40, 73, 142, 82, 152, 120, 254, 19],
+        "accounts": [
+          {
+            "name": "boring_vault_state"
+          }
+        ],
+        "args": [
+          {
+            "name": "_vault_id",
+            "type": "u64"
+          }
+        ],
+        "returns": "u64"
+      },
+      {
+        "name": "initialize",
+        "docs": [
+          "Initializes the program config with the given authority",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `authority` - The pubkey of the authority who can deploy vaults",
+          "",
+          "# Returns",
+          "* `Result<()>` - Result indicating success or failure"
+        ],
+        "discriminator": [175, 175, 109, 31, 13, 152, 155, 237],
+        "accounts": [
+          {
+            "name": "signer",
+            "writable": true,
+            "signer": true
+          },
+          {
+            "name": "program",
+            "signer": true,
+            "address": "5ZRnXG4GsUMLaN7w2DtJV1cgLgcXHmuHCmJ2MxoorWCE"
+          },
+          {
+            "name": "config",
+            "writable": true,
+            "pda": {
+              "seeds": [
+                {
+                  "kind": "const",
+                  "value": [99, 111, 110, 102, 105, 103]
+                }
+              ]
+            }
+          },
+          {
+            "name": "system_program",
+            "address": "11111111111111111111111111111111"
+          }
+        ],
+        "args": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          }
+        ]
+      },
+      {
+        "name": "initialize_cpi_digest",
+        "docs": [
+          "Initializes the CPI digest for managing vault assets",
+          "",
+          "Note: This function does not check that the provided digest",
+          "actually corresponds to the given operators and expected size",
+          "but in the case that it doesn't this digest is just unusable.",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `args` - The CPI digest initialize arguments"
+        ],
+        "discriminator": [137, 9, 120, 93, 182, 194, 100, 147],
+        "accounts": [
+          {
+            "name": "signer",
+            "writable": true,
+            "signer": true
+          },
+          {
+            "name": "system_program",
+            "address": "11111111111111111111111111111111"
+          },
+          {
+            "name": "boring_vault_state"
+          },
+          {
+            "name": "cpi_digest",
+            "writable": true
+          }
+        ],
+        "args": [
+          {
+            "name": "args",
+            "type": {
+              "defined": {
+                "name": "CpiDigestArgs"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "manage",
+        "docs": [
+          "Executes a management operation on the vault",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `args` - Management arguments including CPI call details",
+          "",
+          "# Errors",
+          "* `BoringErrorCode::InvalidCpiDigest` - If CPI digest is invalid"
+        ],
+        "discriminator": [168, 141, 131, 54, 79, 150, 88, 36],
+        "accounts": [
+          {
+            "name": "signer",
+            "signer": true
+          },
+          {
+            "name": "boring_vault_state"
+          },
+          {
+            "name": "boring_vault",
+            "writable": true
+          },
+          {
+            "name": "cpi_digest"
+          },
+          {
+            "name": "ix_program_id"
+          }
+        ],
+        "args": [
+          {
+            "name": "args",
+            "type": {
+              "defined": {
+                "name": "ManageArgs"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "pause",
+        "docs": [
+          "Pauses the vault, preventing deposits and withdrawals",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `vault_id` - The vault ID",
+          "",
+          "# Errors",
+          "* `BoringErrorCode::NotAuthorized` - If signer is not the vault authority"
+        ],
+        "discriminator": [211, 22, 221, 251, 74, 121, 193, 47],
+        "accounts": [
+          {
+            "name": "signer",
+            "signer": true
+          },
+          {
+            "name": "boring_vault_state",
+            "writable": true
+          }
+        ],
+        "args": [
+          {
+            "name": "vault_id",
+            "type": "u64"
+          }
+        ]
+      },
+      {
+        "name": "set_deposit_sub_account",
+        "docs": [
+          "Sets the deposit sub-account for the vault",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `vault_id` - The vault ID",
+          "* `new_sub_account` - The new sub-account number",
+          "",
+          "# Errors",
+          "* `BoringErrorCode::NotAuthorized` - If signer is not the vault authority"
+        ],
+        "discriminator": [135, 238, 218, 4, 120, 77, 207, 156],
+        "accounts": [
+          {
+            "name": "signer",
+            "signer": true
+          },
+          {
+            "name": "boring_vault_state",
+            "writable": true
+          }
+        ],
+        "args": [
+          {
+            "name": "vault_id",
+            "type": "u64"
+          },
+          {
+            "name": "new_sub_account",
+            "type": "u8"
+          }
+        ]
+      },
+      {
+        "name": "set_fees",
+        "docs": [
+          "Sets the platform and performance fees for the vault",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `vault_id` - The vault ID",
+          "* `platform_fee_bps` - Platform fee in basis points",
+          "* `performance_fee_bps` - Performance fee in basis points",
+          "",
+          "# Errors",
+          "* `BoringErrorCode::NotAuthorized` - If signer is not the vault authority",
+          "* `BoringErrorCode::InvalidPlatformFeeBps` - If platform fee exceeds maximum",
+          "* `BoringErrorCode::InvalidPerformanceFeeBps` - If performance fee exceeds maximum"
+        ],
+        "discriminator": [137, 178, 49, 58, 0, 245, 242, 190],
+        "accounts": [
+          {
+            "name": "signer",
+            "signer": true
+          },
+          {
+            "name": "boring_vault_state",
+            "writable": true
+          }
+        ],
+        "args": [
+          {
+            "name": "vault_id",
+            "type": "u64"
+          },
+          {
+            "name": "platform_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "performance_fee_bps",
+            "type": "u16"
+          }
+        ]
+      },
+      {
+        "name": "set_payout",
+        "docs": [
+          "Sets the payout address for the vault",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `vault_id` - The vault ID",
+          "* `new_payout` - The new payout address",
+          "",
+          "# Errors",
+          "* `BoringErrorCode::NotAuthorized` - If signer is not the vault authority",
+          "* `BoringErrorCode::InvalidPayoutAddress` - If payout address is zero address"
+        ],
+        "discriminator": [55, 43, 132, 51, 227, 169, 242, 195],
+        "accounts": [
+          {
+            "name": "signer",
+            "signer": true
+          },
+          {
+            "name": "boring_vault_state",
+            "writable": true
+          }
+        ],
+        "args": [
+          {
+            "name": "vault_id",
+            "type": "u64"
+          },
+          {
+            "name": "new_payout",
+            "type": "pubkey"
+          }
+        ]
+      },
+      {
+        "name": "set_strategist",
+        "docs": [
+          "Sets the strategist for the vault",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `vault_id` - The vault ID",
+          "* `new_strategist` - The new strategist address",
+          "",
+          "# Errors",
+          "* `BoringErrorCode::NotAuthorized` - If signer is not the vault authority"
+        ],
+        "discriminator": [185, 103, 1, 57, 12, 152, 49, 157],
+        "accounts": [
+          {
+            "name": "signer",
+            "signer": true
+          },
+          {
+            "name": "boring_vault_state",
+            "writable": true
+          }
+        ],
+        "args": [
+          {
+            "name": "vault_id",
+            "type": "u64"
+          },
+          {
+            "name": "new_strategist",
+            "type": "pubkey"
+          }
+        ]
+      },
+      {
+        "name": "set_withdraw_authority",
+        "docs": [
+          "Sets the withdraw authority for the vault",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `vault_id` - The vault ID",
+          "* `new_authority` - The new withdraw authority address",
+          "",
+          "# Errors",
+          "* `BoringErrorCode::NotAuthorized` - If signer is not the vault authority"
+        ],
+        "discriminator": [199, 146, 140, 67, 1, 90, 8, 222],
+        "accounts": [
+          {
+            "name": "signer",
+            "signer": true
+          },
+          {
+            "name": "boring_vault_state",
+            "writable": true
+          }
+        ],
+        "args": [
+          {
+            "name": "vault_id",
+            "type": "u64"
+          },
+          {
+            "name": "new_authority",
+            "type": "pubkey"
+          }
+        ]
+      },
+      {
+        "name": "set_withdraw_sub_account",
+        "docs": [
+          "Sets the withdraw sub-account for the vault",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `vault_id` - The vault ID",
+          "* `new_sub_account` - The new sub-account number",
+          "",
+          "# Errors",
+          "* `BoringErrorCode::NotAuthorized` - If signer is not the vault authority"
+        ],
+        "discriminator": [152, 197, 103, 249, 56, 180, 0, 172],
+        "accounts": [
+          {
+            "name": "signer",
+            "signer": true
+          },
+          {
+            "name": "boring_vault_state",
+            "writable": true
+          }
+        ],
+        "args": [
+          {
+            "name": "vault_id",
+            "type": "u64"
+          },
+          {
+            "name": "new_sub_account",
+            "type": "u8"
+          }
+        ]
+      },
+      {
+        "name": "transfer_authority",
+        "docs": [
+          "Transfers authority to a new authority",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `vault_id` - The vault id",
+          "* `pending_authority` - The new pending authority"
+        ],
+        "discriminator": [48, 169, 76, 72, 229, 180, 55, 161],
+        "accounts": [
+          {
+            "name": "signer",
+            "signer": true
+          },
+          {
+            "name": "boring_vault_state",
+            "writable": true
+          }
+        ],
+        "args": [
+          {
+            "name": "vault_id",
+            "type": "u64"
+          },
+          {
+            "name": "pending_authority",
+            "type": "pubkey"
+          }
+        ]
+      },
+      {
+        "name": "unpause",
+        "docs": [
+          "Unpauses the vault, allowing deposits and withdrawals",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `vault_id` - The vault ID",
+          "",
+          "# Errors",
+          "* `BoringErrorCode::NotAuthorized` - If signer is not the vault authority"
+        ],
+        "discriminator": [169, 144, 4, 38, 10, 141, 188, 255],
+        "accounts": [
+          {
+            "name": "signer",
+            "signer": true
+          },
+          {
+            "name": "boring_vault_state",
+            "writable": true
+          }
+        ],
+        "args": [
+          {
+            "name": "vault_id",
+            "type": "u64"
+          }
+        ]
+      },
+      {
+        "name": "update_asset_data",
+        "docs": [
+          "Updates the asset data configuration for a given asset",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `args` - The asset data update arguments including:",
+          "* `vault_id` - The vault ID",
+          "* `asset_data` - The new asset data configuration",
+          "",
+          "# Errors",
+          "* `BoringErrorCode::NotAuthorized` - If signer is not the vault authority",
+          "* `BoringErrorCode::InvalidPriceFeed` - If price feed is invalid for non-pegged asset"
+        ],
+        "discriminator": [73, 69, 104, 229, 48, 169, 98, 67],
+        "accounts": [
+          {
+            "name": "signer",
+            "writable": true,
+            "signer": true
+          },
+          {
+            "name": "boring_vault_state"
+          },
+          {
+            "name": "system_program",
+            "address": "11111111111111111111111111111111"
+          },
+          {
+            "name": "asset",
+            "docs": [
+              "would only prevent deposits with that asset, which is not a security risk since the asset mint",
+              "account would not exist."
+            ]
+          },
+          {
+            "name": "asset_data",
+            "writable": true,
+            "pda": {
+              "seeds": [
+                {
+                  "kind": "const",
+                  "value": [97, 115, 115, 101, 116, 45, 100, 97, 116, 97]
+                },
+                {
+                  "kind": "account",
+                  "path": "boring_vault_state"
+                },
+                {
+                  "kind": "account",
+                  "path": "asset"
+                }
+              ]
+            }
+          }
+        ],
+        "args": [
+          {
+            "name": "args",
+            "type": {
+              "defined": {
+                "name": "UpdateAssetDataArgs"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "update_exchange_rate",
+        "docs": [
+          "Updates the exchange rate for the vault",
+          "",
+          "This logic does not explcitily account for pending fees lowering share price.",
+          "It is expected the caller will either account for this while updating share price,",
+          "or that fees will be regularly collected to make this affect minimal.",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `vault_id` - The vault ID",
+          "* `new_exchange_rate` - The new exchange rate",
+          "",
+          "# Returns",
+          "* `Result<()>` - Result indicating success or failure"
+        ],
+        "discriminator": [69, 102, 48, 181, 8, 41, 8, 1],
+        "accounts": [
+          {
+            "name": "signer",
+            "signer": true
+          },
+          {
+            "name": "boring_vault_state",
+            "writable": true
+          },
+          {
+            "name": "share_mint",
+            "pda": {
+              "seeds": [
+                {
+                  "kind": "const",
+                  "value": [115, 104, 97, 114, 101, 45, 116, 111, 107, 101, 110]
+                },
+                {
+                  "kind": "account",
+                  "path": "boring_vault_state"
+                }
+              ]
+            }
+          }
+        ],
+        "args": [
+          {
+            "name": "vault_id",
+            "type": "u64"
+          },
+          {
+            "name": "new_exchange_rate",
+            "type": "u64"
+          }
+        ]
+      },
+      {
+        "name": "update_exchange_rate_provider",
+        "docs": [
+          "Updates the exchange rate provider for the vault",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `vault_id` - The vault ID",
+          "* `new_provider` - The new exchange rate provider address",
+          "",
+          "# Errors",
+          "* `BoringErrorCode::NotAuthorized` - If signer is not the vault authority"
+        ],
+        "discriminator": [77, 178, 71, 17, 210, 228, 196, 230],
+        "accounts": [
+          {
+            "name": "signer",
+            "signer": true
+          },
+          {
+            "name": "boring_vault_state",
+            "writable": true
+          }
+        ],
+        "args": [
+          {
+            "name": "vault_id",
+            "type": "u64"
+          },
+          {
+            "name": "new_provider",
+            "type": "pubkey"
+          }
+        ]
+      },
+      {
+        "name": "view_cpi_digest",
+        "docs": [
+          "Views the CPI digest for a management operation",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `args` - Management arguments to generate digest for",
+          "",
+          "# Returns",
+          "* `[u8; 32]` - The CPI digest"
+        ],
+        "discriminator": [243, 10, 27, 160, 175, 112, 119, 60],
+        "accounts": [
+          {
+            "name": "ix_program_id"
+          }
+        ],
+        "args": [
+          {
+            "name": "args",
+            "type": {
+              "defined": {
+                "name": "ViewCpiDigestArgs"
+              }
+            }
+          }
+        ],
+        "returns": {
+          "array": ["u8", 32]
+        }
+      },
+      {
+        "name": "withdraw",
+        "docs": [
+          "Withdraws assets from the vault",
+          "",
+          "# Arguments",
+          "* `ctx` - The context of accounts",
+          "* `args` - Withdraw arguments including:",
+          "* `share_amount` - Amount of shares to burn",
+          "* `min_asset_amount` - Minimum amount of assets to receive",
+          "",
+          "# Returns",
+          "* `u64` - Amount of assets withdrawn",
+          "",
+          "# Errors",
+          "* `BoringErrorCode::VaultPaused` - If vault is paused",
+          "* `BoringErrorCode::AssetNotAllowed` - If withdrawals are not allowed",
+          "* `BoringErrorCode::InvalidTokenProgram` - If token program doesn't match mint"
+        ],
+        "discriminator": [183, 18, 70, 156, 148, 109, 161, 34],
+        "accounts": [
+          {
+            "name": "signer",
+            "signer": true
+          },
+          {
+            "name": "boring_vault_state"
+          },
+          {
+            "name": "boring_vault"
+          },
+          {
+            "name": "withdraw_mint"
+          },
+          {
+            "name": "asset_data",
+            "pda": {
+              "seeds": [
+                {
+                  "kind": "const",
+                  "value": [97, 115, 115, 101, 116, 45, 100, 97, 116, 97]
+                },
+                {
+                  "kind": "account",
+                  "path": "boring_vault_state"
+                },
+                {
+                  "kind": "account",
+                  "path": "withdraw_mint"
+                }
+              ]
+            }
+          },
+          {
+            "name": "user_ata",
+            "docs": ["User's Token associated token account"],
+            "writable": true
+          },
+          {
+            "name": "vault_ata",
+            "docs": ["Vault's Token associated token account"],
+            "writable": true
+          },
+          {
+            "name": "token_program",
+            "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          },
+          {
+            "name": "token_program_2022",
+            "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+          },
+          {
+            "name": "share_mint",
+            "docs": ["The vault's share mint"],
+            "writable": true,
+            "pda": {
+              "seeds": [
+                {
+                  "kind": "const",
+                  "value": [115, 104, 97, 114, 101, 45, 116, 111, 107, 101, 110]
+                },
+                {
+                  "kind": "account",
+                  "path": "boring_vault_state"
+                }
+              ]
+            }
+          },
+          {
+            "name": "user_shares",
+            "docs": ["The user's share token 2022 account"],
+            "writable": true,
+            "pda": {
+              "seeds": [
+                {
+                  "kind": "account",
+                  "path": "signer"
+                },
+                {
+                  "kind": "account",
+                  "path": "token_program_2022"
+                },
+                {
+                  "kind": "account",
+                  "path": "share_mint"
+                }
+              ],
+              "program": {
+                "kind": "const",
+                "value": [
+                  140, 151, 37, 143, 78, 36, 137, 241, 187, 61, 16, 41, 20, 142,
+                  13, 131, 11, 90, 19, 153, 218, 255, 16, 132, 4, 142, 123, 216,
+                  219, 233, 248, 89
+                ]
+              }
+            }
+          },
+          {
+            "name": "price_feed"
+          }
+        ],
+        "args": [
+          {
+            "name": "args",
+            "type": {
+              "defined": {
+                "name": "WithdrawArgs"
+              }
+            }
+          }
+        ],
+        "returns": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "AssetData",
+        "discriminator": [91, 115, 36, 105, 141, 93, 1, 135]
+      },
+      {
+        "name": "BoringVault",
+        "discriminator": [35, 84, 44, 89, 150, 55, 236, 25]
+      },
+      {
+        "name": "CpiDigest",
+        "discriminator": [23, 4, 189, 185, 96, 27, 98, 226]
+      },
+      {
+        "name": "ProgramConfig",
+        "discriminator": [196, 210, 90, 231, 144, 149, 140, 63]
+      }
+    ],
+    "errors": [
+      {
+        "code": 6000,
+        "name": "SlippageExceeded",
+        "msg": "Slippage tolerance exceeded"
+      },
+      {
+        "code": 6001,
+        "name": "InvalidShareMint",
+        "msg": "Invalid share mint"
+      },
+      {
+        "code": 6002,
+        "name": "AssetNotAllowed",
+        "msg": "Asset not allowed"
+      },
+      {
+        "code": 6003,
+        "name": "InvalidAssociatedTokenAccount",
+        "msg": "Invalid associated token account"
+      },
+      {
+        "code": 6004,
+        "name": "VaultPaused",
+        "msg": "Vault paused"
+      },
+      {
+        "code": 6005,
+        "name": "InvalidPriceFeed",
+        "msg": "Invalid price feed"
+      },
+      {
+        "code": 6006,
+        "name": "NotAuthorized",
+        "msg": "Not authorized"
+      },
+      {
+        "code": 6007,
+        "name": "MathError",
+        "msg": "Math error"
+      },
+      {
+        "code": 6008,
+        "name": "InvalidCpiDigest",
+        "msg": "Invalid CPI digest"
+      },
+      {
+        "code": 6009,
+        "name": "InvalidTokenProgram",
+        "msg": "Invalid token program"
+      },
+      {
+        "code": 6010,
+        "name": "InvalidExchangeRateProvider",
+        "msg": "Invalid exchange rate provider"
+      },
+      {
+        "code": 6011,
+        "name": "InvalidAuthority",
+        "msg": "Invalid authority"
+      },
+      {
+        "code": 6012,
+        "name": "InvalidPayoutAddress",
+        "msg": "Invalid payout address"
+      },
+      {
+        "code": 6013,
+        "name": "InvalidAllowedExchangeRateChangeUpperBound",
+        "msg": "Invalid allowed exchange rate change upper bound"
+      },
+      {
+        "code": 6014,
+        "name": "InvalidAllowedExchangeRateChangeLowerBound",
+        "msg": "Invalid allowed exchange rate change lower bound"
+      },
+      {
+        "code": 6015,
+        "name": "InvalidPlatformFeeBps",
+        "msg": "Invalid platform fee bps"
+      },
+      {
+        "code": 6016,
+        "name": "InvalidPerformanceFeeBps",
+        "msg": "Invalid performance fee bps"
+      },
+      {
+        "code": 6017,
+        "name": "InvalidBaseAsset",
+        "msg": "Invalid base asset"
+      },
+      {
+        "code": 6018,
+        "name": "DecimalConversionFailed",
+        "msg": "Decimal conversion failed"
+      },
+      {
+        "code": 6019,
+        "name": "MaximumSharePremiumExceeded",
+        "msg": "Maximum share premium exceeded"
+      },
+      {
+        "code": 6020,
+        "name": "InvalidStrategist",
+        "msg": "Invalid strategist"
+      }
+    ],
+    "types": [
+      {
+        "name": "AssetData",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "allow_deposits",
+              "type": "bool"
+            },
+            {
+              "name": "allow_withdrawals",
+              "type": "bool"
+            },
+            {
+              "name": "share_premium_bps",
+              "type": "u16"
+            },
+            {
+              "name": "is_pegged_to_base_asset",
+              "type": "bool"
+            },
+            {
+              "name": "price_feed",
+              "type": "pubkey"
+            },
+            {
+              "name": "inverse_price_feed",
+              "type": "bool"
+            },
+            {
+              "name": "max_staleness",
+              "type": "u64"
+            },
+            {
+              "name": "min_samples",
+              "type": "u32"
+            }
+          ]
+        }
+      },
+      {
+        "name": "BoringVault",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "config",
+              "type": {
+                "defined": {
+                  "name": "VaultState"
+                }
+              }
+            },
+            {
+              "name": "teller",
+              "type": {
+                "defined": {
+                  "name": "TellerState"
+                }
+              }
+            },
+            {
+              "name": "manager",
+              "type": {
+                "defined": {
+                  "name": "ManagerState"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "ConfigureExchangeRateUpdateBoundsArgs",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "upper_bound",
+              "type": "u16"
+            },
+            {
+              "name": "lower_bound",
+              "type": "u16"
+            },
+            {
+              "name": "minimum_update_delay",
+              "type": "u32"
+            }
+          ]
+        }
+      },
+      {
+        "name": "CpiDigest",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "operators",
+              "type": {
+                "defined": {
+                  "name": "Operators"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "CpiDigestArgs",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "vault_id",
+              "type": "u64"
+            },
+            {
+              "name": "cpi_digest",
+              "type": {
+                "array": ["u8", 32]
+              }
+            },
+            {
+              "name": "operators",
+              "type": {
+                "defined": {
+                  "name": "Operators"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "DeployArgs",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "authority",
+              "type": "pubkey"
+            },
+            {
+              "name": "name",
+              "type": "string"
+            },
+            {
+              "name": "symbol",
+              "type": "string"
+            },
+            {
+              "name": "exchange_rate_provider",
+              "type": "pubkey"
+            },
+            {
+              "name": "exchange_rate",
+              "type": "u64"
+            },
+            {
+              "name": "payout_address",
+              "type": "pubkey"
+            },
+            {
+              "name": "allowed_exchange_rate_change_upper_bound",
+              "type": "u16"
+            },
+            {
+              "name": "allowed_exchange_rate_change_lower_bound",
+              "type": "u16"
+            },
+            {
+              "name": "minimum_update_delay_in_seconds",
+              "type": "u32"
+            },
+            {
+              "name": "platform_fee_bps",
+              "type": "u16"
+            },
+            {
+              "name": "performance_fee_bps",
+              "type": "u16"
+            },
+            {
+              "name": "withdraw_authority",
+              "type": "pubkey"
+            },
+            {
+              "name": "strategist",
+              "type": "pubkey"
+            }
+          ]
+        }
+      },
+      {
+        "name": "DepositArgs",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "vault_id",
+              "type": "u64"
+            },
+            {
+              "name": "deposit_amount",
+              "type": "u64"
+            },
+            {
+              "name": "min_mint_amount",
+              "type": "u64"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ManageArgs",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "vault_id",
+              "type": "u64"
+            },
+            {
+              "name": "sub_account",
+              "type": "u8"
+            },
+            {
+              "name": "ix_data",
+              "type": "bytes"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ManagerState",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "strategist",
+              "type": "pubkey"
+            }
+          ]
+        }
+      },
+      {
+        "name": "Operator",
+        "type": {
+          "kind": "enum",
+          "variants": [
+            {
+              "name": "Noop"
+            },
+            {
+              "name": "IngestInstruction",
+              "fields": ["u32", "u8"]
+            },
+            {
+              "name": "IngestAccount",
+              "fields": ["u8"]
+            },
+            {
+              "name": "IngestInstructionDataSize"
+            }
+          ]
+        }
+      },
+      {
+        "name": "Operators",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "operators",
+              "type": {
+                "vec": {
+                  "defined": {
+                    "name": "Operator"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "ProgramConfig",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "authority",
+              "type": "pubkey"
+            },
+            {
+              "name": "vault_count",
+              "type": "u64"
+            }
+          ]
+        }
+      },
+      {
+        "name": "TellerState",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "base_asset",
+              "docs": ["Immutable after deployment"],
+              "type": "pubkey"
+            },
+            {
+              "name": "decimals",
+              "docs": ["Immutable after deployment"],
+              "type": "u8"
+            },
+            {
+              "name": "exchange_rate_provider",
+              "type": "pubkey"
+            },
+            {
+              "name": "exchange_rate",
+              "type": "u64"
+            },
+            {
+              "name": "exchange_rate_high_water_mark",
+              "type": "u64"
+            },
+            {
+              "name": "fees_owed_in_base_asset",
+              "type": "u64"
+            },
+            {
+              "name": "total_shares_last_update",
+              "type": "u64"
+            },
+            {
+              "name": "last_update_timestamp",
+              "type": "u64"
+            },
+            {
+              "name": "payout_address",
+              "type": "pubkey"
+            },
+            {
+              "name": "allowed_exchange_rate_change_upper_bound",
+              "type": "u16"
+            },
+            {
+              "name": "allowed_exchange_rate_change_lower_bound",
+              "type": "u16"
+            },
+            {
+              "name": "minimum_update_delay_in_seconds",
+              "type": "u32"
+            },
+            {
+              "name": "platform_fee_bps",
+              "type": "u16"
+            },
+            {
+              "name": "performance_fee_bps",
+              "type": "u16"
+            },
+            {
+              "name": "withdraw_authority",
+              "type": "pubkey"
+            }
+          ]
+        }
+      },
+      {
+        "name": "UpdateAssetDataArgs",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "vault_id",
+              "type": "u64"
+            },
+            {
+              "name": "asset_data",
+              "type": {
+                "defined": {
+                  "name": "AssetData"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "VaultState",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "vault_id",
+              "docs": ["Immutable after deployment"],
+              "type": "u64"
+            },
+            {
+              "name": "authority",
+              "type": "pubkey"
+            },
+            {
+              "name": "pending_authority",
+              "type": "pubkey"
+            },
+            {
+              "name": "paused",
+              "type": "bool"
+            },
+            {
+              "name": "share_mint",
+              "docs": ["Immutable after deployment"],
+              "type": "pubkey"
+            },
+            {
+              "name": "deposit_sub_account",
+              "type": "u8"
+            },
+            {
+              "name": "withdraw_sub_account",
+              "type": "u8"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ViewCpiDigestArgs",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "ix_data",
+              "type": "bytes"
+            },
+            {
+              "name": "operators",
+              "type": {
+                "defined": {
+                  "name": "Operators"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "WithdrawArgs",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "vault_id",
+              "type": "u64"
+            },
+            {
+              "name": "share_amount",
+              "type": "u64"
+            },
+            {
+              "name": "min_assets_amount",
+              "type": "u64"
+            }
+          ]
+        }
+      }
+    ]
+  }
