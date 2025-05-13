@@ -1,0 +1,82 @@
+---
+title: Vault Metadata
+description: Read-only functions to fetch basic vault information like TVL and share value.
+---
+
+## Introduction
+
+Basic `read-only` functions that provide information about the vault. These can be done without having a users wallet connected and are meant to provide and show basic data about the vault.
+
+## fetchTotalAssets
+
+This function retrieves a vaults TVL in terms of the baseAsset of the vault.
+
+### Inputs
+
+- None
+
+### Outputs
+
+- A promise that returns the decimal adjusted (human readable) total asset numerical value of the vault (aka TVL) in terms of the baseAsset
+
+### Example
+
+```tsx
+import { useState, useEffect } from "react";
+import { useBoringVaultV1 } from 'boring-vault-ui';
+
+const [assets, setAssets] = useState<number | null>(null);
+const { isBoringV1ContextReady, fetchTotalAssets } = useBoringVaultV1();
+
+useEffect(() => {
+  if (!isBoringV1ContextReady) {
+    console.warn("Boring Vault Context is not ready");
+    return;
+  }
+
+  fetchTotalAssets().then(setAssets);
+}, [isBoringV1ContextReady]);
+
+if (assets) {
+  console.log("The Vaults TVL: ", assets);
+}
+```
+
+---
+
+## fetchShareValue
+
+This function provides the value for 1 share of the vault in terms of the underlying baseAsset.
+
+### Inputs
+
+- None
+
+### Outputs
+
+- A promise that returns the decimal adjusted (human readable) numerical value for 1 share in terms of the underlying baseAsset.
+
+### Example
+
+```tsx
+import { useState, useEffect } from "react";
+import { useBoringVaultV1 } from 'boring-vault-ui';
+
+const [shareValue, setShareValue] = useState<number | null>(null);
+const { isBoringV1ContextReady, fetchShareValue } = useBoringVaultV1();
+
+useEffect(() => {
+  if (!isBoringV1ContextReady) {
+    console.warn("Boring Vault Context is not ready");
+    return;
+  }
+
+  fetchShareValue().then(setShareValue);
+}, [isBoringV1ContextReady]);
+
+if (shareValue) {
+  console.log("The value of 1 share in terms of the baseAsset: ", shareValue);
+}
+```
+
+---

@@ -1,0 +1,20 @@
+{
+  "title": "Boring Vault UI SDK",
+  "pages": [
+    "---Getting Started---",
+    "index",
+    "examples",
+    "---Read Only---",
+    "vault-metadata",
+    "user-metadata",
+    "---Deposits---",
+    "deposits",
+    "---Withdrawals---",
+    "boring-queue",
+    "merkle-distributions",
+    "boring-queue-ui-integration",
+    "---Deprecated---",
+    "withdraw-queue",
+    "delay-withdraws"
+  ]
+}

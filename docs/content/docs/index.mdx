@@ -1,0 +1,105 @@
+---
+title: Quick Start
+description: Get started with the Boring Vault UI SDK
+---
+
+import { TypeTable } from 'fumadocs-ui/components/type-table';
+
+## Installation
+
+First install the dependencies
+
+```package-install
+ethers boring-vault-ui-sdk
+```
+
+If you have installed ethers in your project already, you can skip the ethers installation.
+
+## Set-up the Provider
+
+Interactions to and from a boring vault are done through a parent `context/provider` that defines and sets up all relevant functionalities. The library additionally exposes some render components, however only the context is necessary to interact with the vault, within which a fully custom UI may be built.
+
+### Example
+
+```tsx
+import { ethers } from "ethers";
+import { BoringVaultV1Provider } from 'boring-vault-ui';
+
+
+// 1. Create an ethers provider
+const ethersInfuraProvider = new ethers.InfuraProvider(
+  "mainnet",
+  process.env.INFURA_API_KEY
+);
+
+// 2. Wrap your app with the BoringVaultV1Provider
+function App() {
+  return (
+    <BoringVaultV1Provider
+      vaultDecimals={18}
+      ethersProvider={ethersInfuraProvider}
+      vaultContract="0xc79cC44DC8A91330872D7815aE9CFB04405952ea"
+      tellerContract="0xbBe07e335235b5be21d9Ef413fc52aA250a6C125"
+      accountantContract="0xc6f89cc0551c944CEae872997A4060DC95622D8F"
+      lensContract="0xe12Eef08bfef01579D22895CD790F32d94faA54A"
+      depositTokens={[
+        {
+          address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+          decimals: 18,
+        },
+        {
+          address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          decimals: 6,
+        },
+      ]}
+      baseAsset={{
+        address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        decimals: 18,
+      }}
+    >
+      ...
+    </BoringVaultV1Provider>
+  );
+}
+```
+
+### Inputs
+
+Note all `Contract` input addresses will be provided by the Seven Seas team.
+
+<TypeTable
+  type={{
+    vaultContract: { type: "string", description: "Base contract address for the vault.", required: true },
+    tellerContract: { type: "string", description: "Contract address that is responsible for vending user shares/vault tokens.", required: true },
+    accountantContract: { type: "string", description: "Contract address that manages additional state of the vault.", required: true },
+    lensContract: { type: "string", description: "Contract address that exposes readOnly functionalities on the vault.", required: true },
+    ethersProvider: { type: "ethers.Provider", description: "An ethers provider of your choice to power read and write functionalities for a user/dapp on the vault.", required: true },
+    depositTokens: { type: "Array<{ address: string; decimals: number; }>", description: "A list of accepted deposit tokens.", required: true  },
+    baseToken: { type: "{ address: string; decimals: number; }", description: "The primary base asset of the vault.", required: true },
+    vaultDecimals: { type: "number", description: "The decimal precision of the vault itself.", required: true },
+  }}
+/>
+
+---
+
+## isBoringV1ContextReady
+
+This function denotes if the context is ready for usage.
+
+### Inputs
+
+- None
+
+### Outputs
+
+- Boolean denoting if the context is ready to use
+
+```tsx
+import { useBoringVaultV1 } from 'boring-vault-ui';
+
+const { isBoringV1ContextReady } = useBoringVaultV1();
+
+console.warn("Is the Boring Context Ready: ", isBoringV1ContextReady ? "Yes" : "No");
+
+// Output: Is the Boring Context Ready: Yes
+```
