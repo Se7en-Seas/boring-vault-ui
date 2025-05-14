@@ -190,7 +190,7 @@ import { useBoringVaultV1 } from 'boring-vault-ui';
 // Custom viem to ethers hook (example above in 'Inputs')
 import { useEthersSigner } from "../../hooks/ethers";
 
-const { boringQueueStatuses } = useBoringVaultV1();
+const { fetchBoringQueueAssetParams } = useBoringVaultV1();
 
 const signer = useEthersSigner();
 const [statuses, setStatuses] = useState([]);

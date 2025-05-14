@@ -28,7 +28,7 @@ We recommend using this API to perform basic UX logic checks regarding the above
     - **address**: token contract address
     - **decimals**: decimal precision of the token
 - **discountPercent**: a human readable percent (e.g. 1 = 1%) as a string that represents the max discount from the share price the user is willing to accept. If the share price decreases by more than this amount, the request becomes invalid.
-    - **IMPORTANT NOTE:  If this is set to 100, the share value value will be 100% discounted and essentially be free to the solver of the request**
+    - **IMPORTANT NOTE:  If this is set to 100, the share value will be 100% discounted and essentially be free to the solver of the request**
 - **daysValid**: a string indicating how many days the request should be valid from the moment the request is submitted (1 = 1 day)
 
 ### Outputs
@@ -117,8 +117,8 @@ This function retrieves a list of all **NON EXPIRED** withdraw intents.
 ### Example
 
 ```tsx
+import { useState, useEffect } from "react";
 import { useBoringVaultV1 } from 'boring-vault-ui';
-import React, { useEffect } from "react";
 
 // Custom viem to ethers hook (example above in 'Inputs')
 import { useEthersSigner } from "../../hooks/ethers";
