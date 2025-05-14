@@ -1,0 +1,165 @@
+---
+title: Boring Queue UI Integration
+description: Facilitates user withdrawal requests from vaults, fulfilled by external parties at a discount.
+---
+
+## Introduction
+
+When a user submits their withdraw intent on chain, they need to sign to allow a permit, and submit a withdraw transaction. Once submitted, the tokens leave their wallet and go to the queue. Once fulfilled, the requested assets out will be sent back to their account directly with no action required on their part. If a request is cancelled before fulfillment, the vault tokens will get sent back to the user in the same cancellation tx.
+
+- [Repository Example](https://github.com/Se7en-Seas/boring-vault-ui/blob/main/src/contexts/v1/BoringVaultContextV1.tsx#L1336-L1772)
+
+- API -> `https://api.sevenseas.capital/boringQueue/<network>/<vault_address>/<user_address>?string_values=true`
+
+## requestOnChainWithdrawWithPermit
+
+Transaction example:
+
+https://etherscan.io/tx/0x1eb6b6cea02c973eee025c69236057207c4688532cc4b541147a725d5f45af2a
+
+### Inputs
+
+- **assetOut** (string): the address of the token
+- **amountOfShares** (uint128): the amount of shares the user wants to withdraw in the base denom of the vault
+- **discount** (uint16): the discount to apply to the withdraw in bps adjusted to 5 decimals (e.g. 1% = 10000)
+- **secondsToDeadline** (uint24): the time in seconds the request is valid for after it is available to solve
+- **permitDeadline** (uint256): the unix second deadline at which the permit expires
+
+### Recommendations
+
+- Set all inputs as strings to prevent any rounding issues
+- Set permitDeadline to the current unix time + `secondsToDeadline`
+- The withdraw time for each withdraw asset can vary. Query `withdrawAssets(assetOut)` to get the withdraw info for that asset
+    - `secondsToMaturity` the amount of time it takes for the withdraw to be claimed/solved
+    - `minimumSecondsToDeadline` the minimum `secondsToDeadline` a user can specify. This is the amount of time after `secondsToMaturity` that the request is solvable for.
+        - If the withdraw has not been claimed/solved within that time, the request is expired and will need to be requeued.
+
+### Example
+
+```tsx
+// Generate permit data
+const userAddress = await signer.getAddress();
+const nonce = await vaultContractWithSigner.nonces(userAddress);
+const name = await vaultContractWithSigner.name();
+const chainId = (await ethersProvider.getNetwork()).chainId;
+
+const domain = {
+  name: name,
+  version: '1',
+  chainId: chainId,
+  verifyingContract: vaultContract
+};
+
+const types = {
+  Permit: [
+    { name: 'owner', type: 'address' },
+    { name: 'spender', type: 'address' },
+    { name: 'value', type: 'uint256' },
+    { name: 'nonce', type: 'uint256' },
+    { name: 'deadline', type: 'uint256' }
+  ]
+};
+
+const value = {
+  owner: userAddress,
+  spender: boringQueueContract,
+  value: amountWithdrawBaseDenom,
+  nonce: nonce.toString(),
+  deadline: permitDeadline.toFixed(0)
+};
+
+const signature = await signer.signTypedData(domain, types, value);
+const sig = Signature.from(signature);
+const queueTx =
+  await boringQueueContractWithSigner.requestOnChainWithdrawWithPermit(
+    token.address, // assetOut
+    amountWithdrawBaseDenom.toFixed(0),
+    discountBps.toFixed(0),
+    secondsToDeadline.toFixed(0),
+    permitDeadline.toFixed(0),
+    sig.v, // permit v
+    sig.r, // permit r
+    sig.s  // permit s
+  );
+```
+
+---
+
+## cancelOnChainWithdraw
+
+Transaction example:
+
+https://etherscan.io/tx/0x2e93fb4668587768714d341683cc9f8b698955366f17417adfcd28f2f59f394e
+
+### Inputs
+
+- **request** (tuple)
+    - **nonce** (uint96): unique identifier
+    - **user** (string): users address to cancel withdraw for
+    - **assetOut** (string): the address of the token being withdrawn
+    - **amountOfShares** (uint128): number of shares being withdrawn in the base denom
+    - **amountOfAssets** (uint128 ): the number of assets to be received by the user
+    - **creationTime** (uint40): timestamp the request was created
+    - **secondsToMaturity** (uint24): the seconds until the request becomes mature
+    - **secondsToDeadline** (uint24): the seconds until the request expires and becomes invalid
+
+### Recommendations
+
+- Grab all relevant input data from the API open_requests “metadata” field for the relevant request the user wants to cancel to submit the tx.
+
+### Example
+
+```tsx
+const withdrawURL = `https://api.sevenseas.capital/boringQueue/${chainName}/${vaultContract}/${userAddress}?string_values=true`;
+const response = await fetch(withdrawURL)
+  .then((response) => {
+    return response.json();
+  })
+  .catch((error) => {
+    console.error("Error fetching withdraw queue statuses", error);
+    return [];
+  });
+console.log("Response from Withdraw API: ", response);
+
+// Parse on ["Response"]["open_requests"]
+const openRequests = response["Response"]["open_requests"];
+
+// Filter the requests on the token
+const request = openRequests.find((request: any) => {
+  return request["wantToken"].toLowerCase() === token.address.toLowerCase();
+});
+
+if (!request) {
+  console.error("No request found for token", token.address);
+  setWithdrawStatus({
+    initiated: false,
+    loading: false,
+    success: false,
+    error: "No request found for token",
+  });
+  return null;
+}
+
+// Exercise left for reader: Verify one request per assetOut before cancelling
+
+const metadata = request["metadata"];
+
+const cancelTx =
+  await boringQueueContractWithSigner.cancelOnChainWithdraw(
+    [
+      metadata["nonce"].toString(), // nonce
+      metadata["user"].toString(), // user
+      token.address, // assetOut
+      metadata["amountOfShares"].toString(), // amountOfShares
+      metadata["amountOfAssets"].toString(), // amountOfAssets
+      metadata["creationTime"].toString(), // creationTime
+      metadata["secondsToMaturity"].toString(), // secondsToMaturity
+      metadata["secondsToDeadline"].toString() // secondsToDeadline
+    ]
+  );
+
+// Wait for confirmation
+const cancelReceipt: ContractTransactionReceipt = await cancelTx.wait();
+```
+
+---

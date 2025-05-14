@@ -1,0 +1,215 @@
+---
+title: Merkle Distributions
+description: Functionalities that allow users to claim a Merkle distribution.
+---
+
+## Introduction
+
+Functionalities that allow users to claim a Merkle distribution. A comprehensive example may be found here: [merkleClaimExample.tsx](https://github.com/Se7en-Seas/boring-vault-ui/blob/main/src/examples/merkleClaimExample.tsx)
+
+## merkleClaim
+
+This function allows a user to claim a distribution and requires data from our API to create the proofs and fetch the hashes.
+E.g.https://api.sevenseas.capital/usual-bera/ethereum/merkle/0xbDAc05564bB5D299A0aeF8bB81D1f2701364193D
+
+### Inputs
+
+- **signer**: an ethers `JsonRPCSigner`. If you are using viem, you may use this example to create an ethers signer out of a viem wallet client: [ethers.tsx](https://github.com/Se7en-Seas/boring-vault-ui/blob/main/src/hooks/ethers.tsx)
+- **merkleData**: the relevant metadata needed to complete a claim.  All data can be fetched from our API.
+    - **rootHashes**: a list of relevant hashes to claim
+    - **tokens**: list of rewards token addresses mapped to each claim
+    - **balances**: list of balances to claim per reward
+    - **merkleProofs**: list of proofs
+
+### Outputs
+
+- A promise that returns a `MerkleClaimStatus`
+    - **initiated**: boolean representing if the claim function has been called and is in progress of being executed
+    - **loading**: boolean representing if there is a relevant claim transaction ongoing
+    - **success** (optional): boolean representing if the claim action succeeded
+    - **error** (optional): string representing why a claim failed
+    - **tx_hash** (optional): the string of a successful claim transaction hash
+
+### Example
+
+```tsx
+import { useState, useEffect } from "react";
+import { useBoringVaultV1 } from 'boring-vault-ui';
+
+const { merkleClaim, checkClaimStatuses } = useBoringVaultV1();
+
+/*
+Definitions for your signer
+*/
+
+const [merkleData, setMerkleData] = useState(null);
+const [claimableAmount, setClaimableAmount] = useState<string | null>(null);
+
+useEffect(() => {
+  const fetchMerkleData = async () => {
+    if (!signer) return;
+
+    try {
+      const address = await signer.getAddress();
+      const response = await fetch(`https://api.sevenseas.capital/usual-bera/ethereum/merkle/${address}`);
+      const data = await response.json();
+      console.log("Merkle data: ", data);
+
+      if (data.Response) {
+        const totalBalance = data.Response.total_balance;
+
+        if (totalBalance && parseFloat(totalBalance) > 0) {
+          const claimStatuses = await checkClaimStatuses(
+            address,
+            data.Response.tx_data.rootHashes,
+            data.Response.tx_data.balances
+          );
+
+          // Filter out claimed rewards
+          const unclaimedData = {
+            ...data.Response.tx_data,
+            rootHashes: [],
+            balances: [],
+            merkleProofs: [],
+            tokens: []
+          };
+
+          let totalUnclaimedBalance = BigInt(0);
+
+          claimStatuses.forEach((status, index) => {
+            if (!status.claimed) {
+              unclaimedData.rootHashes.push(data.Response.tx_data.rootHashes[index]);
+              unclaimedData.balances.push(data.Response.tx_data.balances[index]);
+              unclaimedData.merkleProofs.push(data.Response.tx_data.merkleProofs[index]);
+              unclaimedData.tokens.push(data.Response.tx_data.tokens[index]);
+              totalUnclaimedBalance += BigInt(status.balance);
+            }
+          });
+
+          if (totalUnclaimedBalance > BigInt(0)) {
+            const roundedBalance = String(Number(ethers.formatUnits(totalUnclaimedBalance.toString(), 18)));
+            setClaimableAmount(roundedBalance);
+            setMerkleData(unclaimedData);
+          } else {
+            setClaimableAmount("0.00");
+            setMerkleData(null);
+          }
+        } else {
+          setClaimableAmount("0.00");
+          setMerkleData(null);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch Merkle data:", error);
+      setClaimableAmount("0.00");
+      setMerkleData(null);
+    }
+  };
+
+  fetchMerkleData();
+}, [signer, checkClaimStatuses]);
+
+if (merkleData) {
+  merkleClaim(signer, merkleData);
+}
+```
+
+---
+
+## checkClaimStatuses
+
+This object returns an array of relevant metadata for a users claims. Input data can be gleaned from our API as mentioned above.
+
+### Inputs
+
+- **address**: address of the user
+- **rootHashes**: a list of root hashes to check
+- **balances**: a list of balances corresponding to each root has
+
+### Outputs
+
+- Returns relevant metadata in an array
+    - **rootHash**: the relevant root hash
+    - **claimed**: a boolean of if the root hash has been claimed or not
+    - **balance**: the balance of the reward at the root hash
+
+### Example
+
+```tsx
+import { useState, useEffect } from "react";
+import { useBoringVaultV1 } from 'boring-vault-ui';
+
+const { merkleClaim, checkClaimStatuses } = useBoringVaultV1();
+
+/*
+Definitions for your signer
+*/
+
+const [merkleData, setMerkleData] = useState(null);
+const [claimableAmount, setClaimableAmount] = useState<string | null>(null);
+
+useEffect(() => {
+  const fetchMerkleData = async () => {
+    if (!signer) return;
+
+    try {
+      const address = await signer.getAddress();
+      const response = await fetch(`https://api.sevenseas.capital/usual-bera/ethereum/merkle/${address}`);
+      const data = await response.json();
+      console.log("Merkle data: ", data);
+
+      if (data.Response) {
+        const totalBalance = data.Response.total_balance;
+        if (totalBalance && parseFloat(totalBalance) > 0) {
+          const claimStatuses = await checkClaimStatuses(
+            address,
+            data.Response.tx_data.rootHashes,
+            data.Response.tx_data.balances
+          );
+
+          // Filter out claimed rewards
+          const unclaimedData = {
+            ...data.Response.tx_data,
+            rootHashes: [],
+            balances: [],
+            merkleProofs: [],
+            tokens: []
+          };
+
+          let totalUnclaimedBalance = BigInt(0);
+
+          claimStatuses.forEach((status, index) => {
+            if (!status.claimed) {
+              unclaimedData.rootHashes.push(data.Response.tx_data.rootHashes[index]);
+              unclaimedData.balances.push(data.Response.tx_data.balances[index]);
+              unclaimedData.merkleProofs.push(data.Response.tx_data.merkleProofs[index]);
+              unclaimedData.tokens.push(data.Response.tx_data.tokens[index]);
+              totalUnclaimedBalance += BigInt(status.balance);
+            }
+          });
+
+          if (totalUnclaimedBalance > BigInt(0)) {
+            const roundedBalance = String(Number(ethers.formatUnits(totalUnclaimedBalance.toString(), 18)));
+            setClaimableAmount(roundedBalance);
+            setMerkleData(unclaimedData);
+          } else {
+            setClaimableAmount("0.00");
+            setMerkleData(null);
+          }
+        } else {
+          setClaimableAmount("0.00");
+          setMerkleData(null);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch Merkle data:", error);
+      setClaimableAmount("0.00");
+      setMerkleData(null);
+    }
+  };
+
+  fetchMerkleData();
+}, [signer, checkClaimStatuses]);
+
+merkleClaim(signer, merkleData);
+```

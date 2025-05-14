@@ -1,0 +1,145 @@
+---
+title: Withdraw Queue
+description: Deprecated in favor of BoringQueue.
+---
+
+## Introduction
+
+The withdraw queue has users submit a withdraw request that an external party will fulfill for them at a small discount at the current share price (a cost to "solve" the request). Tokens of the desired output asset are transferred directly back to a user once a request is fulfilled.
+
+## queueWithdraw
+
+This function checks if a user has approved the withdraw contract a sufficient amount to transfer vault tokens, if not prompts the user to do so, and finally submits a withdraw intent.
+
+> IMPORTANT NOTE: If this function is called multiple times for a specific token, the intents for that specific token are REPLACED. However if multiple requests for multiple tokens occur, they do not replace each other. Thus if a user wants to make a request for a new token, they should be prompted to first cancel any existing withdraw orders. Seven Seas provides APIs to make it easy to see the status of any given user.
+
+Seven Seas provides APIs that make it easy to see all of a users current withdraw states (open, closed, expired, and fulfilled withdraws)  e.g.
+[https://api.sevenseas.capital/withdrawRequests/ethereum/
+0xeA1A6307D9b18F8d1cbf1c3Dd6aad8416C06a221
+/0x5C6735386Fb4aA70AEe7234Bc7f45Ba7824b42c8](https://api.sevenseas.capital/withdrawRequests/ethereum/0xeA1A6307D9b18F8d1cbf1c3Dd6aad8416C06a221/0x5C6735386Fb4aA70AEe7234Bc7f45Ba7824b42c8)
+
+We recommend using this API to perform basic UX logic checks regarding the above.
+
+### Inputs
+
+- **signer**: an ethers `JsonRPCSigner`. If you are using viem, you may use this example to create an ethers signer out of a viem wallet client: [ethers.tsx](https://github.com/Se7en-Seas/boring-vault-ui/blob/main/src/hooks/ethers.tsx)
+- **amountHumanReadable**: a decimal adjusted (human readable) **string** that represents the amount of vault shares a user wants to withdraw
+- **tokenOut**: the **token** the user wants to receive
+    - **address**: token contract address
+    - **decimals**: decimal precision of the token
+- **discountPercent**: a human readable percent (e.g. 1 = 1%) as a string that represents the max discount from the share price the user is willing to accept. If the share price decreases by more than this amount, the request becomes invalid.
+    - **IMPORTANT NOTE:  If this is set to 100, the share value will be 100% discounted and essentially be free to the solver of the request**
+- **daysValid**: a string indicating how many days the request should be valid from the moment the request is submitted (1 = 1 day)
+
+### Outputs
+
+- A promise that returns a WithdrawStatus
+    - **initiated**: boolean representing if the withdraw function has been called and is in progress of being executed
+    - **loading**: boolean representing if there is a relevant withdraw transaction ongoing (e.g. approval and/or withdraw)
+    - **success** (optional): boolean representing if the withdraw intent action succeeded
+    - **error** (optional): string representing why a withdraw failed (e.g. insufficient balance, approval rejected, etc.)
+    - **tx_hash** (optional): the string of a successful withdraw transaction hash
+
+### Example
+
+```tsx
+import { useBoringVaultV1 } from 'boring-vault-ui';
+
+const { queueWithdraw } = useBoringVaultV1();
+
+/*
+Definitions for your signer, amountHumanReadable, tokenOut, discountPercent,
+and daysValid variables
+*/
+queueWithdraw(signer, amountHumanReadable, tokenOut, discountPercent, daysValid)
+```
+
+---
+
+## withdrawQueueCancel
+
+This function cancels a users withdraw request for a given output asset (and only that asset).
+
+### Inputs
+
+- **signer**: an ethers `JsonRPCSigner`. If you are using viem, you may use this example to create an ethers signer out of a viem wallet client: [ethers.tsx](https://github.com/Se7en-Seas/boring-vault-ui/blob/main/src/hooks/ethers.tsx)
+- **tokenOut**: the output **token** to cancel the request for
+    - **address**: token contract address
+    - **decimals**: decimal precision of the token
+
+### Outputs
+
+- A promise that returns a `WithdrawStatus`
+    - **initiated**: boolean representing if the withdraw function has been called and is in progress of being executed
+    - **loading**: boolean representing if there is a relevant withdraw transaction ongoing
+    - **success** (optional): boolean representing if the withdraw intent action succeeded
+    - **error** (optional): string representing why a withdraw failed
+    - **tx_hash** (optional): the string of a successful withdraw transaction hash
+
+### Example
+
+```tsx
+import { useBoringVaultV1 } from 'boring-vault-ui';
+
+const { withdrawQueueCancel } = useBoringVaultV1();
+
+/*
+Definitions for your signer and tokenOut variables
+*/
+
+withdrawQueueCancel(signer, tokenOut);
+```
+
+---
+
+## withdrawQueueStatuses
+
+This function retrieves a list of all **NON EXPIRED** withdraw intents.
+
+### Inputs
+
+- **signer**: an ethers `JsonRPCSigner`. If you are using viem, you may use this example to create an ethers signer out of a viem wallet client: [ethers.tsx](https://github.com/Se7en-Seas/boring-vault-ui/blob/main/src/hooks/ethers.tsx)
+
+### Outputs
+
+- A promise that returns a list of `WithdrawQueueStatus`\es
+    - **errorCode**: error code from the contract. 0 indicates a valid, fulfillable request. Any other code means the request is invalid the moment it was queried. This can be diagnosed by the solver if non 0 (please follow up with the strategy manager).
+    - **sharesWithdrawing**: human readable number of how many shares the user indicated they wanted to withdraw
+    - **tokenOut:** the output token of the request
+        - **address**: token contract address
+        - **decimals**: decimal precision of the token
+    - **minSharePrice**: number representing the minimum share redemption value the user is willing accept for the base asset for 1 share
+    - **deadlineUnixSeconds**: the unix second deadline at which the request expires/becomes invalid
+    - **blockNumberOpened**: the block number the request was opened at
+    - **timestampOpenedUnixSeconds**: the unix second timestamp at which the request was opened
+    - **transactionHashOpened**: transaction hash in which the request was opened
+
+### Example
+
+```tsx
+import { useState, useEffect } from "react";
+import { useBoringVaultV1 } from 'boring-vault-ui';
+
+// Custom viem to ethers hook (example above in 'Inputs')
+import { useEthersSigner } from "../../hooks/ethers";
+
+const { withdrawQueueStatuses } = useBoringVaultV1();
+
+const signer = useEthersSigner();
+const [statuses, setStatuses] = useState([]);
+
+useEffect(() => {
+  if (!signer) {
+    console.warn("No signer provided to withdrawQueueStatuses");
+    return;
+  }
+
+  withdrawQueueStatuses(signer).then(setStatuses);
+}, [withdrawQueueStatuses, signer]);
+
+if (statuses.length > 0) {
+  console.log(statuses);
+}
+```
+
+---

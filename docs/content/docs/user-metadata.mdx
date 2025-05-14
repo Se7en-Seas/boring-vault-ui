@@ -1,0 +1,84 @@
+---
+title: User Metadata
+description: Functions to fetch user-specific vault data, such as shares and unlock times, requiring a connected wallet address.
+---
+
+## Introduction
+
+These are functions that requires a user to be connected to the dapp with their address exposed via useAddress from wagmi and provide user specific information.
+
+## fetchUserShares
+
+This function provides the decimal adjusted (human readable) numerical value of vault shares that a user owns in their account.
+
+### Inputs
+
+- **userAddress**: the address of the user in the vault you'd like to get the shares for
+
+
+### Outputs
+
+- A promise that returns the decimal adjusted (human readable) total numerical value of all shares of a vault a user owns
+
+### Example
+```tsx
+import { useState, useEffect } from "react";
+import { useBoringVaultV1 } from 'boring-vault-ui';
+
+const [userShares, setUserShares] = useState<number | null>(null);
+const { isBoringV1ContextReady, fetchUserShares } = useBoringVaultV1();
+
+
+useEffect(() => {
+  if (!isBoringV1ContextReady) {
+    console.warn("Boring Vault Context is not ready");
+    return;
+  }
+
+  fetchUserShares('0x...').then(setUserShares);
+}, [isBoringV1ContextReady]);
+
+if (userShares) {
+  console.log("The user's shares: ", userShares);
+}
+```
+
+---
+
+## fetchUserUnlockTime
+
+This function provides the unlock time for when a user may transfer or withdraw their shares.
+
+### Inputs
+
+- **userAddress**: the address of the user in the vault you'd like to get the unlock time for
+
+### Outputs
+
+- A promise that returns the Unix Seconds timestamp for when a user may transfer or withdraw their shares from the vault
+
+### Example
+```tsx
+import { useState, useEffect } from "react";
+import { useBoringVaultV1 } from 'boring-vault-ui';
+
+const [userUnlockTime, setUserUnlockTime] = useState<number | null>(null);
+const { isBoringV1ContextReady, fetchUserUnlockTime } = useBoringVaultV1();
+
+
+useEffect(() => {
+  if (!isBoringV1ContextReady) {
+    console.warn("Boring Vault Context is not ready");
+    return;
+  }
+
+  fetchUserUnlockTime('0x...').then(setUserUnlockTime);
+}, [isBoringV1ContextReady]);
+
+if (userUnlockTime) {
+  console.log("The user's unlock time: ", userUnlockTime);
+}
+```
+
+---
+

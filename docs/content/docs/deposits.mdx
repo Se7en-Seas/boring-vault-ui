@@ -1,0 +1,153 @@
+---
+title: Deposits
+description: Deposit assets into the Boring Vault. Learn about different deposit methods and how to track their progress.
+---
+
+## Introduction
+
+Functionalities that write to the vault. A comprehensive example may be found here in this [repository](https://github.com/Se7en-Seas/boring-vault-ui/edit/main/src/components/v1/DepositButton.tsx#L57).
+
+## deposit
+
+This function checks if a user has approved the spend of an asset into the vault, if not prompts them to do so, and sequentially deposits a users desired assets into the vault.
+
+### Inputs
+
+- **signer**: an ethers `JsonRPCSigner`. If you are using viem, you may use this example to create an ethers signer out of a viem wallet client: [ethers.tsx](https://github.com/Se7en-Seas/boring-vault-ui/blob/main/src/hooks/ethers.tsx)
+- **depositAmount**: a decimal adjusted (human readable) `string` that represents the amount of selectedTokens the user wants to deposit into the vault
+- **selectedToken**: the `token` a user wants to deposit in the format
+    - **address**: token contract address
+    - **decimals**: decimal precision of the token
+
+### Outputs
+
+- A promise that returns a `DepositStatus` object
+    - **initiated**: boolean representing if the deposit function has been called and is in progress of being executed
+    - **loading**: boolean representing if there is a relevant deposit transaction ongoing (e.g. approval and/or deposit)
+    - **success** (optional): boolean representing if the deposit action succeeded
+    - **error** (optional): string representing why a deposit failed (e.g. insufficient balance, approval rejected, etc.)
+    - **tx_hash** (optional): the string of a successful deposit transaction hash
+
+### Example
+
+```tsx
+import { useBoringVaultV1 } from 'boring-vault-ui';
+
+const { deposit } = useBoringVaultV1();
+
+/*
+Definitions for your signer, deposits, and token
+*/
+
+deposit(signer, depositAmount, selectedToken);
+```
+
+---
+
+## depositWithPermit
+
+Performs a token deposit using an [EIP-2612](https://eips.ethereum.org/EIPS/eip-2612) `permit`, allowing for gasless approvals. This enables users to deposit in a single transaction after signing a message.
+
+The token must support the permit function.
+
+>⚠️ Only the following tokens are currently known to support EIP-2612:
+>
+> USDC, USDe, deUSD, LBTC, cbBTC, tBTC
+
+### Inputs
+
+- **signer**: an ethers `JsonRPCSigner`. If you are using viem, you may use this example to create an ethers signer out of a viem wallet client: [ethers.tsx](https://github.com/Se7en-Seas/boring-vault-ui/blob/main/src/hooks/ethers.tsx)
+- **depositAmount**: a decimal adjusted (human readable) `**`string`**` that represents the amount of selectedTokens the user wants to deposit into the vault
+- **selectedToken**: the `token` a user wants to deposit in the format
+    - **address**: token contract address
+    - **decimals**: decimal precision of the token
+- **initialDeadline**:  Unix timestamp (in seconds) for the permit's deadline.
+    - Defaults to `now + 15 minutes`
+    - Use this to shorten the expiration window or enforce a custom one.
+
+### Outputs
+
+- A promise that returns a `DepositStatus`
+    - **initiated**: boolean representing if the deposit function has been called and is in progress of being executed
+    - **loading**: boolean representing if there is a relevant deposit transaction ongoing (e.g. approval and/or deposit)
+    - **success** (optional): boolean representing if the deposit action succeeded
+    - **error** (optional): string representing why a deposit failed (e.g. insufficient balance, approval rejected, etc.)
+    - **tx_hash** (optional): the string of a successful deposit transaction hash
+
+### Example
+
+```tsx
+import { useBoringVaultV1 } from 'boring-vault-ui';
+
+const { deposit } = useBoringVaultV1();
+
+/*
+Definitions for your signer, deposits, and token
+*/
+
+depositWithPermit(signer, depositAmount, selectedToken);
+```
+
+---
+
+## depositStatus
+
+This object provides a `depositStatus` denoting any attributes to an ongoing deposit.
+
+### Inputs
+
+- None
+
+### Outputs
+
+- Returns a `DepositStatus` object
+    - **initiated**: boolean representing if the deposit function has been called and is in progress of being executed
+    - **loading**: boolean representing if there is a relevant deposit transaction ongoing (e.g. approval and/or deposit)
+    - **success** (optional): boolean representing if the deposit action succeeded
+    - **error** (optional): string representing why a deposit failed (e.g. insufficient balance, approval rejected, etc.)
+    - **tx_hash** (optional): the string of a successful deposit transaction hash
+
+
+### Example
+
+```tsx
+import { useEffect } from "react";
+import { useToast } from "@chakra-ui/react";
+import { useBoringVaultV1 } from 'boring-vault-ui';
+
+const toast = useToast();
+const { depositStatus } = useBoringVaultV1();
+
+useEffect(() => {
+  if (depositStatus.loading) {
+    return toast({
+      title: "Processing deposit...",
+      status: "info",
+      duration: 3000,
+      isClosable: true,
+    });
+  }
+
+  if (depositStatus.success) {
+    return toast({
+      title: "Deposit successful",
+      description: `Transaction hash: ${depositStatus.tx_hash}`,
+      status: "success",
+      duration: 5000,
+      isClosable: true,
+    });
+  }
+
+  if (depositStatus.error) {
+    return toast({
+      title: "Failed to deposit",
+      description: depositStatus.error,
+      status: "error",
+      duration: 5000,
+      isClosable: true,
+    });
+  }
+}, [depositStatus, toast]);
+```
+
+---
