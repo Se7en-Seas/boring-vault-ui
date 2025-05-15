@@ -3,6 +3,7 @@ import { BoringVaultSolana } from './boring-vault-solana';
 import { AccountLayout, getAssociatedTokenAddress } from '../utils/spl-token-utils';
 import { parseFullVaultData, FullVaultData } from './vault-state';
 import * as boringVaultIdl from './boring-vault-svm-idl.json';
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 /**
  * Interface for token account data
@@ -28,8 +29,7 @@ export class VaultSDK {
     // Get program ID from env or IDL
     this.programId = new PublicKey(
       process.env.BORING_VAULT_PROGRAM_ID || 
-      boringVaultIdl.address || 
-      '5ZRnXG4GsUMLaN7w2DtJV1cgLgcXHmuHCmJ2MxoorWCE'
+      boringVaultIdl.address 
     );
     
     // Initialize the BoringVaultSolana with the connection
@@ -108,7 +108,7 @@ export class TokenService {
     try {
       const response = await this.connection.getTokenAccountsByOwner(
         owner,
-        { programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') }
+        { programId: TOKEN_PROGRAM_ID }
       );
       
       return response.value.map(account => {
