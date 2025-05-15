@@ -1,0 +1,189 @@
+---
+title: Solana Vault Integration
+description: Tools and utilities for interacting with Boring Vault on Solana
+---
+
+## Introduction
+
+The SDK provides Solana support for interacting with Boring Vault on the Solana blockchain. This documentation covers the functionality for retrieving vault balances and other Solana-specific interactions.
+
+## VaultSDK
+
+The `VaultSDK` class provides a streamlined interface for interacting with Boring Vault on Solana. 
+
+### Initializing the SDK
+
+To use the Solana integration, you first need to create a connection to the Solana network and initialize the SDK:
+
+```tsx
+import { Connection } from '@solana/web3.js';
+import { VaultSDK } from 'boring-vault-ui';
+
+// Initialize a connection to Solana
+const connection = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
+
+// Create the SDK instance
+const vaultSDK = new VaultSDK(connection);
+```
+
+### Getting Vault Balances
+
+You can retrieve the current balance of a vault using the `getVaultBalance` method:
+
+```tsx
+import { PublicKey } from '@solana/web3.js';
+
+// The vault public key
+const vaultPubkey = new PublicKey('your_vault_address_here');
+
+async function checkVaultBalance() {
+  try {
+    // Fetch the vault balance
+    const balance = await vaultSDK.getVaultBalance(vaultPubkey);
+    console.log(`Vault balance: ${balance}`);
+    return balance;
+  } catch (error) {
+    console.error('Error fetching vault balance:', error);
+    return '0';
+  }
+}
+```
+
+### Getting Full Vault Data
+
+For more comprehensive vault information, use the `getVaultData` method:
+
+```tsx
+async function getVaultInfo() {
+  try {
+    // Fetch the complete vault data
+    const vaultData = await vaultSDK.getVaultData(vaultPubkey);
+    
+    console.log('Vault ID:', vaultData.vaultState.vaultId.toString());
+    console.log('Token Mint:', vaultData.tokenMint.toString());
+    console.log('Deposit Sub-Account:', vaultData.vaultState.depositSubAccount);
+    
+    return vaultData;
+  } catch (error) {
+    console.error('Error fetching vault data:', error);
+    return null;
+  }
+}
+```
+
+## BoringVaultSolana
+
+The `BoringVaultSolana` class provides low-level access to the Boring Vault program on Solana.
+
+### Getting User Share Balances
+
+To retrieve a user's balance of vault shares:
+
+```tsx
+import { BoringVaultSolana } from 'boring-vault-ui';
+
+// Initialize the BoringVaultSolana class
+const boringVault = new BoringVaultSolana({
+  connection,
+  programId: 'your_program_id_here' // Optional if using the default program ID
+});
+
+async function getUserShareBalance() {
+  const walletAddress = 'user_wallet_address_here';
+  const vaultId = 123; // The numeric ID of the vault
+  
+  try {
+    // Get the user's share balance in the vault
+    const balanceInfo = await boringVault.getBalance(walletAddress, vaultId);
+    
+    console.log('Raw Balance:', balanceInfo.raw.toString());
+    console.log('Formatted Balance:', balanceInfo.formatted);
+    console.log('Decimals:', balanceInfo.decimals);
+    
+    return balanceInfo;
+  } catch (error) {
+    console.error('Error fetching user share balance:', error);
+    return null;
+  }
+}
+```
+
+## TokenService
+
+The SDK also includes a `TokenService` class for SPL token operations:
+
+```tsx
+import { TokenService } from 'boring-vault-ui';
+import { PublicKey } from '@solana/web3.js';
+
+// Initialize the token service
+const tokenService = new TokenService(connection);
+
+async function getUserTokenAccounts() {
+  const owner = new PublicKey('user_wallet_address_here');
+  
+  try {
+    // Get all token accounts owned by the user
+    const tokenAccounts = await tokenService.getTokenAccountsByOwner(owner);
+    
+    tokenAccounts.forEach(account => {
+      console.log('Token Account:', account.pubkey.toString());
+      console.log('Mint:', account.mint.toString());
+      console.log('Amount:', account.amount);
+      console.log('---');
+    });
+    
+    return tokenAccounts;
+  } catch (error) {
+    console.error('Error fetching token accounts:', error);
+    return [];
+  }
+}
+```
+
+## Complete Example
+
+Here's a complete example showing how to check a vault's balance and a user's share in that vault:
+
+```tsx
+import { Connection, PublicKey } from '@solana/web3.js';
+import { VaultSDK, BoringVaultSolana } from 'boring-vault-ui';
+
+async function checkVaultAndUserBalances() {
+  // Initialize connection and SDK
+  const connection = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
+  const vaultSDK = new VaultSDK(connection);
+  
+  // Vault information
+  const vaultPubkey = new PublicKey('your_vault_address_here');
+  const vaultId = 123; // The numeric ID of the vault
+  const userWallet = 'user_wallet_address_here';
+  
+  try {
+    // 1. Get the vault balance
+    const vaultBalance = await vaultSDK.getVaultBalance(vaultPubkey);
+    console.log(`Vault balance: ${vaultBalance}`);
+    
+    // 2. Get detailed vault information
+    const vaultData = await vaultSDK.getVaultData(vaultPubkey);
+    console.log('Vault data:', vaultData);
+    
+    // 3. Get the user's share balance
+    const boringVault = new BoringVaultSolana({
+      connection,
+      programId: vaultSDK.getProgramId() // Get the program ID from the VaultSDK
+    });
+    
+    const userShareBalance = await boringVault.getBalance(userWallet, vaultId);
+    console.log(`User share balance: ${userShareBalance.formatted}`);
+    
+    return {
+      vaultBalance,
+      vaultData,
+      userShareBalance
+    };
+  } catch (error) {
+    console.error('Error checking balances:', error);
+    return null;
+  }
+} 
