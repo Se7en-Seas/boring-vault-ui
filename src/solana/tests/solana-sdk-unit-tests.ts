@@ -1,6 +1,5 @@
 import { PublicKey, Connection, Transaction, Keypair } from '@solana/web3.js';
 import { BoringVaultSolana } from '../sdk/boring-vault-solana';
-import BN from 'bn.js';
 import { 
   BASE_SEED_BORING_VAULT_STATE, 
   BASE_SEED_BORING_VAULT, 

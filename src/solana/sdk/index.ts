@@ -1,6 +1,6 @@
 import { Connection, PublicKey } from '@solana/web3.js';
 import { BoringVaultSolana } from './boring-vault-solana';
-import { AccountLayout } from '../utils/spl-token-utils';
+import { AccountLayout, getAssociatedTokenAddress } from '../utils/spl-token-utils';
 import { parseFullVaultData, FullVaultData } from './vault-state';
 import * as boringVaultIdl from './boring-vault-svm-idl.json';
 
@@ -43,10 +43,7 @@ export class VaultSDK {
    * Get vault data for a given vault
    */
   async getVaultData(vaultPubkey: PublicKey): Promise<FullVaultData> {
-    // Use vault ID from environment variable or default to 4
-    const vaultId = process.env.VAULT_ID ? parseInt(process.env.VAULT_ID) : 4;
-    
-    // Get the account directly 
+    // Get the account directly for the vaultPubkey parameter 
     const accountInfo = await this.connection.getAccountInfo(vaultPubkey);
     if (!accountInfo) {
       throw new Error(`Vault account not found: ${vaultPubkey.toString()}`);
@@ -136,8 +133,8 @@ export class TokenService {
     owner: PublicKey,
     mint: PublicKey
   ): Promise<PublicKey> {
-    // Reuse the existing function from your spl-token-utils
-    return await require('../utils/spl-token-utils').getAssociatedTokenAddress(
+    // Use the imported function directly
+    return await getAssociatedTokenAddress(
       mint,
       owner,
       false
