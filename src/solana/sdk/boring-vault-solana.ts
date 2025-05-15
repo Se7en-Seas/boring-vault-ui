@@ -124,31 +124,27 @@ export class BoringVaultSolana {
       shareMintPDA
     );
     
-    // Get share token decimals
-    let decimals = 9; // Default to 9 decimals
-    try {
-      const mintInfo = await this.connection.getAccountInfo(shareMintPDA);
-      if (mintInfo) {
-        // Mint data layout has decimals at position 44
-        decimals = mintInfo.data[44];
-      }
-    } catch (error) {
-      console.error('Error fetching share token mint info:', error);
+    // Get share token decimals - throw error if we can't get this critical information
+    let decimals: number;
+    const mintInfo = await this.connection.getAccountInfo(shareMintPDA);
+    if (!mintInfo) {
+      throw new Error(`Share token mint account not found at ${shareMintPDA.toString()}`);
     }
     
-    // Get user's balance
+    // Mint data layout has decimals at position 44
+    decimals = mintInfo.data[44];
+    
+    // Get user's balance - throw error if we can't get token account info
     let rawBalance = new BN(0);
     try {
       const tokenAccount = await this.connection.getAccountInfo(userShareATA);
       if (tokenAccount) {
-        // In v0.1.8, the decode method returns a slightly different structure
         const accountData = AccountLayout.decode(tokenAccount.data);
-        // Make sure to handle any differences in the returned object structure
         rawBalance = new BN(accountData.amount.toString());
       }
     } catch (error) {
-      // Account may not exist if user has no balance
-      console.error('Error fetching token account:', error);
+      // Rethrow with additional context
+      throw new Error(`Failed to fetch token account ${userShareATA.toString()}: ${error}`);
     }
     
     // Format the balance with proper decimals
