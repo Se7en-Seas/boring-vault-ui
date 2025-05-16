@@ -1,13 +1,7 @@
-import { Connection, PublicKey, Transaction } from '@solana/web3.js';
-import BN from 'bn.js';
-
-export interface Wallet {
-  publicKey: PublicKey;
-  signTransaction: (tx: Transaction) => Promise<Transaction>;
-}
+import { Connection } from '@solana/web3.js';
 
 export interface BalanceInfo {
-  raw: BN;
+  raw: bigint;
   formatted: string;
   decimals: number;
 }

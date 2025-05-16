@@ -3,19 +3,8 @@ import { BoringVaultSolana } from './boring-vault-solana';
 import { parseFullVaultData, FullVaultData } from './vault-state';
 import * as boringVaultIdl from './boring-vault-svm-idl.json';
 import { 
-  TOKEN_PROGRAM_ID, 
-  AccountLayout, 
-  getAssociatedTokenAddress 
+  AccountLayout
 } from '@solana/spl-token';
-
-/**
- * Interface for token account data
- */
-export interface TokenAccount {
-  pubkey: PublicKey;
-  mint: PublicKey;
-  amount: string;
-}
 
 /**
  * Vault SDK adapter for mainnet testing
@@ -73,7 +62,7 @@ export class VaultSDK {
   async getVaultBalance(vaultPubkey: PublicKey): Promise<string> {
     // Get vault data using the proper parser
     const vaultData = await this.getVaultData(vaultPubkey);
-    const vaultId = vaultData.vaultState.vaultId.toNumber();
+    const vaultId = Number(vaultData.vaultState.vaultId);
     
     // Use the depositSubAccount from the parsed data
     const depositSubAccount = vaultData.vaultState.depositSubAccount;
@@ -93,54 +82,3 @@ export class VaultSDK {
     return '0';
   }
 }
-
-/**
- * Token service for SPL token operations
- */
-export class TokenService {
-  private connection: Connection;
-  
-  constructor(connection: Connection) {
-    this.connection = connection;
-  }
-
-  /**
-   * Get all token accounts owned by a wallet address
-   */
-  async getTokenAccountsByOwner(owner: PublicKey): Promise<TokenAccount[]> {
-    try {
-      const response = await this.connection.getTokenAccountsByOwner(
-        owner,
-        { programId: TOKEN_PROGRAM_ID }
-      );
-      
-      return response.value.map(account => {
-        const accountData = AccountLayout.decode(account.account.data);
-        
-        return {
-          pubkey: account.pubkey,
-          mint: accountData.mint,
-          amount: accountData.amount.toString()
-        };
-      });
-    } catch (error) {
-      console.error('Error fetching token accounts:', error);
-      return [];
-    }
-  }
-  
-  /**
-   * Find the associated token address for a given owner and mint
-   */
-  async findAssociatedTokenAddress(
-    owner: PublicKey,
-    mint: PublicKey
-  ): Promise<PublicKey> {
-    // Use the imported function directly
-    return await getAssociatedTokenAddress(
-      mint,
-      owner,
-      false
-    );
-  }
-} 
