@@ -1,12 +1,10 @@
 import { PublicKey } from '@solana/web3.js';
-import BN from 'bn.js';
-import * as anchor from '@coral-xyz/anchor';
-import { BorshCoder } from '@coral-xyz/anchor';
+import { Idl, BorshCoder } from '@coral-xyz/anchor';
 import idl from './boring-vault-svm-idl.json';
 
 // Complete Vault State structure from IDL
 export interface VaultState {
-  vaultId: BN;
+  vaultId: bigint;
   authority: PublicKey;
   pendingAuthority: PublicKey;
   paused: boolean;
@@ -18,14 +16,14 @@ export interface VaultState {
 // Asset Data structure from IDL
 export interface AssetData {
   baseAsset: PublicKey;
-  baseAssetMinimum: BN;
+  baseAssetMinimum: bigint;
   sharePrecision: number;
   exchangeRateProvider: PublicKey;
-  exchangeRate: BN;
-  exchangeRateHighWaterMark: BN;
-  feesOwedInBaseAsset: BN;
-  totalSharesLastUpdate: BN;
-  lastUpdateTimestamp: BN;
+  exchangeRate: bigint;
+  exchangeRateHighWaterMark: bigint;
+  feesOwedInBaseAsset: bigint;
+  totalSharesLastUpdate: bigint;
+  lastUpdateTimestamp: bigint;
   payoutAddress: PublicKey;
   allowedExchangeRateChangeUpperBound: number;
   allowedExchangeRateChangeLowerBound: number;
@@ -66,7 +64,7 @@ export function parseFullVaultData(data: Buffer): FullVaultData {
   const rawData = Buffer.from(data);
   
   // Initialize BorshCoder with the IDL
-  const coder = new BorshCoder(idl as anchor.Idl);
+  const coder = new BorshCoder(idl as Idl);
   
   // Extract the account discriminator (first 8 bytes)
   const discriminator = data.slice(0, 8);
@@ -121,7 +119,7 @@ export function parseFullVaultData(data: Buffer): FullVaultData {
   
   // Initialize vault state and asset data objects
   let vaultState: VaultState = {
-    vaultId: new BN(0),
+    vaultId: BigInt(0),
     authority: new PublicKey(0),
     pendingAuthority: new PublicKey(0),
     paused: false,
@@ -136,7 +134,7 @@ export function parseFullVaultData(data: Buffer): FullVaultData {
   if (accountType === 'BoringVault') {
     // For BoringVault, extract vaultState from the config field
     vaultState = {
-      vaultId: accountData.config?.vault_id || new BN(0),
+      vaultId: accountData.config?.vault_id ? BigInt(accountData.config.vault_id.toString()) : BigInt(0),
       authority: accountData.config?.authority || new PublicKey(0),
       pendingAuthority: accountData.config?.pending_authority || new PublicKey(0),
       paused: accountData.config?.paused || false,
@@ -149,14 +147,14 @@ export function parseFullVaultData(data: Buffer): FullVaultData {
     if (accountData.teller) {
       assetData = {
         baseAsset: accountData.teller.base_asset || new PublicKey(0),
-        baseAssetMinimum: accountData.teller.base_asset_minimum || new BN(0),
+        baseAssetMinimum: accountData.teller.base_asset_minimum ? BigInt(accountData.teller.base_asset_minimum.toString()) : BigInt(0),
         sharePrecision: accountData.teller.decimals || 0,
         exchangeRateProvider: accountData.teller.exchange_rate_provider || new PublicKey(0),
-        exchangeRate: accountData.teller.exchange_rate || new BN(0),
-        exchangeRateHighWaterMark: accountData.teller.exchange_rate_high_water_mark || new BN(0),
-        feesOwedInBaseAsset: accountData.teller.fees_owed_in_base_asset || new BN(0),
-        totalSharesLastUpdate: accountData.teller.total_shares_last_update || new BN(0),
-        lastUpdateTimestamp: accountData.teller.last_update_timestamp || new BN(0),
+        exchangeRate: accountData.teller.exchange_rate ? BigInt(accountData.teller.exchange_rate.toString()) : BigInt(0),
+        exchangeRateHighWaterMark: accountData.teller.exchange_rate_high_water_mark ? BigInt(accountData.teller.exchange_rate_high_water_mark.toString()) : BigInt(0),
+        feesOwedInBaseAsset: accountData.teller.fees_owed_in_base_asset ? BigInt(accountData.teller.fees_owed_in_base_asset.toString()) : BigInt(0),
+        totalSharesLastUpdate: accountData.teller.total_shares_last_update ? BigInt(accountData.teller.total_shares_last_update.toString()) : BigInt(0),
+        lastUpdateTimestamp: accountData.teller.last_update_timestamp ? BigInt(accountData.teller.last_update_timestamp.toString()) : BigInt(0),
         payoutAddress: accountData.teller.payout_address || new PublicKey(0),
         allowedExchangeRateChangeUpperBound: accountData.teller.allowed_exchange_rate_change_upper_bound || 0,
         allowedExchangeRateChangeLowerBound: accountData.teller.allowed_exchange_rate_change_lower_bound || 0,
@@ -177,7 +175,7 @@ export function parseFullVaultData(data: Buffer): FullVaultData {
     exchangeRate: assetData ? formatBNWithDecimals(assetData.exchangeRate, 9) : '0',
     feesOwed: assetData ? formatBNWithDecimals(assetData.feesOwedInBaseAsset, 9) : '0',
     totalShares: assetData ? formatBNWithDecimals(assetData.totalSharesLastUpdate, 9) : '0',
-    lastUpdate: assetData ? new Date(assetData.lastUpdateTimestamp.toNumber() * 1000).toISOString() : 'Unknown',
+    lastUpdate: assetData ? new Date(Number(assetData.lastUpdateTimestamp) * 1000).toISOString() : 'Unknown',
     platformFee: assetData ? `${assetData.platformFeeBps / 100}%` : '0%',
     performanceFee: assetData ? `${assetData.performanceFeeBps / 100}%` : '0%'
   };
@@ -198,7 +196,7 @@ export function parseFullVaultData(data: Buffer): FullVaultData {
 /**
  * Format a BN value to a readable string with decimals
  */
-export function formatBNWithDecimals(amount: BN, decimals: number): string {
+export function formatBNWithDecimals(amount: bigint, decimals: number): string {
   const amountStr = amount.toString().padStart(decimals + 1, '0');
   const integerPart = amountStr.slice(0, -decimals) || '0';
   const decimalPart = amountStr.slice(-decimals);

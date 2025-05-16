@@ -6,18 +6,15 @@ import {
   TOKEN_PROGRAM_ID, 
   ASSOCIATED_TOKEN_PROGRAM_ID,
   AccountLayout,
-  getAssociatedTokenAddress
+  MintLayout
 } from '@solana/spl-token';
-import BN from 'bn.js';
 import { 
   BASE_SEED_BORING_VAULT_STATE, 
-  BASE_SEED_BORING_VAULT, 
+  BASE_SEED_BORING_VAULT,
   BASE_SEED_SHARE_TOKEN 
 } from '../utils/constants';
 import { BalanceInfo, BoringVaultSolanaConfig } from '../types';
 import { parseFullVaultData } from './vault-state';
-import { BorshCoder } from '@coral-xyz/anchor';
-import idl from './boring-vault-svm-idl.json';
 
 /**
  * Service for interacting with the BoringVault Solana smart contract
@@ -25,12 +22,10 @@ import idl from './boring-vault-svm-idl.json';
 export class BoringVaultSolana {
   private connection: Connection;
   private programId: PublicKey;
-  private coder: BorshCoder;
   
   constructor({ connection, programId }: BoringVaultSolanaConfig) {
     this.connection = connection;
     this.programId = new PublicKey(programId);
-    this.coder = new BorshCoder(idl as any);
   }
 
   /**
@@ -136,16 +131,19 @@ export class BoringVaultSolana {
     }
     
     // Mint data layout has decimals at position 44
-    decimals = mintInfo.data[44];
+    const mintData = MintLayout.decode(mintInfo.data);
+    decimals = mintData.decimals;
     
     // Get user's balance - throw error if we can't get token account info
-    let rawBalance = new BN(0);
+    let rawBalance = BigInt(0);
     try {
       const tokenAccount = await this.connection.getAccountInfo(userShareATA);
       if (tokenAccount) {
         // This is correct for token accounts owned by SPL Token Program
         const accountData = AccountLayout.decode(tokenAccount.data);
-        rawBalance = new BN(accountData.amount.toString());
+
+        rawBalance = BigInt(accountData.amount.readBigUInt64LE(0));
+
       }
     } catch (error) {
       // Rethrow with additional context
@@ -165,7 +163,7 @@ export class BoringVaultSolana {
   /**
    * Helper to format raw balance with decimals
    */
-  private formatBalance(amount: BN, decimals: number): string {
+  private formatBalance(amount: bigint, decimals: number): string {
     const amountStr = amount.toString().padStart(decimals + 1, '0');
     const integerPart = amountStr.slice(0, -decimals) || '0';
     const decimalPart = amountStr.slice(-decimals);
@@ -178,13 +176,18 @@ export const createBoringVaultSolana = (config: BoringVaultSolanaConfig): Boring
   return new BoringVaultSolana(config);
 };
 
+/**
+ * Helper to find the associated token address
+ */
 async function getTokenAccount(owner: PublicKey, mint: PublicKey): Promise<PublicKey> {
-  // Use our custom utility instead of reimplementing the logic
-  return await getAssociatedTokenAddress(
-    mint,
-    owner,
-    false, // allowOwnerOffCurve
-    TOKEN_PROGRAM_ID,
+  const address = PublicKey.findProgramAddressSync(
+    [
+      owner.toBuffer(),
+      TOKEN_PROGRAM_ID.toBuffer(),
+      mint.toBuffer(),
+    ],
     ASSOCIATED_TOKEN_PROGRAM_ID
-  );
+  )
+
+  return address[0]
 } 

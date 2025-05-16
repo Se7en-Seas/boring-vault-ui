@@ -158,8 +158,9 @@ async function testTransactionFunctionality() {
       mockKeypair.publicKey.toBuffer().copy(mockData, 32);
       
       // 3. Set amount at position 64 (8 bytes for u64)
-      const amount = Buffer.from([10, 0, 0, 0, 0, 0, 0, 0]); // 10 tokens
-      amount.copy(mockData, 64);
+      const amount = Buffer.alloc(8);
+      amount.writeBigUInt64LE(BigInt(10), 0); // Set amount to 10
+      amount.copy(mockData, 64); // Copy to correct position in token account data
       
       return {
         data: mockData,
