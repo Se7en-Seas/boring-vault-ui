@@ -146,8 +146,23 @@ async function testTransactionFunctionality() {
   const mockConnection = {
     getAccountInfo: async (pubkey: PublicKey) => {
       console.log(`Mock: Getting account info for ${pubkey.toString()}`);
+      
+      // Create a properly sized buffer for token accounts
+      const mockData = Buffer.alloc(165); // SPL token accounts are 165 bytes
+      
+      // For proper testing, ensure we have a valid account structure
+      // 1. Set mint at position 0 (32 bytes)
+      mockKeypair.publicKey.toBuffer().copy(mockData, 0);
+      
+      // 2. Set owner at position 32 (32 bytes)
+      mockKeypair.publicKey.toBuffer().copy(mockData, 32);
+      
+      // 3. Set amount at position 64 (8 bytes for u64)
+      const amount = Buffer.from([10, 0, 0, 0, 0, 0, 0, 0]); // 10 tokens
+      amount.copy(mockData, 64);
+      
       return {
-        data: Buffer.from(new Array(100).fill(0)),
+        data: mockData,
         executable: false,
         lamports: 1000000,
         owner: mockKeypair.publicKey

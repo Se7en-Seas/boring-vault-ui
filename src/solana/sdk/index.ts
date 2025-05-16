@@ -1,9 +1,12 @@
 import { Connection, PublicKey } from '@solana/web3.js';
 import { BoringVaultSolana } from './boring-vault-solana';
-import { AccountLayout, getAssociatedTokenAddress } from '../utils/spl-token-utils';
 import { parseFullVaultData, FullVaultData } from './vault-state';
 import * as boringVaultIdl from './boring-vault-svm-idl.json';
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { 
+  TOKEN_PROGRAM_ID, 
+  AccountLayout, 
+  getAssociatedTokenAddress 
+} from '@solana/spl-token';
 
 /**
  * Interface for token account data
@@ -117,7 +120,7 @@ export class TokenService {
         return {
           pubkey: account.pubkey,
           mint: accountData.mint,
-          amount: accountData.amount
+          amount: accountData.amount.toString()
         };
       });
     } catch (error) {

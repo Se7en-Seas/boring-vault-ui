@@ -4,10 +4,10 @@ import {
 } from '@solana/web3.js';
 import { 
   TOKEN_PROGRAM_ID, 
-  ASSOCIATED_TOKEN_PROGRAM_ID
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  AccountLayout,
+  getAssociatedTokenAddress
 } from '@solana/spl-token';
-// Import our custom implementations
-import { getAssociatedTokenAddress, AccountLayout } from '../utils/spl-token-utils';
 import BN from 'bn.js';
 import { 
   BASE_SEED_BORING_VAULT_STATE, 
@@ -16,6 +16,8 @@ import {
 } from '../utils/constants';
 import { BalanceInfo, BoringVaultSolanaConfig } from '../types';
 import { parseFullVaultData } from './vault-state';
+import { BorshCoder } from '@coral-xyz/anchor';
+import idl from './boring-vault-svm-idl.json';
 
 /**
  * Service for interacting with the BoringVault Solana smart contract
@@ -23,10 +25,12 @@ import { parseFullVaultData } from './vault-state';
 export class BoringVaultSolana {
   private connection: Connection;
   private programId: PublicKey;
+  private coder: BorshCoder;
   
   constructor({ connection, programId }: BoringVaultSolanaConfig) {
     this.connection = connection;
     this.programId = new PublicKey(programId);
+    this.coder = new BorshCoder(idl as any);
   }
 
   /**
@@ -95,7 +99,7 @@ export class BoringVaultSolana {
       throw new Error(`Vault state not found for vault ID ${vaultId}`);
     }
     
-    // Only use the proper parser based on IDL structure
+    // Use parseFullVaultData from vault-state.ts, which already uses the Anchor coder
     const fullVaultData = parseFullVaultData(accountInfo.data);
     return { 
       depositSubAccount: fullVaultData.vaultState.depositSubAccount,
@@ -139,6 +143,7 @@ export class BoringVaultSolana {
     try {
       const tokenAccount = await this.connection.getAccountInfo(userShareATA);
       if (tokenAccount) {
+        // This is correct for token accounts owned by SPL Token Program
         const accountData = AccountLayout.decode(tokenAccount.data);
         rawBalance = new BN(accountData.amount.toString());
       }
