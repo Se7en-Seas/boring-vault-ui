@@ -66,6 +66,11 @@ async function loadKeypair(keypairPath?: string): Promise<KeyPairSigner> {
     const keyData = JSON.parse(fs.readFileSync(path, 'utf-8'));
     const secretKey = new Uint8Array(keyData);
     
+    // Validate that the secret key is the correct size (64 bytes for Solana keypairs)
+    if (secretKey.length !== 64) {
+      throw new Error(`Invalid keypair format: Expected 64 bytes but got ${secretKey.length} bytes`);
+    }
+    
     // Solana keypair JSON has 64 bytes: first 32 are private key, last 32 are public key
     // Extract just the private key (first 32 bytes)
     const privateKeyBytes = secretKey.slice(0, 32);
@@ -107,10 +112,12 @@ async function analyzeVaultAccount(): Promise<void> {
     
     console.log('✅ Vault account found');
     console.log(`Owner: ${response.value.owner}`);
-    console.log(`Size: ${response.value.data[1]} bytes`);
+    
+    // Get the data buffer from base64 encoded data
+    const data = Buffer.from(response.value.data[0], 'base64');
+    console.log(`Size: ${data.length} bytes`);
     
     // Get the discriminator for verification
-    const data = Buffer.from(response.value.data[0], 'base64');
     const discriminator = data.slice(0, 8);
     const discriminatorHex = Buffer.from(discriminator).toString('hex');
     console.log(`Discriminator: ${discriminatorHex}`);
