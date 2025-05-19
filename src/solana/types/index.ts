@@ -1,4 +1,4 @@
-import { Connection } from '@solana/web3.js';
+import { type SolanaClient } from 'gill';
 
 export interface BalanceInfo {
   raw: bigint;
@@ -7,6 +7,6 @@ export interface BalanceInfo {
 }
 
 export interface BoringVaultSolanaConfig {
-  connection: Connection;
+  solanaClient: SolanaClient;
   programId: string;
 }

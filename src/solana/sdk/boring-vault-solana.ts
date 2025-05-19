@@ -1,6 +1,3 @@
-import { 
-  Connection, 
-} from '@solana/web3.js';
 import { web3 } from '@coral-xyz/anchor';
 import { 
   TOKEN_PROGRAM_ID, 
@@ -15,16 +12,17 @@ import {
 } from '../utils/constants';
 import { BalanceInfo, BoringVaultSolanaConfig } from '../types';
 import { parseFullVaultData } from './vault-state';
+import { type SolanaClient, Address, createSolanaClient } from 'gill';
 
 /**
  * Service for interacting with the BoringVault Solana smart contract
  */
 export class BoringVaultSolana {
-  private connection: Connection;
+  private rpc: SolanaClient['rpc'];
   private programId: web3.PublicKey;
   
-  constructor({ connection, programId }: BoringVaultSolanaConfig) {
-    this.connection = connection;
+  constructor({ solanaClient, programId }: BoringVaultSolanaConfig) {
+    this.rpc = solanaClient.rpc;
     this.programId = new web3.PublicKey(programId);
   }
 
@@ -88,14 +86,22 @@ export class BoringVaultSolana {
    */
   async getVaultState(vaultId: number): Promise<{ depositSubAccount: number, withdrawSubAccount: number }> {
     const vaultStatePDA = await this.getVaultStatePDA(vaultId);
-    const accountInfo = await this.connection.getAccountInfo(vaultStatePDA);
+    // Convert web3.PublicKey to Address type for gill
+    const address = vaultStatePDA.toBase58() as Address;
+    const response = await this.rpc.getAccountInfo(
+      address,
+      { encoding: 'base64' }
+    ).send();
     
-    if (!accountInfo) {
+    if (!response.value) {
       throw new Error(`Vault state not found for vault ID ${vaultId}`);
     }
     
+    // The data structure is different in gill, we need to extract the data properly
+    const data = Buffer.from(response.value.data[0], 'base64');
+    
     // Use parseFullVaultData from vault-state.ts, which already uses the Anchor coder
-    const fullVaultData = parseFullVaultData(accountInfo.data);
+    const fullVaultData = parseFullVaultData(data);
     return { 
       depositSubAccount: fullVaultData.vaultState.depositSubAccount,
       withdrawSubAccount: fullVaultData.vaultState.withdrawSubAccount
@@ -125,25 +131,33 @@ export class BoringVaultSolana {
     
     // Get share token decimals - throw error if we can't get this critical information
     let decimals: number;
-    const mintInfo = await this.connection.getAccountInfo(shareMintPDA);
-    if (!mintInfo) {
+    // Convert web3.PublicKey to Address type for gill
+    const shareMintAddress = shareMintPDA.toBase58() as Address;
+    const mintResponse = await this.rpc.getAccountInfo(
+      shareMintAddress,
+      { encoding: 'base64' }
+    ).send();
+    if (!mintResponse.value) {
       throw new Error(`Share token mint account not found at ${shareMintPDA.toString()}`);
     }
     
-    // Mint data layout has decimals at position 44
-    const mintData = MintLayout.decode(mintInfo.data);
+    // Extract data from the gill response
+    const mintData = MintLayout.decode(Buffer.from(mintResponse.value.data[0], 'base64'));
     decimals = mintData.decimals;
     
     // Get user's balance - throw error if we can't get token account info
     let rawBalance = BigInt(0);
     try {
-      const tokenAccount = await this.connection.getAccountInfo(userShareATA);
-      if (tokenAccount) {
-        // This is correct for token accounts owned by SPL Token Program
-        const accountData = AccountLayout.decode(tokenAccount.data);
-
+      // Convert web3.PublicKey to Address type for gill
+      const userShareAddress = userShareATA.toBase58() as Address;
+      const tokenResponse = await this.rpc.getAccountInfo(
+        userShareAddress,
+        { encoding: 'base64' }
+      ).send();
+      if (tokenResponse.value) {
+        // Extract data from the gill response
+        const accountData = AccountLayout.decode(Buffer.from(tokenResponse.value.data[0], 'base64'));
         rawBalance = BigInt(accountData.amount.readBigUInt64LE(0));
-
       }
     } catch (error) {
       // Rethrow with additional context
@@ -172,8 +186,15 @@ export class BoringVaultSolana {
 }
 
 // Export a function to create a BoringVaultSolana instance
-export const createBoringVaultSolana = (config: BoringVaultSolanaConfig): BoringVaultSolana => {
-  return new BoringVaultSolana(config);
+export const createBoringVaultSolana = (config: {
+  urlOrMoniker: string;
+  programId: string;
+}): BoringVaultSolana => {
+  const solanaClient = createSolanaClient({ urlOrMoniker: config.urlOrMoniker });
+  return new BoringVaultSolana({
+    solanaClient,
+    programId: config.programId
+  });
 };
 
 /**

@@ -1,9 +1,14 @@
-import { Connection, Keypair } from '@solana/web3.js';
 import { web3 } from '@coral-xyz/anchor';
 import * as fs from 'fs';
 import * as dotenv from 'dotenv';
 import * as readline from 'readline';
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { TOKEN_PROGRAM_ID, AccountLayout } from '@solana/spl-token';
+import { 
+  createSolanaClient, 
+  Address,
+  createKeyPairSignerFromPrivateKeyBytes,
+  type KeyPairSigner
+} from 'gill';
 
 // Import services from SDK location
 import { VaultSDK } from '../sdk';
@@ -41,13 +46,15 @@ const MAINNET_CONFIG = {
   tokenMint: TOKEN_MINTS.JITO_SOL,
 };
 
-// Create connection to Solana network
-const connection = new Connection(MAINNET_CONFIG.rpcUrl, 'confirmed');
+// Create Solana client
+const solanaClient = createSolanaClient({ 
+  urlOrMoniker: MAINNET_CONFIG.rpcUrl 
+});
 
 /**
- * Load keypair from file
+ * Load keypair from file using gill's keypair signer
  */
-function loadKeypair(keypairPath?: string): Keypair {
+async function loadKeypair(keypairPath?: string): Promise<KeyPairSigner> {
   const path = keypairPath || process.env.KEYPAIR_PATH || '';
   
   if (!path) {
@@ -55,8 +62,20 @@ function loadKeypair(keypairPath?: string): Keypair {
   }
   
   try {
+    // Load key data using fs and create a keypair signer
     const keyData = JSON.parse(fs.readFileSync(path, 'utf-8'));
-    return Keypair.fromSecretKey(new Uint8Array(keyData));
+    const secretKey = new Uint8Array(keyData);
+    
+    // Solana keypair JSON has 64 bytes: first 32 are private key, last 32 are public key
+    // Extract just the private key (first 32 bytes)
+    const privateKeyBytes = secretKey.slice(0, 32);
+    
+    // Create keypair signer using just the private key bytes
+    const keypairSigner = await createKeyPairSignerFromPrivateKeyBytes(privateKeyBytes);
+    
+    console.log(`Loaded keypair with address: ${keypairSigner.address}`);
+    
+    return keypairSigner;
   } catch (error) {
     console.error('Failed to load keypair:', error);
     throw new Error('Failed to load keypair from file');
@@ -72,19 +91,27 @@ async function analyzeVaultAccount(): Promise<void> {
     const vaultPubkey = MAINNET_CONFIG.vaultPubkey;
     
     console.log(`Fetching data for vault: ${vaultPubkey.toString()}`);
-    const accountInfo = await connection.getAccountInfo(vaultPubkey);
     
-    if (!accountInfo) {
+    // Try using the address directly without converting to string first
+    // Also enable `encoding: 'base64'` to satisfy the error message
+    const address = vaultPubkey.toBase58() as Address;
+    const response = await solanaClient.rpc.getAccountInfo(
+      address,
+      { encoding: 'base64' }
+    ).send();
+    
+    if (!response.value) {
       console.log('❌ Vault account not found');
       return;
     }
     
     console.log('✅ Vault account found');
-    console.log(`Owner: ${accountInfo.owner.toString()}`);
-    console.log(`Size: ${accountInfo.data.length} bytes`);
+    console.log(`Owner: ${response.value.owner}`);
+    console.log(`Size: ${response.value.data[1]} bytes`);
     
     // Get the discriminator for verification
-    const discriminator = accountInfo.data.slice(0, 8);
+    const data = Buffer.from(response.value.data[0], 'base64');
+    const discriminator = data.slice(0, 8);
     const discriminatorHex = Buffer.from(discriminator).toString('hex');
     console.log(`Discriminator: ${discriminatorHex}`);
     
@@ -101,8 +128,8 @@ async function testReadOperations() {
   console.log('\n=== VAULT DATA DETAILS ===');
   
   try {
-    // Create service instances
-    const vaultService = new VaultSDK(connection);
+    // Create service instances - passing RPC URL directly
+    const vaultService = new VaultSDK(MAINNET_CONFIG.rpcUrl);
     const vaultPubkey = MAINNET_CONFIG.vaultPubkey;
     
     // Fetch vault data
@@ -148,28 +175,35 @@ async function testUserBalances(): Promise<any[] | undefined> {
   console.log('\n=== TESTING USER BALANCES ===');
   
   try {
-    const vaultService = new VaultSDK(connection);
-    const signer = loadKeypair();
+    const vaultService = new VaultSDK(MAINNET_CONFIG.rpcUrl);
+    const signer = await loadKeypair();
     
-    console.log(`Checking balances for wallet: ${signer.publicKey.toString()}`);
+    // Use signer.address instead of signer.publicKey.toString()
+    console.log(`Checking balances for wallet: ${signer.address}`);
     
-    // Get native SOL balance
-    const solBalance = await connection.getBalance(signer.publicKey);
+    // Get native SOL balance with base64 encoding
+    const signerAddress = signer.address;
+    const solBalanceResponse = await solanaClient.rpc.getBalance(signerAddress).send();
+    const solBalance = Number(solBalanceResponse.value);
     console.log(`\nNative SOL Balance: ${solBalance / 1_000_000_000} SOL (${solBalance} lamports)`);
     
-    // Use connection directly to get token accounts
-    const response = await connection.getParsedTokenAccountsByOwner(
-      signer.publicKey,
-      { programId: TOKEN_PROGRAM_ID }
-    );
+    // Use gill to get token accounts with base64 encoding
+    const tokenAccountsResponse = await solanaClient.rpc.getTokenAccountsByOwner(
+      signerAddress,
+      { programId: TOKEN_PROGRAM_ID.toString() as Address },
+      { encoding: 'base64' }
+    ).send();
     
-    const tokenAccounts = response.value.map(item => {
-      const accountData = item.account.data.parsed.info;
+    const tokenAccounts = tokenAccountsResponse.value.map(item => {
+      // Convert the account data Buffer to the format we need
+      const data = Buffer.from(item.account.data[0], 'base64');
+      const accountData = AccountLayout.decode(data);
+
       return {
         pubkey: item.pubkey,
         mint: new web3.PublicKey(accountData.mint),
         owner: new web3.PublicKey(accountData.owner),
-        amount: accountData.tokenAmount.uiAmountString
+        amount: accountData.amount.readBigUInt64LE(0).toString()
       };
     });
     
@@ -193,30 +227,41 @@ async function getBalance(): Promise<any> {
   console.log('\n=== CHECKING USER BALANCE IN VAULT ===');
   
   try {
-    const vaultService = new VaultSDK(connection);
+    const vaultService = new VaultSDK(MAINNET_CONFIG.rpcUrl);
     const vaultPubkey = MAINNET_CONFIG.vaultPubkey;
-    const signer = loadKeypair();
+    const signer = await loadKeypair();
     const vaultData = await vaultService.getVaultData(vaultPubkey);
     
     console.log(`Vault: ${vaultPubkey.toString()}`);
     console.log(`Share Token Mint: ${vaultData.vaultState.shareMint.toString()}`);
     
-    // Get all token accounts
-    const response = await connection.getParsedTokenAccountsByOwner(
-      signer.publicKey,
-      { programId: TOKEN_PROGRAM_ID }
-    );
+    // Use gill to get token accounts with base64 encoding
+    const signerAddress = signer.address;
+    const tokenAccountsResponse = await solanaClient.rpc.getTokenAccountsByOwner(
+      signerAddress,
+      { programId: TOKEN_PROGRAM_ID.toString() as Address },
+      { encoding: 'base64' }
+    ).send();
+    
+    // Convert shareMint to string for comparison
+    const shareMintString = vaultData.vaultState.shareMint.toString();
     
     // Look for share token account
-    const shareTokenAccount = response.value.find(item => 
-      item.account.data.parsed.info.mint === vaultData.vaultState.shareMint.toString()
-    );
+    const shareTokenAccount = tokenAccountsResponse.value.find(item => {
+      const data = Buffer.from(item.account.data[0], 'base64');
+      const accountData = AccountLayout.decode(data);
+      const mintString = new web3.PublicKey(accountData.mint).toString();
+      return mintString === shareMintString;
+    });
     
     if (shareTokenAccount) {
-      const tokenAmount = shareTokenAccount.account.data.parsed.info.tokenAmount;
-      console.log(`✅ User has ${tokenAmount.uiAmountString} shares of this vault`);
-      console.log(`Share token account: ${shareTokenAccount.pubkey.toString()}`);
-      return tokenAmount.uiAmountString;
+      const data = Buffer.from(shareTokenAccount.account.data[0], 'base64');
+      const accountData = AccountLayout.decode(data);
+      const amount = accountData.amount.readBigUInt64LE(0).toString();
+      
+      console.log(`✅ User has ${amount} shares of this vault`);
+      console.log(`Share token account: ${shareTokenAccount.pubkey}`);
+      return amount;
     } else {
       console.log(`❌ User does not have share tokens for this vault`);
       return 0;

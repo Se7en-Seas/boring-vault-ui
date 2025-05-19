@@ -16,14 +16,16 @@ The `VaultSDK` class provides a streamlined interface for interacting with Borin
 To use the Solana integration, you first need to create a connection to the Solana network and initialize the SDK:
 
 ```tsx
-import { Connection } from '@solana/web3.js';
+import { createSolanaClient } from 'gill';
 import { VaultSDK } from 'boring-vault-ui';
 
-// Initialize a connection to Solana
-const connection = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
+// Initialize a Solana client using gill
+const rpcUrl = 'https://api.mainnet-beta.solana.com';
+// You can also use moniker shortcuts like 'mainnet', 'devnet', etc.
+const solanaClient = createSolanaClient({ urlOrMoniker: rpcUrl });
 
 // Create the SDK instance
-const vaultSDK = new VaultSDK(connection);
+const vaultSDK = new VaultSDK(rpcUrl);
 ```
 
 ### Getting Vault Balances
@@ -75,19 +77,23 @@ async function getVaultInfo() {
 
 The `BoringVaultSolana` class provides low-level access to the Boring Vault program on Solana.
 
+### Creating a BoringVaultSolana Instance
+
+```tsx
+import { createBoringVaultSolana } from 'boring-vault-ui';
+
+// Create the BoringVaultSolana instance with gill integration
+const boringVault = createBoringVaultSolana({
+  urlOrMoniker: 'https://api.mainnet-beta.solana.com',
+  programId: 'your_program_id_here'
+});
+```
+
 ### Getting User Share Balances
 
 To retrieve a user's balance of vault shares:
 
 ```tsx
-import { BoringVaultSolana } from 'boring-vault-ui';
-
-// Initialize the BoringVaultSolana class
-const boringVault = new BoringVaultSolana({
-  connection,
-  programId: 'your_program_id_here' // Optional if using the default program ID
-});
-
 async function getUserShareBalance() {
   const walletAddress = 'user_wallet_address_here';
   const vaultId = 123; // The numeric ID of the vault
@@ -108,36 +114,67 @@ async function getUserShareBalance() {
 }
 ```
 
-## TokenService
+## Loading a Keypair
 
-The SDK also includes a `TokenService` class for SPL token operations:
+When you need to use a keypair from a Solana CLI-formatted JSON file (e.g., for testing or administrative operations):
 
 ```tsx
-import { TokenService } from 'boring-vault-ui';
-import { PublicKey } from '@solana/web3.js';
+import { createKeyPairSignerFromPrivateKeyBytes } from 'gill';
+import * as fs from 'fs';
 
-// Initialize the token service
-const tokenService = new TokenService(connection);
-
-async function getUserTokenAccounts() {
-  const owner = new PublicKey('user_wallet_address_here');
-  
+/**
+ * Load keypair from file using gill's keypair signer
+ */
+async function loadKeypair(keypairPath: string) {
   try {
-    // Get all token accounts owned by the user
-    const tokenAccounts = await tokenService.getTokenAccountsByOwner(owner);
+    // Load key data using fs
+    const keyData = JSON.parse(fs.readFileSync(keypairPath, 'utf-8'));
+    const secretKey = new Uint8Array(keyData);
     
-    tokenAccounts.forEach(account => {
-      console.log('Token Account:', account.pubkey.toString());
-      console.log('Mint:', account.mint.toString());
-      console.log('Amount:', account.amount);
-      console.log('---');
-    });
+    // Solana keypair JSON has 64 bytes: first 32 are private key, last 32 are public key
+    // Extract just the private key (first 32 bytes)
+    const privateKeyBytes = secretKey.slice(0, 32);
     
-    return tokenAccounts;
+    // Create keypair signer using just the private key bytes
+    const keypairSigner = await createKeyPairSignerFromPrivateKeyBytes(privateKeyBytes);
+    
+    console.log(`Loaded keypair with address: ${keypairSigner.address}`);
+    
+    return keypairSigner;
   } catch (error) {
-    console.error('Error fetching token accounts:', error);
-    return [];
+    console.error('Failed to load keypair:', error);
+    throw new Error('Failed to load keypair from file');
   }
+}
+```
+
+## Working with RPC Calls and Encoding
+
+When working with the Solana RPC, it's important to use base64 encoding for account data:
+
+```tsx
+import { createSolanaClient, Address } from 'gill';
+
+const solanaClient = createSolanaClient({ urlOrMoniker: 'mainnet' });
+
+async function getAccountInfo(publicKey) {
+  // Convert PublicKey to Address type for gill
+  const address = publicKey.toBase58() as Address;
+  
+  // Always use base64 encoding for account data
+  const response = await solanaClient.rpc.getAccountInfo(
+    address,
+    { encoding: 'base64' }
+  ).send();
+  
+  if (response.value) {
+    // Extract data from the gill response
+    const data = Buffer.from(response.value.data[0], 'base64');
+    console.log('Account data:', data);
+    return data;
+  }
+  
+  return null;
 }
 ```
 
@@ -146,13 +183,15 @@ async function getUserTokenAccounts() {
 Here's a complete example showing how to check a vault's balance and a user's share in that vault:
 
 ```tsx
-import { Connection, PublicKey } from '@solana/web3.js';
-import { VaultSDK, BoringVaultSolana } from 'boring-vault-ui';
+import { PublicKey } from '@solana/web3.js';
+import { createSolanaClient } from 'gill';
+import { VaultSDK, createBoringVaultSolana } from 'boring-vault-ui';
 
 async function checkVaultAndUserBalances() {
-  // Initialize connection and SDK
-  const connection = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
-  const vaultSDK = new VaultSDK(connection);
+  // Initialize Solana client and SDK
+  const rpcUrl = 'https://api.mainnet-beta.solana.com';
+  const solanaClient = createSolanaClient({ urlOrMoniker: rpcUrl });
+  const vaultSDK = new VaultSDK(rpcUrl);
   
   // Vault information
   const vaultPubkey = new PublicKey('your_vault_address_here');
@@ -169,8 +208,8 @@ async function checkVaultAndUserBalances() {
     console.log('Vault data:', vaultData);
     
     // 3. Get the user's share balance
-    const boringVault = new BoringVaultSolana({
-      connection,
+    const boringVault = createBoringVaultSolana({
+      urlOrMoniker: rpcUrl,
       programId: vaultSDK.getProgramId() // Get the program ID from the VaultSDK
     });
     

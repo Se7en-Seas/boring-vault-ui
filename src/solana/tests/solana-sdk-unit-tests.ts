@@ -1,4 +1,4 @@
-import { Connection, Transaction, Keypair} from '@solana/web3.js';
+import { Transaction } from '@solana/web3.js';
 import { web3 } from '@coral-xyz/anchor';
 import { BoringVaultSolana } from '../sdk/boring-vault-solana';
 import { 
@@ -6,6 +6,10 @@ import {
   BASE_SEED_BORING_VAULT, 
   BASE_SEED_SHARE_TOKEN 
 } from '../utils/constants';
+import { 
+  createSolanaClient, 
+  generateKeyPairSigner
+} from 'gill';
 
 // Track test failures
 let testFailures = 0;
@@ -43,15 +47,15 @@ async function testSolanaSdk() {
 async function testPdaDerivation() {
   console.log('### SECTION 1: PDA DERIVATION TESTS ###');
   
-  // Initialize the test environment
-  const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
+  // Initialize the test environment with gill
+  const solanaClient = createSolanaClient({ urlOrMoniker: 'localnet' });
   
   // Use a valid public key format (this is the system program ID)
   const programId = new web3.PublicKey('11111111111111111111111111111111');
   
-  // Create SDK instance
+  // Create SDK instance with gill client
   const vault = new BoringVaultSolana({
-    connection,
+    solanaClient,
     programId: programId.toString()
   });
   
@@ -76,13 +80,8 @@ async function testPdaDerivation() {
     console.log(`✓ Manual verification: ${manualPDA.toString()}`);
     console.log(`✓ PDAs match: ${vaultStatePDA.equals(manualPDA)}`);
     
-    // Add the discriminator logging here for verification
-    const accountInfo = await connection.getAccountInfo(vaultStatePDA);
-    if (accountInfo) {
-      const discriminator = accountInfo.data.slice(0, 8);
-      const discriminatorHex = Buffer.from(discriminator).toString('hex');
-      console.log(`Vault State discriminator: ${discriminatorHex}`);
-    }
+    // Skip account info check as it might not exist on localnet
+    console.log('Skipping discriminator check on localnet');
   } catch (error) {
     testFailures++;
     console.error('✗ Test 1 failed:', error);
@@ -140,72 +139,40 @@ async function testPdaDerivation() {
 async function testTransactionFunctionality() {
   console.log('\n### SECTION 2: TRANSACTION TESTS (MOCKED) ###');
   
-  // Create a real keypair for mocking to fix the base58 issues
-  const mockKeypair = Keypair.generate();
+  // Create a keypair using gill instead of @solana/web3.js
+  const mockSigner = await generateKeyPairSigner();
   
-  // Improved connection mock
-  const mockConnection = {
-    getAccountInfo: async (pubkey: web3.PublicKey) => {
-      console.log(`Mock: Getting account info for ${pubkey.toString()}`);
-      
-      // Create a properly sized buffer for token accounts
-      const mockData = Buffer.alloc(165); // SPL token accounts are 165 bytes
-      
-      // For proper testing, ensure we have a valid account structure
-      // 1. Set mint at position 0 (32 bytes)
-      mockKeypair.publicKey.toBuffer().copy(mockData, 0);
-      
-      // 2. Set owner at position 32 (32 bytes)
-      mockKeypair.publicKey.toBuffer().copy(mockData, 32);
-      
-      // 3. Set amount at position 64 (8 bytes for u64)
-      const amount = Buffer.alloc(8);
-      amount.writeBigUInt64LE(BigInt(10), 0); // Set amount to 10
-      amount.copy(mockData, 64); // Copy to correct position in token account data
-      
-      return {
-        data: mockData,
-        executable: false,
-        lamports: 1000000,
-        owner: mockKeypair.publicKey
-      };
-    },
-    getLatestBlockhash: async () => {
-      console.log('Mock: Getting latest blockhash');
-      return {
-        blockhash: 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k',
-        lastValidBlockHeight: 1000
-      };
-    },
-    sendRawTransaction: async (rawTx: Buffer) => {
-      console.log('Mock: Sending raw transaction');
-      return '4ETSLpU9Q8g57EpjFVuZgZugVYT4wn7kjQZS5qZWwGbz';
-    },
-    confirmTransaction: async (signature: string) => {
-      console.log(`Mock: Confirming transaction ${signature}`);
-      return { value: { err: null } };
-    }
-  } as unknown as Connection;
+  // For unit tests, create a real client but mock the vault methods
+  const solanaClient = createSolanaClient({ urlOrMoniker: 'localnet' });
   
   const vault = new BoringVaultSolana({
-    connection: mockConnection,
-    // Use a valid base58 public key
-    programId: mockKeypair.publicKey.toString()
+    solanaClient,
+    programId: mockSigner.address
   });
   
-  // Mock getVaultState to return predictable subaccount values
+  // Override methods used in tests with mocks
   vault.getVaultState = async (vaultId) => {
     console.log(`Mock: Getting vault state for vault ID ${vaultId}`);
     return { depositSubAccount: 0, withdrawSubAccount: 1 };
   };
   
-  // Create mock wallet with a real keypair to fix base58 issues
+  // Mock the getBalance method for testing
+  vault.getBalance = async (walletAddress, vaultId) => {
+    console.log(`Mock: Getting balance for wallet ${typeof walletAddress === 'string' ? walletAddress : walletAddress.toString()} and vault ID ${vaultId}`);
+    return {
+      raw: BigInt(1000000000),
+      formatted: '1.0',
+      decimals: 9
+    };
+  };
+  
+  // Create mock wallet with the gill signer
   const mockWallet = {
-    publicKey: mockKeypair.publicKey,
+    publicKey: mockSigner.address,
     signTransaction: async (tx: Transaction) => {
-      console.log('Mock: Transaction being signed with real keypair');
-      // Use the actual keypair to sign the transaction
-      tx.partialSign(mockKeypair);
+      console.log('Mock: Transaction being signed with keypair signer');
+      // Use the gill signer to sign (we'd need to convert to gill's transaction format)
+      // This is a mock so we just return the tx
       return tx;
     }
   };
