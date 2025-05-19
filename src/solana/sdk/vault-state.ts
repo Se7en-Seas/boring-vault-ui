@@ -1,36 +1,35 @@
-import { PublicKey } from '@solana/web3.js';
-import { Idl, BorshCoder } from '@coral-xyz/anchor';
+import { web3, Idl, BorshCoder } from '@coral-xyz/anchor';
 import idl from './boring-vault-svm-idl.json';
 
 // Complete Vault State structure from IDL
 export interface VaultState {
   vaultId: bigint;
-  authority: PublicKey;
-  pendingAuthority: PublicKey;
+  authority: web3.PublicKey;
+  pendingAuthority: web3.PublicKey;
   paused: boolean;
-  shareMint: PublicKey;
+  shareMint: web3.PublicKey;
   depositSubAccount: number;
   withdrawSubAccount: number;
 }
 
 // Asset Data structure from IDL
 export interface AssetData {
-  baseAsset: PublicKey;
+  baseAsset: web3.PublicKey;
   baseAssetMinimum: bigint;
   sharePrecision: number;
-  exchangeRateProvider: PublicKey;
+  exchangeRateProvider: web3.PublicKey;
   exchangeRate: bigint;
   exchangeRateHighWaterMark: bigint;
   feesOwedInBaseAsset: bigint;
   totalSharesLastUpdate: bigint;
   lastUpdateTimestamp: bigint;
-  payoutAddress: PublicKey;
+  payoutAddress: web3.PublicKey;
   allowedExchangeRateChangeUpperBound: number;
   allowedExchangeRateChangeLowerBound: number;
   minimumUpdateDelayInSeconds: number;
   platformFeeBps: number;
   performanceFeeBps: number;
-  withdrawAuthority: PublicKey;
+  withdrawAuthority: web3.PublicKey;
 }
 
 // Full vault account data with all parsed structures
@@ -40,7 +39,7 @@ export interface FullVaultData {
   assetData?: AssetData;
   rawData: Buffer;
   // Added properties to support enhanced data display
-  tokenMint?: PublicKey;
+  tokenMint?: web3.PublicKey;
   readableData?: {
     vaultId: string;
     paused: boolean;
@@ -120,10 +119,10 @@ export function parseFullVaultData(data: Buffer): FullVaultData {
   // Initialize vault state and asset data objects
   let vaultState: VaultState = {
     vaultId: BigInt(0),
-    authority: new PublicKey(0),
-    pendingAuthority: new PublicKey(0),
+    authority: new web3.PublicKey(0),
+    pendingAuthority: new web3.PublicKey(0),
     paused: false,
-    shareMint: new PublicKey(0),
+    shareMint: new web3.PublicKey(0),
     depositSubAccount: 0,
     withdrawSubAccount: 0
   };
@@ -135,10 +134,10 @@ export function parseFullVaultData(data: Buffer): FullVaultData {
     // For BoringVault, extract vaultState from the config field
     vaultState = {
       vaultId: accountData.config?.vault_id ? BigInt(accountData.config.vault_id.toString()) : BigInt(0),
-      authority: accountData.config?.authority || new PublicKey(0),
-      pendingAuthority: accountData.config?.pending_authority || new PublicKey(0),
+      authority: accountData.config?.authority || new web3.PublicKey(0),
+      pendingAuthority: accountData.config?.pending_authority || new web3.PublicKey(0),
       paused: accountData.config?.paused || false,
-      shareMint: accountData.config?.share_mint || new PublicKey(0),
+      shareMint: accountData.config?.share_mint || new web3.PublicKey(0),
       depositSubAccount: accountData.config?.deposit_sub_account || 0,
       withdrawSubAccount: accountData.config?.withdraw_sub_account || 0
     };
@@ -146,22 +145,22 @@ export function parseFullVaultData(data: Buffer): FullVaultData {
     // Extract asset data from the teller field
     if (accountData.teller) {
       assetData = {
-        baseAsset: accountData.teller.base_asset || new PublicKey(0),
+        baseAsset: accountData.teller.base_asset || new web3.PublicKey(0),
         baseAssetMinimum: accountData.teller.base_asset_minimum ? BigInt(accountData.teller.base_asset_minimum.toString()) : BigInt(0),
         sharePrecision: accountData.teller.decimals || 0,
-        exchangeRateProvider: accountData.teller.exchange_rate_provider || new PublicKey(0),
+        exchangeRateProvider: accountData.teller.exchange_rate_provider || new web3.PublicKey(0),
         exchangeRate: accountData.teller.exchange_rate ? BigInt(accountData.teller.exchange_rate.toString()) : BigInt(0),
         exchangeRateHighWaterMark: accountData.teller.exchange_rate_high_water_mark ? BigInt(accountData.teller.exchange_rate_high_water_mark.toString()) : BigInt(0),
         feesOwedInBaseAsset: accountData.teller.fees_owed_in_base_asset ? BigInt(accountData.teller.fees_owed_in_base_asset.toString()) : BigInt(0),
         totalSharesLastUpdate: accountData.teller.total_shares_last_update ? BigInt(accountData.teller.total_shares_last_update.toString()) : BigInt(0),
         lastUpdateTimestamp: accountData.teller.last_update_timestamp ? BigInt(accountData.teller.last_update_timestamp.toString()) : BigInt(0),
-        payoutAddress: accountData.teller.payout_address || new PublicKey(0),
+        payoutAddress: accountData.teller.payout_address || new web3.PublicKey(0),
         allowedExchangeRateChangeUpperBound: accountData.teller.allowed_exchange_rate_change_upper_bound || 0,
         allowedExchangeRateChangeLowerBound: accountData.teller.allowed_exchange_rate_change_lower_bound || 0,
         minimumUpdateDelayInSeconds: accountData.teller.minimum_update_delay_in_seconds || 0,
         platformFeeBps: accountData.teller.platform_fee_bps || 0,
         performanceFeeBps: accountData.teller.performance_fee_bps || 0,
-        withdrawAuthority: accountData.teller.withdraw_authority || new PublicKey(0)
+        withdrawAuthority: accountData.teller.withdraw_authority || new web3.PublicKey(0)
       };
     }
   }

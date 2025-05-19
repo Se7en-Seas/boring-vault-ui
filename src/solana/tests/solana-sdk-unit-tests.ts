@@ -1,4 +1,5 @@
-import { PublicKey, Connection, Transaction, Keypair } from '@solana/web3.js';
+import { Connection, Transaction, Keypair} from '@solana/web3.js';
+import { web3 } from '@coral-xyz/anchor';
 import { BoringVaultSolana } from '../sdk/boring-vault-solana';
 import { 
   BASE_SEED_BORING_VAULT_STATE, 
@@ -46,7 +47,7 @@ async function testPdaDerivation() {
   const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
   
   // Use a valid public key format (this is the system program ID)
-  const programId = new PublicKey('11111111111111111111111111111111');
+  const programId = new web3.PublicKey('11111111111111111111111111111111');
   
   // Create SDK instance
   const vault = new BoringVaultSolana({
@@ -68,7 +69,7 @@ async function testPdaDerivation() {
     // Manual verification
     const vaultIdBuffer = Buffer.alloc(8);
     vaultIdBuffer.writeBigUInt64LE(BigInt(vaultId), 0);
-    const [manualPDA] = await PublicKey.findProgramAddress(
+    const [manualPDA] = await web3.PublicKey.findProgramAddress(
       [Buffer.from(BASE_SEED_BORING_VAULT_STATE), vaultIdBuffer],
       programId
     );
@@ -99,7 +100,7 @@ async function testPdaDerivation() {
       vaultIdBuffer.writeBigUInt64LE(BigInt(vaultId), 0);
       const subAccountBuffer = Buffer.alloc(1);
       subAccountBuffer.writeUInt8(subAccount, 0);
-      const [manualPDA] = await PublicKey.findProgramAddress(
+      const [manualPDA] = await web3.PublicKey.findProgramAddress(
         [Buffer.from(BASE_SEED_BORING_VAULT), vaultIdBuffer, subAccountBuffer],
         programId
       );
@@ -119,7 +120,7 @@ async function testPdaDerivation() {
     console.log(`✓ Share Token PDA: ${shareTokenPDA.toString()}`);
     
     // Manual verification
-    const [manualPDA] = await PublicKey.findProgramAddress(
+    const [manualPDA] = await web3.PublicKey.findProgramAddress(
       [Buffer.from(BASE_SEED_SHARE_TOKEN), vaultStatePDA.toBuffer()],
       programId
     );
@@ -144,7 +145,7 @@ async function testTransactionFunctionality() {
   
   // Improved connection mock
   const mockConnection = {
-    getAccountInfo: async (pubkey: PublicKey) => {
+    getAccountInfo: async (pubkey: web3.PublicKey) => {
       console.log(`Mock: Getting account info for ${pubkey.toString()}`);
       
       // Create a properly sized buffer for token accounts
