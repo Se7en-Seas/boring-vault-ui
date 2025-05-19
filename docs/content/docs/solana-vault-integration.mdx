@@ -33,15 +33,15 @@ const vaultSDK = new VaultSDK(rpcUrl);
 You can retrieve the current balance of a vault using the `getVaultBalance` method:
 
 ```tsx
-import { PublicKey } from '@solana/web3.js';
+import { Address } from 'gill';
 
-// The vault public key
-const vaultPubkey = new PublicKey('your_vault_address_here');
+// The vault address
+const vaultAddress = 'your_vault_address_here' as Address;
 
 async function checkVaultBalance() {
   try {
     // Fetch the vault balance
-    const balance = await vaultSDK.getVaultBalance(vaultPubkey);
+    const balance = await vaultSDK.getVaultBalance(vaultAddress);
     console.log(`Vault balance: ${balance}`);
     return balance;
   } catch (error) {
@@ -59,7 +59,7 @@ For more comprehensive vault information, use the `getVaultData` method:
 async function getVaultInfo() {
   try {
     // Fetch the complete vault data
-    const vaultData = await vaultSDK.getVaultData(vaultPubkey);
+    const vaultData = await vaultSDK.getVaultData(vaultAddress);
     
     console.log('Vault ID:', vaultData.vaultState.vaultId.toString());
     console.log('Token Mint:', vaultData.tokenMint.toString());
@@ -157,10 +157,7 @@ import { createSolanaClient, Address } from 'gill';
 
 const solanaClient = createSolanaClient({ urlOrMoniker: 'mainnet' });
 
-async function getAccountInfo(publicKey) {
-  // Convert PublicKey to Address type for gill
-  const address = publicKey.toBase58() as Address;
-  
+async function getAccountInfo(address: Address) {
   // Always use base64 encoding for account data
   const response = await solanaClient.rpc.getAccountInfo(
     address,
@@ -183,8 +180,7 @@ async function getAccountInfo(publicKey) {
 Here's a complete example showing how to check a vault's balance and a user's share in that vault:
 
 ```tsx
-import { PublicKey } from '@solana/web3.js';
-import { createSolanaClient } from 'gill';
+import { createSolanaClient, Address } from 'gill';
 import { VaultSDK, createBoringVaultSolana } from 'boring-vault-ui';
 
 async function checkVaultAndUserBalances() {
@@ -194,17 +190,17 @@ async function checkVaultAndUserBalances() {
   const vaultSDK = new VaultSDK(rpcUrl);
   
   // Vault information
-  const vaultPubkey = new PublicKey('your_vault_address_here');
+  const vaultAddress = 'your_vault_address_here' as Address;
   const vaultId = 123; // The numeric ID of the vault
   const userWallet = 'user_wallet_address_here';
   
   try {
     // 1. Get the vault balance
-    const vaultBalance = await vaultSDK.getVaultBalance(vaultPubkey);
+    const vaultBalance = await vaultSDK.getVaultBalance(vaultAddress);
     console.log(`Vault balance: ${vaultBalance}`);
     
     // 2. Get detailed vault information
-    const vaultData = await vaultSDK.getVaultData(vaultPubkey);
+    const vaultData = await vaultSDK.getVaultData(vaultAddress);
     console.log('Vault data:', vaultData);
     
     // 3. Get the user's share balance

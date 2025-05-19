@@ -56,14 +56,11 @@ export class BoringVaultSolana {
     vaultIdBuffer.writeBigUInt64LE(BigInt(vaultId), 0);
     
     // Use "vault-" prefix as the base seed
-    const [pda] = await web3.PublicKey.findProgramAddress(
-      [
-        Buffer.from(BASE_SEED_BORING_VAULT),
-        vaultIdBuffer,
-        Buffer.from([subAccount])
-      ],
-      new web3.PublicKey(this.programId)
-    );
+    const [pda] = await this.findProgramAddress([
+      Buffer.from(BASE_SEED_BORING_VAULT),
+      vaultIdBuffer,
+      Buffer.from([subAccount])
+    ]);
     
     return pda;
   }
@@ -97,6 +94,11 @@ export class BoringVaultSolana {
       throw new Error(`Vault state not found for vault ID ${vaultId}`);
     }
     
+    // Validate that data exists and is not empty
+    if (!response.value.data || !response.value.data.length) {
+      throw new Error(`No data found in vault state for vault ID ${vaultId}`);
+    }
+    
     // The data structure is different in gill, we need to extract the data properly
     const data = Buffer.from(response.value.data[0], 'base64');
     
@@ -124,7 +126,7 @@ export class BoringVaultSolana {
     const shareMintPDA = await this.getShareTokenPDA(vaultStatePDA);
     
     // Get user's share token account
-    const userShareATA = await getTokenAccount(
+    const userShareATA = await this.getTokenAccount(
       walletPubkey,
       shareMintPDA
     );
@@ -141,6 +143,11 @@ export class BoringVaultSolana {
       throw new Error(`Share token mint account not found at ${shareMintPDA.toString()}`);
     }
     
+    // Validate that data exists and is not empty
+    if (!mintResponse.value.data || !mintResponse.value.data.length) {
+      throw new Error(`No data found in share token mint at ${shareMintPDA.toString()}`);
+    }
+    
     // Extract data from the gill response
     const mintData = MintLayout.decode(Buffer.from(mintResponse.value.data[0], 'base64'));
     decimals = mintData.decimals;
@@ -155,6 +162,11 @@ export class BoringVaultSolana {
         { encoding: 'base64' }
       ).send();
       if (tokenResponse.value) {
+        // Validate that data exists and is not empty
+        if (!tokenResponse.value.data || !tokenResponse.value.data.length) {
+          throw new Error(`No data found in token account at ${userShareATA.toString()}`);
+        }
+        
         // Extract data from the gill response
         const accountData = AccountLayout.decode(Buffer.from(tokenResponse.value.data[0], 'base64'));
         rawBalance = BigInt(accountData.amount.readBigUInt64LE(0));
@@ -183,6 +195,22 @@ export class BoringVaultSolana {
     const decimalPart = amountStr.slice(-decimals);
     return `${integerPart}.${decimalPart}`;
   }
+
+  /**
+   * Helper to find the associated token address
+   */
+  private async getTokenAccount(owner: web3.PublicKey, mint: web3.PublicKey): Promise<web3.PublicKey> {
+    const [address] = await web3.PublicKey.findProgramAddress(
+      [
+        owner.toBuffer(),
+        TOKEN_PROGRAM_ID.toBuffer(),
+        mint.toBuffer(),
+      ],
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    );
+
+    return address;
+  }
 }
 
 // Export a function to create a BoringVaultSolana instance
@@ -195,20 +223,4 @@ export const createBoringVaultSolana = (config: {
     solanaClient,
     programId: config.programId
   });
-};
-
-/**
- * Helper to find the associated token address
- */
-async function getTokenAccount(owner: web3.PublicKey, mint: web3.PublicKey): Promise<web3.PublicKey> {
-  const address = web3.PublicKey.findProgramAddressSync(
-    [
-      owner.toBuffer(),
-      TOKEN_PROGRAM_ID.toBuffer(),
-      mint.toBuffer(),
-    ],
-    ASSOCIATED_TOKEN_PROGRAM_ID
-  )
-
-  return address[0]
-} 
+}; 
