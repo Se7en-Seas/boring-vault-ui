@@ -1,4 +1,5 @@
-import { Connection, PublicKey, Keypair } from '@solana/web3.js';
+import { Connection, Keypair } from '@solana/web3.js';
+import { web3 } from '@coral-xyz/anchor';
 import * as fs from 'fs';
 import * as dotenv from 'dotenv';
 import * as readline from 'readline';
@@ -12,7 +13,7 @@ dotenv.config();
 
 // Add token mint IDs
 const TOKEN_MINTS = {
-  JITO_SOL: new PublicKey('J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn')
+  JITO_SOL: new web3.PublicKey('J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn')
 };
 
 // Create readline interface for user interaction
@@ -35,7 +36,7 @@ const MAINNET_CONFIG = {
   // Use Alchemy RPC endpoint from environment variable
   rpcUrl: process.env.ALCHEMY_RPC_URL || 'https://api.mainnet-beta.solana.com',
   // The vault you have admin access to
-  vaultPubkey: new PublicKey(process.env.VAULT_PUBKEY || ''),
+  vaultPubkey: new web3.PublicKey(process.env.VAULT_PUBKEY || ''),
   // Default token mint for operations (jitoSOL)
   tokenMint: TOKEN_MINTS.JITO_SOL,
 };
@@ -166,8 +167,8 @@ async function testUserBalances(): Promise<any[] | undefined> {
       const accountData = item.account.data.parsed.info;
       return {
         pubkey: item.pubkey,
-        mint: new PublicKey(accountData.mint),
-        owner: new PublicKey(accountData.owner),
+        mint: new web3.PublicKey(accountData.mint),
+        owner: new web3.PublicKey(accountData.owner),
         amount: accountData.tokenAmount.uiAmountString
       };
     });

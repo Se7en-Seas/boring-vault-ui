@@ -1,4 +1,5 @@
-import { Connection, PublicKey } from '@solana/web3.js';
+import { Connection } from '@solana/web3.js';
+import { web3 } from '@coral-xyz/anchor';
 import { BoringVaultSolana } from './boring-vault-solana';
 import { parseFullVaultData, FullVaultData } from './vault-state';
 import * as boringVaultIdl from './boring-vault-svm-idl.json';
@@ -13,13 +14,13 @@ import {
 export class VaultSDK {
   private connection: Connection;
   private boringVault: BoringVaultSolana;
-  private programId: PublicKey;
+  private programId: web3.PublicKey;
   
   constructor(connection: Connection) {
     this.connection = connection;
     
     // Get program ID from env or IDL
-    this.programId = new PublicKey(
+    this.programId = new web3.PublicKey(
       process.env.BORING_VAULT_PROGRAM_ID || 
       boringVaultIdl.address 
     );
@@ -34,7 +35,7 @@ export class VaultSDK {
   /**
    * Get vault data for a given vault
    */
-  async getVaultData(vaultPubkey: PublicKey): Promise<FullVaultData> {
+  async getVaultData(vaultPubkey: web3.PublicKey): Promise<FullVaultData> {
     // Get the account directly for the vaultPubkey parameter 
     const accountInfo = await this.connection.getAccountInfo(vaultPubkey);
     if (!accountInfo) {
@@ -45,7 +46,7 @@ export class VaultSDK {
     const vaultData = parseFullVaultData(accountInfo.data);
     
     // For convenience, also return the token mint, which might be in the assetData
-    let tokenMint = new PublicKey('So11111111111111111111111111111111111111112'); // Default to SOL
+    let tokenMint;
     if (vaultData.assetData?.baseAsset) {
       tokenMint = vaultData.assetData.baseAsset;
     }
@@ -59,7 +60,7 @@ export class VaultSDK {
   /**
    * Get the current balance of a vault
    */
-  async getVaultBalance(vaultPubkey: PublicKey): Promise<string> {
+  async getVaultBalance(vaultPubkey: web3.PublicKey): Promise<string> {
     // Get vault data using the proper parser
     const vaultData = await this.getVaultData(vaultPubkey);
     const vaultId = Number(vaultData.vaultState.vaultId);

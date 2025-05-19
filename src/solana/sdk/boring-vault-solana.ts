@@ -1,7 +1,7 @@
 import { 
   Connection, 
-  PublicKey,
 } from '@solana/web3.js';
+import { web3 } from '@coral-xyz/anchor';
 import { 
   TOKEN_PROGRAM_ID, 
   ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -21,24 +21,24 @@ import { parseFullVaultData } from './vault-state';
  */
 export class BoringVaultSolana {
   private connection: Connection;
-  private programId: PublicKey;
+  private programId: web3.PublicKey;
   
   constructor({ connection, programId }: BoringVaultSolanaConfig) {
     this.connection = connection;
-    this.programId = new PublicKey(programId);
+    this.programId = new web3.PublicKey(programId);
   }
 
   /**
    * Find program address for the given seeds
    */
-  private async findProgramAddress(seeds: Buffer[]): Promise<[PublicKey, number]> {
-    return await PublicKey.findProgramAddress(seeds, this.programId);
+  private async findProgramAddress(seeds: Buffer[]): Promise<[web3.PublicKey, number]> {
+    return await web3.PublicKey.findProgramAddress(seeds, this.programId);
   }
 
   /**
    * Get the PDA for the vault state account
    */
-  async getVaultStatePDA(vaultId: number): Promise<PublicKey> {
+  async getVaultStatePDA(vaultId: number): Promise<web3.PublicKey> {
     const vaultIdBuffer = Buffer.alloc(8);
     vaultIdBuffer.writeBigUInt64LE(BigInt(vaultId), 0);
     
@@ -53,18 +53,18 @@ export class BoringVaultSolana {
   /**
    * Get the PDA for a vault subaccount
    */
-  async getVaultPDA(vaultId: number, subAccount: number): Promise<PublicKey> {
+  async getVaultPDA(vaultId: number, subAccount: number): Promise<web3.PublicKey> {
     const vaultIdBuffer = Buffer.alloc(8);
     vaultIdBuffer.writeBigUInt64LE(BigInt(vaultId), 0);
     
     // Use "vault-" prefix as the base seed
-    const [pda] = await PublicKey.findProgramAddress(
+    const [pda] = await web3.PublicKey.findProgramAddress(
       [
         Buffer.from(BASE_SEED_BORING_VAULT),
         vaultIdBuffer,
         Buffer.from([subAccount])
       ],
-      new PublicKey(this.programId)
+      new web3.PublicKey(this.programId)
     );
     
     return pda;
@@ -73,7 +73,7 @@ export class BoringVaultSolana {
   /**
    * Get the PDA for the share token mint
    */
-  async getShareTokenPDA(vaultStatePDA: PublicKey): Promise<PublicKey> {
+  async getShareTokenPDA(vaultStatePDA: web3.PublicKey): Promise<web3.PublicKey> {
     const [pda] = await this.findProgramAddress([
       Buffer.from(BASE_SEED_SHARE_TOKEN),
       vaultStatePDA.toBuffer()
@@ -106,11 +106,11 @@ export class BoringVaultSolana {
    * Get user's balance of vault shares
    */
   async getBalance(
-    walletAddress: string | PublicKey,
+    walletAddress: string | web3.PublicKey,
     vaultId: number
   ): Promise<BalanceInfo> {
     const walletPubkey = typeof walletAddress === 'string'
-      ? new PublicKey(walletAddress)
+      ? new web3.PublicKey(walletAddress)
       : walletAddress;
     
     // Get necessary PDAs
@@ -179,8 +179,8 @@ export const createBoringVaultSolana = (config: BoringVaultSolanaConfig): Boring
 /**
  * Helper to find the associated token address
  */
-async function getTokenAccount(owner: PublicKey, mint: PublicKey): Promise<PublicKey> {
-  const address = PublicKey.findProgramAddressSync(
+async function getTokenAccount(owner: web3.PublicKey, mint: web3.PublicKey): Promise<web3.PublicKey> {
+  const address = web3.PublicKey.findProgramAddressSync(
     [
       owner.toBuffer(),
       TOKEN_PROGRAM_ID.toBuffer(),
