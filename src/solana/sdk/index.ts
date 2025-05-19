@@ -1,4 +1,3 @@
-import { Connection } from '@solana/web3.js';
 import { web3 } from '@coral-xyz/anchor';
 import { BoringVaultSolana } from './boring-vault-solana';
 import { parseFullVaultData, FullVaultData } from './vault-state';
@@ -6,18 +5,21 @@ import * as boringVaultIdl from './boring-vault-svm-idl.json';
 import { 
   AccountLayout
 } from '@solana/spl-token';
+import { createSolanaClient, type SolanaClient, Address } from 'gill';
 
 /**
  * Vault SDK adapter for mainnet testing
  * Wraps the existing BoringVaultSolana class
  */
 export class VaultSDK {
-  private connection: Connection;
+  private rpc: SolanaClient['rpc'];
   private boringVault: BoringVaultSolana;
   private programId: web3.PublicKey;
+  private solanaClient: SolanaClient;
   
-  constructor(connection: Connection) {
-    this.connection = connection;
+  constructor(urlOrMoniker: string) {
+    this.solanaClient = createSolanaClient({ urlOrMoniker });
+    this.rpc = this.solanaClient.rpc;
     
     // Get program ID from env or IDL
     this.programId = new web3.PublicKey(
@@ -25,9 +27,9 @@ export class VaultSDK {
       boringVaultIdl.address 
     );
     
-    // Initialize the BoringVaultSolana with the connection
+    // Initialize the BoringVaultSolana with the solanaClient
     this.boringVault = new BoringVaultSolana({
-      connection,
+      solanaClient: this.solanaClient,
       programId: this.programId.toString()
     });
   }
@@ -36,14 +38,22 @@ export class VaultSDK {
    * Get vault data for a given vault
    */
   async getVaultData(vaultPubkey: web3.PublicKey): Promise<FullVaultData> {
+    // Convert web3.PublicKey to Address type for gill
+    const address = vaultPubkey.toBase58() as Address;
     // Get the account directly for the vaultPubkey parameter 
-    const accountInfo = await this.connection.getAccountInfo(vaultPubkey);
-    if (!accountInfo) {
+    const response = await this.rpc.getAccountInfo(
+      address,
+      { encoding: 'base64' }
+    ).send();
+    if (!response.value) {
       throw new Error(`Vault account not found: ${vaultPubkey.toString()}`);
     }
     
+    // Extract data from the gill response
+    const data = Buffer.from(response.value.data[0], 'base64');
+    
     // Parse the full vault data using our comprehensive parser
-    const vaultData = parseFullVaultData(accountInfo.data);
+    const vaultData = parseFullVaultData(data);
     
     // For convenience, also return the token mint, which might be in the assetData
     let tokenMint;
@@ -71,11 +81,18 @@ export class VaultSDK {
     // Check vault token account using the deposit sub-account value
     const depositPDA = await this.boringVault.getVaultPDA(vaultId, depositSubAccount);
     
+    // Convert web3.PublicKey to Address type for gill
+    const depositAddress = depositPDA.toBase58() as Address;
     // Check if token account exists
-    const depositInfo = await this.connection.getAccountInfo(depositPDA);
-    if (depositInfo) {
+    const response = await this.rpc.getAccountInfo(
+      depositAddress,
+      { encoding: 'base64' }
+    ).send();
+    if (response.value) {
+      // Extract data from the gill response
+      const data = Buffer.from(response.value.data[0], 'base64');
       // Parse token account data
-      const accountData = AccountLayout.decode(depositInfo.data);
+      const accountData = AccountLayout.decode(data);
       return accountData.amount.toString();
     }
     
