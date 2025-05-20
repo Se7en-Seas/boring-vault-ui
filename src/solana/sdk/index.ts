@@ -45,7 +45,7 @@ export class VaultSDK {
       address,
       { encoding: 'base64' }
     ).send();
-    if (!response.value) {
+    if (!response.value || !response.value.data.length) {
       throw new Error(`Vault account not found: ${vaultPubkey.toString()}`);
     }
     
