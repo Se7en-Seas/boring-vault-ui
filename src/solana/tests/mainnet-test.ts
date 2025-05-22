@@ -230,7 +230,7 @@ async function testUserBalances(): Promise<any[] | undefined> {
 /**
  * Get user balance in the vault
  */
-async function getBalance(): Promise<any> {
+async function fetchUserShares(): Promise<any> {
   console.log('\n=== CHECKING USER BALANCE IN VAULT ===');
   
   try {
@@ -303,7 +303,8 @@ async function main() {
         await testReadOperations();
         break;
       case 'balance':
-        await getBalance();
+      case 'shares':
+        await fetchUserShares();
         break;
       case 'accounts':
       case 'tokens':
@@ -340,8 +341,8 @@ if (require.main === module) {
       console.error(error);
       rl.close();
     });
-  } else if (command === 'getbalance' || command === 'balance') {
-    getBalance().then(() => rl.close()).catch(error => {
+  } else if (command === 'fetchshares' || command === 'shares' || command === 'balance') {
+    fetchUserShares().then(() => rl.close()).catch(error => {
       console.error(error);
       rl.close();
     });
@@ -360,7 +361,7 @@ if (require.main === module) {
     analyzeVaultAccount,
     testReadOperations,
     testUserBalances,
-    getBalance,
+    fetchUserShares,
     main
   };
 }

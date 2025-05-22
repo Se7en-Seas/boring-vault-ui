@@ -113,7 +113,7 @@ export class BoringVaultSolana {
   /**
    * Get user's balance of vault shares
    */
-  async getBalance(
+  async fetchUserShares(
     walletAddress: string | web3.PublicKey,
     vaultId: number
   ): Promise<BalanceInfo> {

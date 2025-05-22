@@ -156,8 +156,8 @@ async function testTransactionFunctionality() {
     return { depositSubAccount: 0, withdrawSubAccount: 1 };
   };
   
-  // Mock the getBalance method for testing
-  vault.getBalance = async (walletAddress, vaultId) => {
+  // Mock the fetchUserShares method for testing
+  vault.fetchUserShares = async (walletAddress: string | web3.PublicKey, vaultId: number) => {
     console.log(`Mock: Getting balance for wallet ${typeof walletAddress === 'string' ? walletAddress : walletAddress.toString()} and vault ID ${vaultId}`);
     return {
       raw: BigInt(1000000000),
@@ -177,10 +177,10 @@ async function testTransactionFunctionality() {
     }
   };
   
-  // Test getBalance
+  // Test fetchUserShares
   try {
-    console.log('\nTest 6: Testing getBalance()...');
-    const balance = await vault.getBalance(
+    console.log('\nTest 6: Testing fetchUserShares()...');
+    const balance = await vault.fetchUserShares(
       mockWallet.publicKey,
       1 // vaultId
     );
