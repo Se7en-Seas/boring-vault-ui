@@ -1,8 +1,12 @@
 // Seeds from the smart contract
-export const BASE_SEED_BORING_VAULT_STATE = "vault-state-";
-export const BASE_SEED_BORING_VAULT = "vault-";
-export const BASE_SEED_SHARE_TOKEN = "share-token-";
+export const BASE_SEED_BORING_VAULT_STATE = "boring-vault-state";
+export const BASE_SEED_BORING_VAULT = "boring-vault";
+export const BASE_SEED_SHARE_TOKEN = 'share-token';
 export const BASE_SEED_ASSET_DATA = 'asset-data';
 
 // Default values
 export const DEFAULT_DECIMALS = 9; 
+
+// Token addresses
+export const JITO_SOL_MINT_ADDRESS = 'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn';
+export const JITO_SOL_PRICE_FEED_ADDRESS = '4Z1SLH9g4ikNBV8uP2ZctEouqjYmVqB2Tz5SZxKYBN7z'; 

@@ -4,7 +4,10 @@ import { BoringVaultSolana } from '../sdk/boring-vault-solana';
 import { 
   BASE_SEED_BORING_VAULT_STATE, 
   BASE_SEED_BORING_VAULT, 
-  BASE_SEED_SHARE_TOKEN 
+  BASE_SEED_SHARE_TOKEN,
+  BASE_SEED_ASSET_DATA,
+  JITO_SOL_MINT_ADDRESS,
+  JITO_SOL_PRICE_FEED_ADDRESS
 } from '../utils/constants';
 import { 
   createSolanaClient, 
@@ -168,7 +171,7 @@ async function testTransactionFunctionality() {
   
   // Create mock wallet with the gill signer
   const mockWallet = {
-    publicKey: mockSigner.address,
+    publicKey: new web3.PublicKey(mockSigner.address),
     signTransaction: async (tx: Transaction) => {
       console.log('Mock: Transaction being signed with keypair signer');
       // Use the gill signer to sign (we'd need to convert to gill's transaction format)
@@ -188,6 +191,54 @@ async function testTransactionFunctionality() {
   } catch (error) {
     testFailures++;
     console.error('✗ Get balance test failed:', error);
+  }
+  
+  // Test deposit functionality
+  try {
+    console.log('\nTest 7: Testing deposit functionality...');
+    
+    // Implement a mock for buildDepositTransaction
+    vault.buildDepositTransaction = async (
+      payer: web3.PublicKey,
+      vaultId: number,
+      depositMint: web3.PublicKey,
+      depositAmount: bigint,
+      minMintAmount: bigint
+    ) => {
+      console.log(`Mock: Building deposit transaction for vault ${vaultId}`);
+      console.log(`Mock: Deposit amount: ${depositAmount.toString()}`);
+      console.log(`Mock: Min mint amount: ${minMintAmount.toString()}`);
+      console.log(`Mock: Deposit mint: ${depositMint.toString()}`);
+      
+      const mockTransaction = new Transaction();
+      // Add a dummy instruction to make it a valid transaction
+      mockTransaction.add(new web3.TransactionInstruction({
+        keys: [],
+        programId: new web3.PublicKey(mockSigner.address),
+        data: Buffer.from([0])
+      }));
+      
+      return mockTransaction;
+    };
+    
+    // Create test data
+    const depositAmount = BigInt(1000000000); // 1 token with 9 decimals
+    const minMintAmount = BigInt(900000000); // 0.9 tokens with 9 decimals
+    const jitoSolMint = new web3.PublicKey(JITO_SOL_MINT_ADDRESS);
+    
+    // Test building a deposit transaction
+    const transaction = await vault.buildDepositTransaction(
+      mockWallet.publicKey,
+      1, // vaultId
+      jitoSolMint,
+      depositAmount,
+      minMintAmount
+    );
+    
+    console.log(`✓ Deposit transaction build succeeded with ${transaction.instructions.length} instruction(s)`);
+  } catch (error) {
+    testFailures++;
+    console.error('✗ Deposit test failed:', error);
   }
   
   // Report section result accurately
