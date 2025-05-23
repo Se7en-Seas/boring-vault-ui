@@ -17,7 +17,8 @@
     "test": "jest",
     "dev": "webpack --mode production && webpack serve --mode development --open",
     "type:check": "tsc --noEmit",
-    "test:solana": "ts-node src/solana/tests/solana-sdk-unit-tests.ts"
+    "test:solana": "ts-node src/solana/tests/solana-sdk-unit-tests.ts",
+    "mainnet-test-solana": "ts-node src/solana/tests/mainnet-test.ts"
   },
   "keywords": [],
   "author": "Philip Bal",

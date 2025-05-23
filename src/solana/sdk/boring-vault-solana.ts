@@ -246,27 +246,34 @@ export class BoringVaultSolana {
   ): Promise<web3.Transaction> {
     // Get the vault state PDA
     const vaultStatePDA = await this.getVaultStatePDA(vaultId);
+    console.log(`DEBUG: Vault State PDA: ${vaultStatePDA.toString()}`);
     
     // Get the vault state to find deposit subaccount
     const vaultState = await this.getVaultState(vaultId);
     
     // Get the vault PDA for the deposit subaccount
     const vaultPDA = await this.getVaultPDA(vaultId, vaultState.depositSubAccount);
+    console.log(`DEBUG: Vault PDA (deposit sub-account ${vaultState.depositSubAccount}): ${vaultPDA.toString()}`);
     
     // Get the share token mint PDA
     const shareMintPDA = await this.getShareTokenPDA(vaultStatePDA);
+    console.log(`DEBUG: Share Token Mint PDA: ${shareMintPDA.toString()}`);
     
     // Get the asset data PDA
     const assetDataPDA = await this.getAssetDataPDA(vaultStatePDA, depositMint);
+    console.log(`DEBUG: Asset Data PDA: ${assetDataPDA.toString()}`);
     
     // Get the user's associated token account for the deposit mint
     const userATA = await this.getTokenAccount(payer, depositMint);
+    console.log(`DEBUG: User's Token Account: ${userATA.toString()}`);
     
     // Get the vault's associated token account for the deposit mint
     const vaultATA = await this.getTokenAccount(vaultPDA, depositMint);
+    console.log(`DEBUG: Vault's Token Account: ${vaultATA.toString()}`);
     
     // Get the user's associated token account for the share token
     const userSharesATA = await this.getTokenAccount(payer, shareMintPDA);
+    console.log(`DEBUG: User's Share Token Account: ${userSharesATA.toString()}`);
     
     // Fetch the asset data to get the price feed
     const assetDataAddress = assetDataPDA.toBase58() as Address;
@@ -283,6 +290,7 @@ export class BoringVaultSolana {
     const assetDataBuffer = Buffer.from(assetDataResponse.value.data[0], 'base64');
     // Price feed is at offset 40 in the AssetData structure (8 byte discriminator + 32 byte fields)
     const priceFeedAddress = new web3.PublicKey(assetDataBuffer.slice(40, 72));
+    console.log(`DEBUG: Price Feed Address: ${priceFeedAddress.toString()}`);
     
     // Create deposit instruction
     const depositInstruction = new web3.TransactionInstruction({
@@ -307,6 +315,11 @@ export class BoringVaultSolana {
         this.getDepositInstructionDiscriminator(),
         this.serializeDepositArgs(vaultId, depositAmount, minMintAmount)
       ])
+    });
+    
+    console.log(`DEBUG: Instruction accounts:`);
+    depositInstruction.keys.forEach((key, index) => {
+      console.log(`  [${index}] ${key.pubkey.toString()} (signer: ${key.isSigner}, writable: ${key.isWritable})`);
     });
     
     // Create a new transaction

@@ -36,6 +36,13 @@ export class VaultSDK {
   }
 
   /**
+   * For testing purposes - get the underlying BoringVaultSolana instance
+   */
+  getBoringVault(): BoringVaultSolana {
+    return this.boringVault;
+  }
+
+  /**
    * Get vault data for a given vault
    */
   async getVaultData(vaultPubkey: web3.PublicKey): Promise<FullVaultData> {
