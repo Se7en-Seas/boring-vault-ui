@@ -118,43 +118,6 @@ export async function getAccountExistenceStatus(pubkey: web3.PublicKey): Promise
   }
 }
 
-// Helper function to find the associated token address
-export async function getTokenAccount(owner: web3.PublicKey, mint: web3.PublicKey): Promise<web3.PublicKey> {
-  const [address] = await web3.PublicKey.findProgramAddress(
-    [
-      owner.toBuffer(),
-      TOKEN_PROGRAM_ID.toBuffer(),
-      mint.toBuffer(),
-    ],
-    ASSOCIATED_TOKEN_PROGRAM_ID
-  );
-  return address;
-}
-
-/**
- * Create an instruction to initialize an associated token account
- */
-export function createAssociatedTokenAccountInstruction(
-  payer: web3.PublicKey,
-  associatedToken: web3.PublicKey,
-  owner: web3.PublicKey,
-  mint: web3.PublicKey
-): web3.TransactionInstruction {
-  return new web3.TransactionInstruction({
-    keys: [
-      { pubkey: payer, isSigner: true, isWritable: true },
-      { pubkey: associatedToken, isSigner: false, isWritable: true },
-      { pubkey: owner, isSigner: false, isWritable: false },
-      { pubkey: mint, isSigner: false, isWritable: false },
-      { pubkey: web3.SystemProgram.programId, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: web3.SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
-    ],
-    programId: ASSOCIATED_TOKEN_PROGRAM_ID,
-    data: Buffer.from([]),
-  });
-}
-
 /**
  * Creates a web3.js connection with appropriate configuration
  * Avoids websocket connections for better reliability

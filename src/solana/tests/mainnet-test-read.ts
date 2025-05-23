@@ -1,5 +1,5 @@
 import { web3 } from '@coral-xyz/anchor';
-import { AccountLayout, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { AccountLayout, TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from '@solana/spl-token';
 import { Address } from 'gill';
 
 // Import shared utilities
@@ -8,7 +8,6 @@ import {
   MAINNET_CONFIG, 
   loadKeypair, 
   getAccountExistenceStatus, 
-  getTokenAccount,
   TOKEN_MINTS,
   createConnection
 } from './mainnet-test-utils';
@@ -134,14 +133,25 @@ export async function analyzeVaultAccount(): Promise<void> {
       const jitoSolMint = new web3.PublicKey(JITO_SOL_MINT_ADDRESS);
       console.log(`\nChecking jitoSOL accounts...`);
       
+      // Load signer for account lookups
+      const signer = await loadKeypair();
+      
       // Vault deposit account's jitoSOL account
-      const depositVaultJitoSolATA = await getTokenAccount(depositVaultPDA, jitoSolMint);
+      const depositVaultJitoSolATA = await getAssociatedTokenAddress(
+        jitoSolMint,
+        depositVaultPDA,
+        true // allowOwnerOffCurve - this is crucial for PDAs
+      );
       console.log(`Deposit Vault's jitoSOL Account: ${depositVaultJitoSolATA.toString()}`);
       const depositJitoSolInfo = await getAccountExistenceStatus(depositVaultJitoSolATA);
       console.log(`Status: ${depositJitoSolInfo}`);
       
       // Vault withdraw account's jitoSOL account
-      const withdrawVaultJitoSolATA = await getTokenAccount(withdrawVaultPDA, jitoSolMint);
+      const withdrawVaultJitoSolATA = await getAssociatedTokenAddress(
+        jitoSolMint,
+        withdrawVaultPDA,
+        true // allowOwnerOffCurve - this is crucial for PDAs
+      );
       console.log(`Withdraw Vault's jitoSOL Account: ${withdrawVaultJitoSolATA.toString()}`);
       const withdrawJitoSolInfo = await getAccountExistenceStatus(withdrawVaultJitoSolATA);
       console.log(`Status: ${withdrawJitoSolInfo}`);
@@ -254,7 +264,7 @@ export async function testUserBalances(): Promise<any[] | undefined> {
         pubkey: item.pubkey,
         mint: new web3.PublicKey(accountData.mint),
         owner: new web3.PublicKey(accountData.owner),
-        amount: accountData.amount.readBigUInt64LE(0).toString()
+        amount: accountData.amount.toString()
       };
     });
     
@@ -308,7 +318,7 @@ export async function fetchUserShares(): Promise<any> {
     if (shareTokenAccount) {
       const data = Buffer.from(shareTokenAccount.account.data[0], 'base64');
       const accountData = AccountLayout.decode(data);
-      const amount = accountData.amount.readBigUInt64LE(0).toString();
+      const amount = accountData.amount.toString();
       
       console.log(`✅ User has ${amount} shares of this vault`);
       console.log(`Share token account: ${shareTokenAccount.pubkey}`);
@@ -441,7 +451,11 @@ export async function verifyVaultPDA(): Promise<void> {
     
     // Check the jitoSOL token account for this vault PDA
     const jitoSolMint = new web3.PublicKey(JITO_SOL_MINT_ADDRESS);
-    const vaultJitoSolATA = await getTokenAccount(vaultPDA, jitoSolMint);
+    const vaultJitoSolATA = await getAssociatedTokenAddress(
+      jitoSolMint,
+      vaultPDA,
+      true // allowOwnerOffCurve - this is crucial for PDAs
+    );
     
     console.log(`\n4. Checking Vault's jitoSOL token account: ${vaultJitoSolATA.toString()}`);
     

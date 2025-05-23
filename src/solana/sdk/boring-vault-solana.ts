@@ -183,7 +183,7 @@ export class BoringVaultSolana {
         
         // Extract data from the gill response
         const accountData = AccountLayout.decode(Buffer.from(tokenResponse.value.data[0], 'base64'));
-        rawBalance = BigInt(accountData.amount.readBigUInt64LE(0));
+        rawBalance = accountData.amount; // amount is already a bigint in newer versions
       }
     } catch (error) {
       // Rethrow with additional context
