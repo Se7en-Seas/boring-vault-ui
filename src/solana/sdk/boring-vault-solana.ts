@@ -289,7 +289,7 @@ export class BoringVaultSolana {
     // Parse asset data to get price feed
     const assetDataBuffer = Buffer.from(assetDataResponse.value.data[0], 'base64');
     // Price feed is at offset 40 in the AssetData structure (8 byte discriminator + 32 byte fields)
-    const priceFeedAddress = new web3.PublicKey(assetDataBuffer.slice(40, 72));
+    const priceFeedAddress = new web3.PublicKey(assetDataBuffer.slice(16, 48));
     console.log(`DEBUG: Price Feed Address: ${priceFeedAddress.toString()}`);
     
     // Create deposit instruction

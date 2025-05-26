@@ -4,12 +4,10 @@ import {
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountIdempotentInstructionWithDerivation,
-  createAssociatedTokenAccount,
   getAssociatedTokenAddressSync,
 } from '@solana/spl-token';
 import { Address } from 'gill';
 import * as fs from 'fs';
-import { utils } from '@coral-xyz/anchor';
 
 // Import shared utilities
 import { 
@@ -132,11 +130,13 @@ export async function testDeposit(): Promise<string | undefined> {
     const vaultStatePDA = await boringVault.getVaultStatePDA(vaultId);
     const vaultPDA = await boringVault.getVaultPDA(vaultId, vaultData.vaultState.depositSubAccount);
     const shareMintPDA = vaultData.vaultState.shareMint;
+    const shareMintPDAInfo = await connection.getAccountInfo(shareMintPDA);
+    const shareMintProgram = shareMintPDAInfo?.owner;
     const userSharesATA = getAssociatedTokenAddressSync(
       shareMintPDA,         // mint
       walletPublicKey,      // owner
       true,                 // allowOwnerOffCurve
-      TOKEN_PROGRAM_ID,     // programId
+      shareMintProgram,     // programId
       ASSOCIATED_TOKEN_PROGRAM_ID  // associatedTokenProgramId
     );
     
@@ -150,53 +150,30 @@ export async function testDeposit(): Promise<string | undefined> {
     console.log(`Vault PDA: ${vaultPDA.toString()}`);
     console.log(`Share Mint: ${shareMintPDA.toString()}`);
     console.log(`User's Share ATA: ${userSharesATA.toString()}`);
+
+    // Check jitoSOL token account
+    const jitoSolMint = new web3.PublicKey(JITO_SOL_MINT_ADDRESS);
+    const vaultJitoSolATA = getAssociatedTokenAddressSync(
+      jitoSolMint,         // mint
+      vaultPDA,            // owner
+      true,                // allowOwnerOffCurve
+      TOKEN_PROGRAM_ID,    // programId
+      ASSOCIATED_TOKEN_PROGRAM_ID // associatedTokenProgramId
+    );
+    console.log(`Vault's jitoSOL token account: ${vaultJitoSolATA.toString()}`);
     
-    // Just check the vault PDA but don't block on it
-    const vaultPDAInfo = await connection.getAccountInfo(vaultPDA);
-    if (!vaultPDAInfo) {
-      console.log(`⚠️ Vault PDA does not appear to exist: ${vaultPDA.toString()}`);
-      console.log('However, we will continue with the deposit since the jitoSOL token account exists');
-      console.log('The program may handle creating the PDA as part of the deposit transaction');
-      
-      // Log PDA derivation for clarity
-      const vaultIdBuffer = Buffer.alloc(8);
-      vaultIdBuffer.writeBigUInt64LE(BigInt(vaultId), 0);
-      const subAccount = vaultData.vaultState.depositSubAccount;
-      
-      console.log(`\nPDA Derivation Info:`);
-      console.log(`Vault ID: ${vaultId}`);
-      console.log(`Sub-account: ${subAccount}`);
-      console.log(`BASE_SEED_BORING_VAULT: "${require('../utils/constants').BASE_SEED_BORING_VAULT}"`);
-      
-      // Check jitoSOL token account
-      const jitoSolMint = new web3.PublicKey(JITO_SOL_MINT_ADDRESS);
-      const vaultJitoSolATA = getAssociatedTokenAddressSync(
-        jitoSolMint,         // mint
-        vaultPDA,            // owner
-        true,                // allowOwnerOffCurve
-        TOKEN_PROGRAM_ID,    // programId
-        ASSOCIATED_TOKEN_PROGRAM_ID // associatedTokenProgramId
-      );
-      console.log(`Vault's jitoSOL token account: ${vaultJitoSolATA.toString()}`);
-      
-      const jitoSolAtaInfo = await connection.getAccountInfo(vaultJitoSolATA);
-      if (jitoSolAtaInfo) {
-        console.log(`✅ Vault's jitoSOL token account exists`);
-        const accountData = AccountLayout.decode(jitoSolAtaInfo.data);
-        console.log(`Token Owner: ${new web3.PublicKey(accountData.owner).toString()}`);
-        console.log(`Token Mint: ${new web3.PublicKey(accountData.mint).toString()}`);
-      } else {
-        console.log(`❌ Vault's jitoSOL token account does not exist`);
-      }
+    const jitoSolAtaInfo = await connection.getAccountInfo(vaultJitoSolATA);
+    if (jitoSolAtaInfo) {
+      console.log(`✅ Vault's jitoSOL token account exists`);
+      const accountData = AccountLayout.decode(jitoSolAtaInfo.data);
+      console.log(`Token Owner: ${new web3.PublicKey(accountData.owner).toString()}`);
+      console.log(`Token Mint: ${new web3.PublicKey(accountData.mint).toString()}`);
     } else {
-      console.log(`✅ Vault PDA exists: ${vaultPDA.toString()}`);
-      console.log(`Owner: ${vaultPDAInfo.owner.toString()}`);
-      console.log(`Data Size: ${vaultPDAInfo.data.length} bytes`);
-      console.log(`Executable: ${vaultPDAInfo.executable}`);
-      console.log(`Lamports: ${vaultPDAInfo.lamports}`);
+      console.log(`❌ Vault's jitoSOL token account does not exist`);
     }
+
     
-    // 2. Check if the user's share token account exists
+    // Check if the user's share token account exists
     const userSharesATAInfo = await connection.getAccountInfo(userSharesATA);
     if (!userSharesATAInfo) {
       console.log(`⚠️ User's share token account does not exist: ${userSharesATA.toString()}`);
@@ -343,19 +320,18 @@ export async function testDeposit(): Promise<string | undefined> {
       return undefined;
     }
 
-    // Check for program config account - this may be the missing account
+    // Check for program config account 
     try {
-      // The missing account from the error log
-      const missingAccountAddress = new web3.PublicKey('3dMB3jrRu6j6LrVWm116KGqBEUsT34fi5P7BBa2mRKSR');
-      console.log(`\nChecking for missing program config account: ${missingAccountAddress.toString()}`);
+      const accountAddress = new web3.PublicKey('3dMB3jrRu6j6LrVWm116KGqBEUsT34fi5P7BBa2mRKSR');
+      console.log(`\nChecking for config account: ${accountAddress.toString()}`);
       
-      const missingAccountInfo = await connection.getAccountInfo(missingAccountAddress);
-      if (missingAccountInfo) {
+      const accountInfo = await connection.getAccountInfo(accountAddress);
+      if (accountInfo) {
         console.log(`✅ Program config account exists with the following details:`);
-        console.log(`   Owner: ${missingAccountInfo.owner.toString()}`);
-        console.log(`   Data Size: ${missingAccountInfo.data.length} bytes`);
+        console.log(`   Owner: ${accountInfo.owner.toString()}`);
+        console.log(`   Data Size: ${accountInfo.data.length} bytes`);
       } else {
-        console.log(`❌ Program config account does not exist: ${missingAccountAddress.toString()}`);
+        console.log(`❌ Program config account does not exist: ${accountAddress.toString()}`);
         console.log(`This account is required by the program but is missing.`);
         console.log(`This may need to be initialized by an admin or the program owner.`);
         return undefined;
@@ -379,26 +355,7 @@ export async function testDeposit(): Promise<string | undefined> {
     console.log(`- Min Mint Amount: ${minMintAmount.toString()}`);
     
     try {
-      // STEP 1: Try to initialize the vault PDA if it doesn't exist
-      if (!vaultPDAInfo) {
-        console.log('\nInitializing Vault PDA since it does not exist...');
-        console.log('This may need admin privileges and may not work with a regular user wallet.');
-        
-        try {
-          // Instead of trying to initialize directly (which would require admin privileges),
-          // we'll check if the vault admin needs to perform this action
-          const adminRequired = vaultData.vaultState.authority.toString() !== signerAddress;
-          if (adminRequired) {
-            console.log(`❌ Vault PDA initialization requires the vault authority: ${vaultData.vaultState.authority.toString()}`);
-            console.log('Current signer does not have permission to initialize the vault');
-            console.log('Please contact the vault administrator to initialize the vault PDA first.');
-            return;
-          }
-        } catch (error) {
-          console.log('Error checking vault initialization permissions:', error);
-          console.log('Continuing with deposit attempt anyway...');
-        }
-      }
+
 
       // Get share mint info to determine the correct token program
       console.log('\nFetching share mint information...');
@@ -409,7 +366,7 @@ export async function testDeposit(): Promise<string | undefined> {
       }
       console.log(`Share Mint Owner (Token Program): ${shareMintInfo.owner.toString()}`);
 
-      // STEP 2: Get the correct price feed address from constants
+      // Get the correct price feed address from constants
       const JITO_SOL_PRICE_FEED_ADDRESS = require('../utils/constants').JITO_SOL_PRICE_FEED_ADDRESS;
       const priceFeedPublicKey = new web3.PublicKey(JITO_SOL_PRICE_FEED_ADDRESS);
       console.log(`Using jito-sol price feed: ${priceFeedPublicKey.toString()}`);
