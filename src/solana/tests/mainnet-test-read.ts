@@ -1,5 +1,5 @@
 import { web3 } from '@coral-xyz/anchor';
-import { AccountLayout, TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from '@solana/spl-token';
+import { AccountLayout, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from '@solana/spl-token';
 import { Address } from 'gill';
 
 // Import shared utilities
@@ -295,16 +295,67 @@ export async function fetchUserShares(): Promise<any> {
     console.log(`Vault: ${vaultPubkey.toString()}`);
     console.log(`Share Token Mint: ${vaultData.vaultState.shareMint.toString()}`);
     
-    // Use gill to get token accounts with base64 encoding
-    const signerAddress = signer.address;
+    // Get the share mint account info to determine the token program
+    const connection = createConnection();
+    const shareMintInfo = await connection.getAccountInfo(vaultData.vaultState.shareMint);
+    
+    if (!shareMintInfo) {
+      console.log(`❌ Share mint account not found: ${vaultData.vaultState.shareMint.toString()}`);
+      return 0;
+    }
+    
+    // Get the token program from the share mint owner
+    const shareMintProgram = shareMintInfo.owner;
+    console.log(`Share Mint Token Program: ${shareMintProgram.toString()}`);
+    console.log(`Standard TOKEN_PROGRAM_ID: ${TOKEN_PROGRAM_ID.toString()}`);
+    console.log(`Is using standard token program: ${shareMintProgram.equals(TOKEN_PROGRAM_ID) ? 'Yes' : 'No'}`);
+    
+    // Check token accounts using both standard and token-2022 program IDs
+    console.log('\nChecking token accounts with multiple token programs:');
+    
+    // Try with standard TOKEN_PROGRAM_ID first (for debugging)
+    console.log(`\n1. Checking with standard TOKEN_PROGRAM_ID:`);
+    try {
+      const standardTokenResponse = await solanaClient.rpc.getTokenAccountsByOwner(
+        signer.address,
+        { programId: TOKEN_PROGRAM_ID.toString() as Address },
+        { encoding: 'base64' }
+      ).send();
+      
+      console.log(`Found ${standardTokenResponse.value.length} token accounts with standard program`);
+      
+      // Print all mint addresses for debugging
+      standardTokenResponse.value.forEach((item, index) => {
+        const data = Buffer.from(item.account.data[0], 'base64');
+        const accountData = AccountLayout.decode(data);
+        const mintString = new web3.PublicKey(accountData.mint).toString();
+        console.log(`  [${index}] Mint: ${mintString}`);
+      });
+    } catch (error) {
+      console.error(`Error checking standard token accounts: ${error}`);
+    }
+    
+    // Now try with the correct token program from share mint
+    console.log(`\n2. Checking with token program from share mint (${shareMintProgram.toString()}):`);
     const tokenAccountsResponse = await solanaClient.rpc.getTokenAccountsByOwner(
-      signerAddress,
-      { programId: TOKEN_PROGRAM_ID.toString() as Address },
+      signer.address,
+      { programId: shareMintProgram.toString() as Address },
       { encoding: 'base64' }
     ).send();
     
+    console.log(`Found ${tokenAccountsResponse.value.length} token accounts with correct program`);
+    
     // Convert shareMint to string for comparison
     const shareMintString = vaultData.vaultState.shareMint.toString();
+    console.log(`Looking for share mint: ${shareMintString}`);
+    
+    // Print all mint addresses from these accounts
+    tokenAccountsResponse.value.forEach((item, index) => {
+      const data = Buffer.from(item.account.data[0], 'base64');
+      const accountData = AccountLayout.decode(data);
+      const mintString = new web3.PublicKey(accountData.mint).toString();
+      console.log(`  [${index}] Mint: ${mintString} (Amount: ${accountData.amount.toString()})`);
+    });
     
     // Look for share token account
     const shareTokenAccount = tokenAccountsResponse.value.find(item => {
@@ -319,11 +370,36 @@ export async function fetchUserShares(): Promise<any> {
       const accountData = AccountLayout.decode(data);
       const amount = accountData.amount.toString();
       
-      console.log(`✅ User has ${amount} shares of this vault`);
+      console.log(`\n✅ User has ${amount} shares of this vault`);
       console.log(`Share token account: ${shareTokenAccount.pubkey}`);
       return amount;
     } else {
-      console.log(`❌ User does not have share tokens for this vault`);
+      console.log(`\n❌ User does not have share tokens for this vault`);
+      
+      // Check if user's ATA exists with the share mint
+      console.log('\nChecking if user ATA exists for this share mint:');
+      const userShareATA = await getAssociatedTokenAddress(
+        vaultData.vaultState.shareMint,
+        new web3.PublicKey(signer.address),
+        true,
+        shareMintProgram,
+        ASSOCIATED_TOKEN_PROGRAM_ID
+      );
+      
+      console.log(`Expected user share ATA: ${userShareATA.toString()}`);
+      
+      const ataInfo = await connection.getAccountInfo(userShareATA);
+      if (ataInfo) {
+        console.log(`✅ ATA exists but may not have been included in the token accounts response`);
+        // Parse data to get amount
+        const accountData = AccountLayout.decode(ataInfo.data);
+        const amount = accountData.amount.toString();
+        console.log(`Token amount: ${amount}`);
+        return amount;
+      } else {
+        console.log(`❌ ATA does not exist - user hasn't received shares yet`);
+      }
+      
       return 0;
     }
   } catch (error) {
