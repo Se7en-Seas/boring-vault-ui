@@ -3,7 +3,8 @@ import {
   TOKEN_PROGRAM_ID, 
   ASSOCIATED_TOKEN_PROGRAM_ID,
   AccountLayout,
-  MintLayout
+  MintLayout,
+  getAssociatedTokenAddress
 } from '@solana/spl-token';
 import { 
   BASE_SEED_BORING_VAULT_STATE, 
@@ -259,6 +260,24 @@ export class BoringVaultSolana {
     const shareMintPDA = await this.getShareTokenPDA(vaultStatePDA);
     console.log(`DEBUG: Share Token Mint PDA: ${shareMintPDA.toString()}`);
     
+    // Get the share mint account info to find the token program
+    const shareMintAddress = shareMintPDA.toBase58() as Address;
+    const shareMintResponse = await this.rpc.getAccountInfo(
+      shareMintAddress,
+      { encoding: 'base64' }
+    ).send();
+    
+    // Default to TOKEN_PROGRAM_ID if we can't retrieve the share mint info
+    let shareMintProgram;
+    
+    if (shareMintResponse.value) {
+      // Extract the owner (token program) from the account info
+      shareMintProgram = new web3.PublicKey(shareMintResponse.value.owner);
+      console.log(`DEBUG: Share Mint Program: ${shareMintProgram.toString()}`);
+    } else {
+      throw new Error(`Could not retrieve share mint info, using default TOKEN_PROGRAM_ID`);
+    }
+    
     // Get the asset data PDA
     const assetDataPDA = await this.getAssetDataPDA(vaultStatePDA, depositMint);
     console.log(`DEBUG: Asset Data PDA: ${assetDataPDA.toString()}`);
@@ -271,8 +290,14 @@ export class BoringVaultSolana {
     const vaultATA = await this.getTokenAccount(vaultPDA, depositMint);
     console.log(`DEBUG: Vault's Token Account: ${vaultATA.toString()}`);
     
-    // Get the user's associated token account for the share token
-    const userSharesATA = await this.getTokenAccount(payer, shareMintPDA);
+    // Get the user's associated token account for the share token using the standard SPL token function
+    const userSharesATA = await getAssociatedTokenAddress(
+      shareMintPDA,    // mint
+      payer,           // owner
+      true,            // allowOwnerOffCurve
+      shareMintProgram, // programId - use shareMintProgram
+      ASSOCIATED_TOKEN_PROGRAM_ID // associatedTokenProgramId
+    );
     console.log(`DEBUG: User's Share Token Account: ${userSharesATA.toString()}`);
     
     // Fetch the asset data to get the price feed
@@ -286,10 +311,16 @@ export class BoringVaultSolana {
       throw new Error(`Asset data not found for mint ${depositMint.toString()}`);
     }
     
-    // Parse asset data to get price feed
+    // Parse asset data using the parseFullVaultData function
     const assetDataBuffer = Buffer.from(assetDataResponse.value.data[0], 'base64');
-    // Price feed is at offset 40 in the AssetData structure (8 byte discriminator + 32 byte fields)
-    const priceFeedAddress = new web3.PublicKey(assetDataBuffer.slice(16, 48));
+    const parsedAssetData = parseFullVaultData(assetDataBuffer);
+
+    // Get price feed address from the parsed asset data
+    if (!parsedAssetData.assetData || !parsedAssetData.assetData.priceFeed) {
+      throw new Error(`Price feed not found in asset data for mint ${depositMint.toString()}`);
+    }
+    
+    const priceFeedAddress = parsedAssetData.assetData.priceFeed;
     console.log(`DEBUG: Price Feed Address: ${priceFeedAddress.toString()}`);
     
     // Create deposit instruction

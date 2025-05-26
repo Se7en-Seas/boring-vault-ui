@@ -74,24 +74,23 @@ export async function analyzeVaultAccount(): Promise<void> {
     console.log(`Paused: ${vaultData.vaultState.paused}`);
     
     // Display asset data if available
-    if (vaultData.assetData) {
-      console.log('\n--- Asset Data ---');
-      console.log(`Base Asset: ${vaultData.assetData.baseAsset.toString()}`);
-      console.log(`Base Asset Minimum: ${vaultData.assetData.baseAssetMinimum.toString()}`);
-      console.log(`Share Precision: ${vaultData.assetData.sharePrecision}`);
-      console.log(`Exchange Rate Provider: ${vaultData.assetData.exchangeRateProvider.toString()}`);
-      console.log(`Exchange Rate: ${vaultData.assetData.exchangeRate.toString()}`);
-      console.log(`Exchange Rate High Water Mark: ${vaultData.assetData.exchangeRateHighWaterMark.toString()}`);
-      console.log(`Fees Owed In Base Asset: ${vaultData.assetData.feesOwedInBaseAsset.toString()}`);
-      console.log(`Total Shares Last Update: ${vaultData.assetData.totalSharesLastUpdate.toString()}`);
-      console.log(`Last Update Timestamp: ${new Date(Number(vaultData.assetData.lastUpdateTimestamp) * 1000).toISOString()}`);
-      console.log(`Payout Address: ${vaultData.assetData.payoutAddress.toString()}`);
-      console.log(`Allowed Exchange Rate Change Upper Bound: ${vaultData.assetData.allowedExchangeRateChangeUpperBound / 100}%`);
-      console.log(`Allowed Exchange Rate Change Lower Bound: ${vaultData.assetData.allowedExchangeRateChangeLowerBound / 100}%`);
-      console.log(`Minimum Update Delay In Seconds: ${vaultData.assetData.minimumUpdateDelayInSeconds}`);
-      console.log(`Platform Fee: ${vaultData.assetData.platformFeeBps / 100}%`);
-      console.log(`Performance Fee: ${vaultData.assetData.performanceFeeBps / 100}%`);
-      console.log(`Withdraw Authority: ${vaultData.assetData.withdrawAuthority.toString()}`);
+    if (vaultData.tellerState) {
+      console.log('\n--- Teller State ---');
+      console.log(`Base Asset: ${vaultData.tellerState.baseAsset.toString()}`);
+      console.log(`Decimals: ${vaultData.tellerState.decimals}`);
+      console.log(`Exchange Rate Provider: ${vaultData.tellerState.exchangeRateProvider.toString()}`);
+      console.log(`Exchange Rate: ${vaultData.tellerState.exchangeRate.toString()}`);
+      console.log(`Exchange Rate High Water Mark: ${vaultData.tellerState.exchangeRateHighWaterMark.toString()}`);
+      console.log(`Fees Owed In Base Asset: ${vaultData.tellerState.feesOwedInBaseAsset.toString()}`);
+      console.log(`Total Shares Last Update: ${vaultData.tellerState.totalSharesLastUpdate.toString()}`);
+      console.log(`Last Update Timestamp: ${new Date(Number(vaultData.tellerState.lastUpdateTimestamp) * 1000).toISOString()}`);
+      console.log(`Payout Address: ${vaultData.tellerState.payoutAddress.toString()}`);
+      console.log(`Allowed Exchange Rate Change Upper Bound: ${vaultData.tellerState.allowedExchangeRateChangeUpperBound / 100}%`);
+      console.log(`Allowed Exchange Rate Change Lower Bound: ${vaultData.tellerState.allowedExchangeRateChangeLowerBound / 100}%`);
+      console.log(`Minimum Update Delay In Seconds: ${vaultData.tellerState.minimumUpdateDelayInSeconds}`);
+      console.log(`Platform Fee: ${vaultData.tellerState.platformFeeBps / 100}%`);
+      console.log(`Performance Fee: ${vaultData.tellerState.performanceFeeBps / 100}%`);
+      console.log(`Withdraw Authority: ${vaultData.tellerState.withdrawAuthority.toString()}`);
     }
     
     // Derive and check important PDAs related to the vault
@@ -120,8 +119,8 @@ export async function analyzeVaultAccount(): Promise<void> {
     console.log(`Status: ${shareMintInfo}`);
     
     // 5. Asset Data PDAs - If we have a base asset, check the related asset data
-    if (vaultData.assetData && vaultData.assetData.baseAsset) {
-      const baseAsset = vaultData.assetData.baseAsset;
+    if (vaultData.tellerState && vaultData.tellerState.baseAsset) {
+      const baseAsset = vaultData.tellerState.baseAsset;
       console.log(`\nBase Asset: ${baseAsset.toString()}`);
       
       const assetDataPDA = await boringVault.getAssetDataPDA(vaultStatePDA, baseAsset);
@@ -207,11 +206,11 @@ export async function testReadOperations() {
     console.log(`Paused: ${vaultData.vaultState.paused}`);
     
     // Display asset data if available
-    if (vaultData.assetData) {
+    if (vaultData.tellerState) {
       console.log('\n=== ASSET DATA ===');
-      console.log(`Base Asset: ${vaultData.assetData.baseAsset.toString()}`);
-      console.log(`Platform Fee: ${vaultData.assetData.platformFeeBps / 100}%`);
-      console.log(`Performance Fee: ${vaultData.assetData.performanceFeeBps / 100}%`);
+      console.log(`Base Asset: ${vaultData.tellerState.baseAsset.toString()}`);
+      console.log(`Platform Fee: ${vaultData.tellerState.platformFeeBps / 100}%`);
+      console.log(`Performance Fee: ${vaultData.tellerState.performanceFeeBps / 100}%`);
     }
     
     // Fetch vault balance

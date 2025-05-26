@@ -65,8 +65,8 @@ export class VaultSDK {
     
     // For convenience, also return the token mint, which might be in the assetData
     let tokenMint;
-    if (vaultData.assetData?.baseAsset) {
-      tokenMint = vaultData.assetData.baseAsset;
+    if (vaultData.tellerState?.baseAsset) {
+      tokenMint = vaultData.tellerState.baseAsset;
     }
     
     return {

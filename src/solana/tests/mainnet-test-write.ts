@@ -63,11 +63,11 @@ export async function testDeposit(): Promise<string | undefined> {
     console.log(`Withdraw Sub-Account: ${vaultData.vaultState.withdrawSubAccount}`);
     
     // Check asset data if available
-    if (vaultData.assetData) {
-      console.log('\nAsset Data:');
-      console.log(`Base Asset: ${vaultData.assetData.baseAsset.toString()}`);
-      console.log(`Exchange Rate: ${vaultData.assetData.exchangeRate.toString()}`);
-      console.log(`Exchange Rate Provider: ${vaultData.assetData.exchangeRateProvider.toString()}`);
+    if (vaultData.tellerState) {
+      console.log('\nTeller State:');
+      console.log(`Base Asset: ${vaultData.tellerState.baseAsset.toString()}`);
+      console.log(`Exchange Rate: ${vaultData.tellerState.exchangeRate.toString()}`);
+      console.log(`Exchange Rate Provider: ${vaultData.tellerState.exchangeRateProvider.toString()}`);
     }
     
     // Create a direct web3.js connection for transaction sending
@@ -445,38 +445,6 @@ export async function testDeposit(): Promise<string | undefined> {
         minMintAmount
       );
       
-      // Replace the price feed account with the correct one from constants
-      const accounts = tx.instructions[0].keys;
-      const priceFeedIndex = accounts.findIndex(key => 
-        key.pubkey.toString() === '111111118YVWCzLQ58N3so7cz5suJHiWYKoKsY3Xu'
-      );
-      
-      if (priceFeedIndex !== -1) {
-        console.log(`Replacing placeholder price feed with: ${JITO_SOL_PRICE_FEED_ADDRESS}`);
-        accounts[priceFeedIndex].pubkey = priceFeedPublicKey;
-      }
-      
-      // Also ensure we're using the correct share token account
-      const shareATAIndex = accounts.findIndex(key => 
-        key.pubkey.toString() === '2Mi1Mz13RjiU34YdwSaWgtrrSLt1hV4zCv6eSdvdYgpr'
-      );
-      
-      if (shareATAIndex !== -1) {
-        console.log(`Replacing incorrect share token account with: ${correctUserShareATA.toString()}`);
-        accounts[shareATAIndex].pubkey = correctUserShareATA;
-      }
-      
-      console.log('\nTransaction built with corrected accounts:');
-      tx.instructions.forEach((ix, index) => {
-        console.log(`Instruction ${index + 1}:`);
-        console.log(`  Program ID: ${ix.programId.toString()}`);
-        console.log(`  Data length: ${ix.data.length} bytes`);
-        console.log(`  Accounts (${ix.keys.length}):`);
-        ix.keys.forEach((key, i) => {
-          console.log(`    [${i}] ${key.pubkey.toString()} (signer: ${key.isSigner}, writable: ${key.isWritable})`);
-        });
-      });
-      
       // Get recent blockhash from direct connection (HTTP only)
       console.log('\nGetting recent blockhash...');
       const { blockhash } = await connection.getLatestBlockhash();
@@ -689,157 +657,5 @@ export async function testDeposit(): Promise<string | undefined> {
   } catch (error) {
     console.error('Error testing deposit:', error);
     return undefined;
-  }
-}
-
-/**
- * Initialize the vault deposit sub-account
- * This function is for vault administrators to create the deposit sub-account
- */
-export async function initVaultDepositAccount(): Promise<void> {
-  try {
-    console.log('\n=== INITIALIZING VAULT DEPOSIT ACCOUNT ===');
-    const vaultPubkey = MAINNET_CONFIG.vaultPubkey;
-    
-    // Load admin keypair (the vault administrator)
-    const signer = await loadKeypair();
-    
-    // Create SDK instances
-    const vaultService = new VaultSDK(MAINNET_CONFIG.rpcUrl);
-    const vaultData = await vaultService.getVaultData(vaultPubkey);
-    const vaultId = Number(vaultData.vaultState.vaultId);
-    const depositSubAccount = vaultData.vaultState.depositSubAccount;
-    
-    console.log(`Vault ID: ${vaultId}`);
-    console.log(`Authority: ${vaultData.vaultState.authority.toString()}`);
-    console.log(`Signer: ${signer.address}`);
-    console.log(`Deposit Sub-Account: ${depositSubAccount}`);
-    
-    // Verify the signer is the vault authority or strategist
-    if (vaultData.vaultState.authority.toString() !== signer.address) {
-      if (vaultData.assetData?.exchangeRateProvider.toString() !== signer.address) {
-        console.log('\n❌ Error: Signer is not the vault authority or strategist');
-        console.log(`Vault Authority: ${vaultData.vaultState.authority.toString()}`);
-        console.log(`Signer: ${signer.address}`);
-        console.log('\nYou must use the vault administrator or strategist wallet to create the deposit sub-account.');
-        return;
-      }
-    }
-    
-    // Create direct Solana connection for creating the transaction
-    const connection = createConnection();
-    
-    // Derive the vault PDAs
-    const boringVault = vaultService.getBoringVault();
-    const vaultStatePDA = await boringVault.getVaultStatePDA(vaultId);
-    const depositVaultPDA = await boringVault.getVaultPDA(vaultId, depositSubAccount);
-    
-    // Check if the deposit vault account already exists
-    const depositVaultInfo = await connection.getAccountInfo(depositVaultPDA);
-    if (depositVaultInfo) {
-      console.log(`\n✅ Deposit vault account already exists: ${depositVaultPDA.toString()}`);
-      return;
-    }
-
-    console.log(`\nAttempting to initialize deposit vault account: ${depositVaultPDA.toString()}`);
-    console.log(`This account is a Program Derived Address (PDA) and must be initialized by the program.`);
-    
-    console.log(`\nThe proper approach is to call the program with specific instructions to initialize this account.`);
-    console.log(`Since jitoSOL deposits are enabled, we can try to create an Associated Token Account (ATA) for it:`);
-    
-    // Get jitoSOL mint for deposit
-    const jitoSolMint = new web3.PublicKey(JITO_SOL_MINT_ADDRESS);
-    console.log(`\njitoSOL Mint: ${jitoSolMint.toString()}`);
-    
-    // Get the vault's associated token account for jitoSOL
-    const vaultJitoSolATA = getAssociatedTokenAddressSync(
-      jitoSolMint,         // mint
-      depositVaultPDA,     // owner - use depositVaultPDA here
-      true,                // allowOwnerOffCurve
-      TOKEN_PROGRAM_ID,    // programId
-      ASSOCIATED_TOKEN_PROGRAM_ID // associatedTokenProgramId
-    );
-    console.log(`Vault's jitoSOL ATA: ${vaultJitoSolATA.toString()}`);
-    
-    // Check if the ATA already exists
-    const ataInfo = await connection.getAccountInfo(vaultJitoSolATA);
-    if (ataInfo) {
-      console.log(`\n✅ Vault's jitoSOL ATA already exists: ${vaultJitoSolATA.toString()}`);
-      
-      // Try to run a deposit with 0 amount to trigger vault creation
-      console.log(`\nRunning a deposit with 0 amount to check if this triggers vault account creation...`);
-      
-      // Implement deposit logic here
-      return;
-    }
-    
-    console.log(`\nCreating Associated Token Account for jitoSOL to initialize deposit mechanism...`);
-    
-    // Create instruction to create the ATA with PDA support
-    const createATAIx = createAssociatedTokenAccountIdempotentInstructionWithDerivation(
-      new web3.PublicKey(signer.address), // payer
-      depositVaultPDA,                    // owner - this is a PDA, so we need special handling
-      jitoSolMint,                        // mint
-      true,                               // allowOwnerOffCurve - allows PDAs
-      TOKEN_PROGRAM_ID,                   // Use the standard Token Program ID
-      ASSOCIATED_TOKEN_PROGRAM_ID         // Use the standard Associated Token Program ID
-    );
-    
-    // Create transaction
-    const transaction = new web3.Transaction().add(createATAIx);
-    
-    // Get recent blockhash
-    const { blockhash } = await connection.getLatestBlockhash('confirmed');
-    transaction.recentBlockhash = blockhash;
-    transaction.feePayer = new web3.PublicKey(signer.address);
-    
-    // Load keypair from file for signing
-    const keypairPath = process.env.KEYPAIR_PATH || '';
-    if (!keypairPath) {
-      throw new Error('Keypair path not provided. Set KEYPAIR_PATH in .env file');
-    }
-    const keyData = JSON.parse(fs.readFileSync(keypairPath, 'utf-8'));
-    const keypair = web3.Keypair.fromSecretKey(new Uint8Array(keyData));
-    
-    // Sign and send the transaction
-    try {
-      transaction.sign(keypair);
-      const signature = await connection.sendRawTransaction(transaction.serialize(), {
-        skipPreflight: true,
-        preflightCommitment: 'confirmed'
-      });
-      console.log(`\n✅ Transaction sent with signature: ${signature}`);
-      console.log(`View on explorer: https://solscan.io/tx/${signature}`);
-      
-      // Wait a fixed amount of time instead of polling
-      console.log(`\nWaiting 5 seconds for transaction to propagate...`);
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      
-      // Check if ATA was created
-      const newATAInfo = await connection.getAccountInfo(vaultJitoSolATA);
-      if (newATAInfo) {
-        console.log(`✅ Vault's jitoSOL ATA created successfully: ${vaultJitoSolATA.toString()}`);
-        console.log(`Now you can try making a deposit to this vault.`);
-      } else {
-        console.log(`⚠️ Vault's jitoSOL ATA creation transaction may still be processing.`);
-        console.log(`Check transaction status at: https://solscan.io/tx/${signature}`);
-      }
-      
-      // Check if the vault PDA was created as a side effect
-      const newVaultInfo = await connection.getAccountInfo(depositVaultPDA);
-      if (newVaultInfo) {
-        console.log(`✅ Deposit vault account created as a side effect: ${depositVaultPDA.toString()}`);
-      } else {
-        console.log(`⚠️ The deposit vault account was not created yet: ${depositVaultPDA.toString()}`);
-        console.log(`It may be created during the first deposit operation.`);
-      }
-    } catch (error: any) {
-      console.error(`\nError sending transaction: ${error}`);
-      console.log(`\n⚠️ Important: The vault deposit account and ATA creation requires special privileges.`);
-      console.log(`This functionality should be done by the vault administrator through the program's intended instructions.`);
-      console.log(`If you are the vault administrator but still see this error, please check that your keypair has the correct permissions.`);
-    }
-  } catch (error) {
-    console.error('Error initializing vault deposit account:', error);
   }
 }
