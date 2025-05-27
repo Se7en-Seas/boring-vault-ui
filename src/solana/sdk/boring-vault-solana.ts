@@ -15,6 +15,7 @@ import {
 import { BalanceInfo, BoringVaultSolanaConfig } from '../types';
 import { parseFullVaultData } from './vault-state';
 import { type SolanaClient, Address, createSolanaClient } from 'gill';
+import idl from './boring-vault-svm-idl.json';
 
 /**
  * Service for interacting with the BoringVault Solana smart contract
@@ -228,11 +229,43 @@ export class BoringVaultSolana {
   }
 
   /**
+   * Extracts the instruction discriminator from the IDL for a given instruction name
+   */
+  private getInstructionDiscriminator(instructionName: string): Buffer {
+    const instruction = (idl.instructions as any[]).find(
+      (instr) => instr.name === instructionName
+    );
+    
+    if (!instruction || !instruction.discriminator) {
+      throw new Error(`Instruction '${instructionName}' or its discriminator not found in IDL`);
+    }
+    
+    return Buffer.from(instruction.discriminator);
+  }
+
+  /**
    * Extracts the deposit instruction discriminator from the IDL
    */
   private getDepositInstructionDiscriminator(): Buffer {
-    // The deposit instruction discriminator from the IDL
-    return Buffer.from([242, 35, 198, 137, 82, 225, 242, 182]);
+    return this.getInstructionDiscriminator('deposit');
+  }
+
+  /**
+   * Serializes deposit arguments into a buffer
+   */
+  private serializeDepositArgs(vaultId: number, depositAmount: bigint, minMintAmount: bigint): Buffer {
+    const buffer = Buffer.alloc(24); // 8 bytes for each u64
+    
+    // Write vaultId as u64 LE
+    this.writeUint64LE(buffer, BigInt(vaultId), 0);
+    
+    // Write depositAmount as u64 LE
+    this.writeUint64LE(buffer, depositAmount, 8);
+    
+    // Write minMintAmount as u64 LE
+    this.writeUint64LE(buffer, minMintAmount, 16);
+    
+    return buffer;
   }
 
   /**
@@ -363,24 +396,6 @@ export class BoringVaultSolana {
   }
 
   /**
-   * Serializes deposit arguments into a buffer
-   */
-  private serializeDepositArgs(vaultId: number, depositAmount: bigint, minMintAmount: bigint): Buffer {
-    const buffer = Buffer.alloc(24); // 8 bytes for each u64
-    
-    // Write vaultId as u64 LE
-    this.writeUint64LE(buffer, BigInt(vaultId), 0);
-    
-    // Write depositAmount as u64 LE
-    this.writeUint64LE(buffer, depositAmount, 8);
-    
-    // Write minMintAmount as u64 LE
-    this.writeUint64LE(buffer, minMintAmount, 16);
-    
-    return buffer;
-  }
-
-  /**
    * Helper to write a uint64 to a buffer in little-endian format
    */
   private writeUint64LE(buffer: Buffer, value: bigint, offset: number): void {
@@ -391,37 +406,6 @@ export class BoringVaultSolana {
     buffer.writeUint32LE(high, offset + 4);
   }
 
-  /**
-   * Deposits SPL tokens into the vault
-   */
-  async deposit(
-    payer: web3.PublicKey,
-    vaultId: number,
-    depositMint: web3.PublicKey,
-    depositAmount: bigint,
-    minMintAmount: bigint
-  ): Promise<string> {
-    // Build the deposit transaction
-    const transaction = await this.buildDepositTransaction(
-      payer,
-      vaultId,
-      depositMint,
-      depositAmount,
-      minMintAmount
-    );
-    
-    // Add recent blockhash
-    const blockhashResponse = await this.rpc.getLatestBlockhash().send();
-    if (!blockhashResponse.value) {
-      throw new Error('Failed to get recent blockhash');
-    }
-    
-    transaction.recentBlockhash = blockhashResponse.value.blockhash;
-    transaction.feePayer = payer;
-    
-    // Return the serialized transaction for signing
-    return transaction.serialize({ requireAllSignatures: false }).toString('base64');
-  }
 }
 
 // Export a function to create a BoringVaultSolana instance
