@@ -100,7 +100,7 @@ async function getUserShareBalance() {
   
   try {
     // Get the user's share balance in the vault
-    const balanceInfo = await boringVault.getBalance(walletAddress, vaultId);
+    const balanceInfo = await boringVault.fetchUserShares(walletAddress, vaultId);
     
     console.log('Raw Balance:', balanceInfo.raw.toString());
     console.log('Formatted Balance:', balanceInfo.formatted);
@@ -209,7 +209,7 @@ async function checkVaultAndUserBalances() {
       programId: vaultSDK.getProgramId() // Get the program ID from the VaultSDK
     });
     
-    const userShareBalance = await boringVault.getBalance(userWallet, vaultId);
+    const userShareBalance = await boringVault.fetchUserShares(userWallet, vaultId);
     console.log(`User share balance: ${userShareBalance.formatted}`);
     
     return {

@@ -12,11 +12,22 @@ export interface VaultState {
   withdrawSubAccount: number;
 }
 
-// Asset Data structure from IDL
+// Correctly matches AssetData from IDL
 export interface AssetData {
+  allowDeposits: boolean;
+  allowWithdrawals: boolean;
+  sharePremiumBps: number;
+  isPeggedToBaseAsset: boolean;
+  priceFeed: web3.PublicKey;
+  inversePriceFeed: boolean;
+  maxStaleness: bigint;
+  minSamples: number;
+}
+
+// TellerState structure from IDL
+export interface TellerState {
   baseAsset: web3.PublicKey;
-  baseAssetMinimum: bigint;
-  sharePrecision: number;
+  decimals: number;
   exchangeRateProvider: web3.PublicKey;
   exchangeRate: bigint;
   exchangeRateHighWaterMark: bigint;
@@ -36,7 +47,8 @@ export interface AssetData {
 export interface FullVaultData {
   discriminator: string;
   vaultState: VaultState;
-  assetData?: AssetData;
+  tellerState?: TellerState;
+  assetData?: AssetData; // The actual AssetData from the IDL
   rawData: Buffer;
   // Added properties to support enhanced data display
   tokenMint?: web3.PublicKey;
@@ -44,7 +56,7 @@ export interface FullVaultData {
     vaultId: string;
     paused: boolean;
     baseAsset: string;
-    baseAssetMinimum: string;
+    baseAssetMinimum?: string;
     exchangeRate: string;
     feesOwed: string;
     totalShares: string;
@@ -116,7 +128,7 @@ export function parseFullVaultData(data: Buffer): FullVaultData {
     throw new Error(`Failed to decode account data: ${e}`);
   }
   
-  // Initialize vault state and asset data objects
+  // Initialize vault state and teller state objects
   let vaultState: VaultState = {
     vaultId: BigInt(0),
     authority: new web3.PublicKey(0),
@@ -127,6 +139,7 @@ export function parseFullVaultData(data: Buffer): FullVaultData {
     withdrawSubAccount: 0
   };
   
+  let tellerState: TellerState | undefined;
   let assetData: AssetData | undefined;
   
   // Parse based on account type
@@ -142,12 +155,11 @@ export function parseFullVaultData(data: Buffer): FullVaultData {
       withdrawSubAccount: accountData.config?.withdraw_sub_account || 0
     };
     
-    // Extract asset data from the teller field
+    // Extract teller state from the teller field
     if (accountData.teller) {
-      assetData = {
+      tellerState = {
         baseAsset: accountData.teller.base_asset || new web3.PublicKey(0),
-        baseAssetMinimum: accountData.teller.base_asset_minimum ? BigInt(accountData.teller.base_asset_minimum.toString()) : BigInt(0),
-        sharePrecision: accountData.teller.decimals || 0,
+        decimals: accountData.teller.decimals || 0,
         exchangeRateProvider: accountData.teller.exchange_rate_provider || new web3.PublicKey(0),
         exchangeRate: accountData.teller.exchange_rate ? BigInt(accountData.teller.exchange_rate.toString()) : BigInt(0),
         exchangeRateHighWaterMark: accountData.teller.exchange_rate_high_water_mark ? BigInt(accountData.teller.exchange_rate_high_water_mark.toString()) : BigInt(0),
@@ -163,28 +175,40 @@ export function parseFullVaultData(data: Buffer): FullVaultData {
         withdrawAuthority: accountData.teller.withdraw_authority || new web3.PublicKey(0)
       };
     }
+  } else if (accountType === 'AssetData') {
+    // Parse AssetData account
+    assetData = {
+      allowDeposits: accountData.allow_deposits || false,
+      allowWithdrawals: accountData.allow_withdrawals || false,
+      sharePremiumBps: accountData.share_premium_bps || 0,
+      isPeggedToBaseAsset: accountData.is_pegged_to_base_asset || false,
+      priceFeed: accountData.price_feed || new web3.PublicKey(0),
+      inversePriceFeed: accountData.inverse_price_feed || false,
+      maxStaleness: accountData.max_staleness ? BigInt(accountData.max_staleness.toString()) : BigInt(0),
+      minSamples: accountData.min_samples || 0
+    };
   }
   
   // Create readable data for display
   const readableData = {
     vaultId: vaultState.vaultId.toString(),
     paused: vaultState.paused,
-    baseAsset: assetData ? assetData.baseAsset.toString() : 'Unknown',
-    baseAssetMinimum: assetData ? formatBNWithDecimals(assetData.baseAssetMinimum, 9) : '0',
-    exchangeRate: assetData ? formatBNWithDecimals(assetData.exchangeRate, 9) : '0',
-    feesOwed: assetData ? formatBNWithDecimals(assetData.feesOwedInBaseAsset, 9) : '0',
-    totalShares: assetData ? formatBNWithDecimals(assetData.totalSharesLastUpdate, 9) : '0',
-    lastUpdate: assetData ? new Date(Number(assetData.lastUpdateTimestamp) * 1000).toISOString() : 'Unknown',
-    platformFee: assetData ? `${assetData.platformFeeBps / 100}%` : '0%',
-    performanceFee: assetData ? `${assetData.performanceFeeBps / 100}%` : '0%'
+    baseAsset: tellerState ? tellerState.baseAsset.toString() : 'Unknown',
+    exchangeRate: tellerState ? formatBNWithDecimals(tellerState.exchangeRate, 9) : '0',
+    feesOwed: tellerState ? formatBNWithDecimals(tellerState.feesOwedInBaseAsset, 9) : '0',
+    totalShares: tellerState ? formatBNWithDecimals(tellerState.totalSharesLastUpdate, 9) : '0',
+    lastUpdate: tellerState ? new Date(Number(tellerState.lastUpdateTimestamp) * 1000).toISOString() : 'Unknown',
+    platformFee: tellerState ? `${tellerState.platformFeeBps / 100}%` : '0%',
+    performanceFee: tellerState ? `${tellerState.performanceFeeBps / 100}%` : '0%'
   };
 
   // Set tokenMint to baseAsset if available
-  const tokenMint = assetData ? assetData.baseAsset : undefined;
+  const tokenMint = tellerState ? tellerState.baseAsset : undefined;
   
   return {
     discriminator: discriminatorHex,
     vaultState,
+    tellerState,
     assetData,
     rawData,
     tokenMint,

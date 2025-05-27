@@ -6,6 +6,7 @@ import {
   AccountLayout
 } from '@solana/spl-token';
 import { createSolanaClient, type SolanaClient, Address } from 'gill';
+import { JITO_SOL_MINT_ADDRESS } from '../utils/constants';
 
 /**
  * Vault SDK adapter for mainnet testing
@@ -16,8 +17,10 @@ export class VaultSDK {
   private boringVault: BoringVaultSolana;
   private programId: web3.PublicKey;
   private solanaClient: SolanaClient;
+  private rpcUrl: string;
   
   constructor(urlOrMoniker: string) {
+    this.rpcUrl = urlOrMoniker;
     this.solanaClient = createSolanaClient({ urlOrMoniker });
     this.rpc = this.solanaClient.rpc;
     
@@ -32,6 +35,13 @@ export class VaultSDK {
       solanaClient: this.solanaClient,
       programId: this.programId.toString()
     });
+  }
+
+  /**
+   * For testing purposes - get the underlying BoringVaultSolana instance
+   */
+  getBoringVault(): BoringVaultSolana {
+    return this.boringVault;
   }
 
   /**
@@ -57,8 +67,8 @@ export class VaultSDK {
     
     // For convenience, also return the token mint, which might be in the assetData
     let tokenMint;
-    if (vaultData.assetData?.baseAsset) {
-      tokenMint = vaultData.assetData.baseAsset;
+    if (vaultData.tellerState?.baseAsset) {
+      tokenMint = vaultData.tellerState.baseAsset;
     }
     
     return {
@@ -98,5 +108,96 @@ export class VaultSDK {
     
     // If no token account exists, return 0
     return '0';
+  }
+
+  /**
+   * Deposits SPL tokens into a vault
+   * 
+   * @param wallet The wallet that will sign the transaction
+   * @param vaultId The ID of the vault to deposit into
+   * @param depositMint The mint of the token to deposit
+   * @param depositAmount The amount of tokens to deposit
+   * @param minMintAmount The minimum amount of shares to mint
+   * @param options Additional options for the deposit transaction
+   * @returns The transaction signature
+   */
+  async deposit(
+    wallet: { publicKey: web3.PublicKey; signTransaction: (tx: web3.Transaction) => Promise<web3.Transaction> } | web3.Keypair,
+    vaultId: number,
+    depositMint: web3.PublicKey | string = JITO_SOL_MINT_ADDRESS,
+    depositAmount: bigint | string,
+    minMintAmount: bigint | string,
+    options: {
+      skipPreflight?: boolean;
+      maxRetries?: number;
+      skipStatusCheck?: boolean;
+    } = {}
+  ): Promise<string> {
+    // Convert string inputs to proper types
+    const tokenMint = typeof depositMint === 'string' 
+      ? new web3.PublicKey(depositMint) 
+      : depositMint;
+    
+    const amount = typeof depositAmount === 'string' 
+      ? BigInt(depositAmount) 
+      : depositAmount;
+    
+    const minAmount = typeof minMintAmount === 'string' 
+      ? BigInt(minMintAmount) 
+      : minMintAmount;
+    
+    try {
+      // Create direct web3.js connection for transaction sending
+      const connection = new web3.Connection(
+        process.env.ALCHEMY_RPC_URL || this.rpcUrl,
+        { commitment: 'confirmed' }
+      );
+      
+      // Get the wallet's public key
+      const payerPublicKey = 'signTransaction' in wallet 
+        ? wallet.publicKey 
+        : wallet.publicKey;
+      
+      // Build the transaction using the core implementation
+      const transaction = await this.boringVault.buildDepositTransaction(
+        payerPublicKey,
+        vaultId,
+        tokenMint,
+        amount,
+        minAmount
+      );
+      
+      // Add recent blockhash
+      const { blockhash } = await connection.getLatestBlockhash('confirmed');
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = payerPublicKey;
+      
+      // Sign the transaction
+      let signedTx: web3.Transaction;
+      if ('signTransaction' in wallet) {
+        // Using wallet adapter
+        signedTx = await wallet.signTransaction(transaction);
+      } else {
+        // Using keypair
+        transaction.sign(wallet);
+        signedTx = transaction;
+      }
+      
+      console.log('Transaction signed, sending to network...');
+      
+      // Send transaction
+      const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+        skipPreflight: options.skipPreflight || false,
+        preflightCommitment: 'confirmed'
+      });
+      
+      console.log(`Transaction sent! Signature: ${signature}`);
+      console.log(`View on explorer: https://solscan.io/tx/${signature}`);
+
+      return signature;
+    } catch (error) {
+      console.error('Deposit error:', error);
+      throw new Error(`Failed to deposit: ${error}`);
+    }
   }
 }
