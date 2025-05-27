@@ -83,9 +83,11 @@ if (require.main === module) {
   // Function to execute a test and gracefully close
   const executeTest = async (testFn: () => Promise<any>) => {
     try {
-      await testFn();
+      const result = await testFn();
+      return result;
     } catch (error) {
       console.error(error);
+      throw error;
     } finally {
       rl.close();
     }

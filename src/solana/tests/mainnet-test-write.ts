@@ -122,523 +122,94 @@ export async function testDeposit(): Promise<string | undefined> {
     const minMintAmount = depositLamports * BigInt(95) / BigInt(100);
     console.log(`Minimum shares to receive: ${minMintAmount} (5% slippage tolerance)`);
     
-    // Create the wallet adapter with web3.js PublicKey for the boring vault SDK
-    const walletPublicKey = new web3.PublicKey(signerAddress);
-    
-    // Get key PDAs for transaction preparation
-    const boringVault = vaultService.getBoringVault();
-    const vaultStatePDA = await boringVault.getVaultStatePDA(vaultId);
-    const vaultPDA = await boringVault.getVaultPDA(vaultId, vaultData.vaultState.depositSubAccount);
-    const shareMintPDA = vaultData.vaultState.shareMint;
-    const shareMintPDAInfo = await connection.getAccountInfo(shareMintPDA);
-    const shareMintProgram = shareMintPDAInfo?.owner;
-    const userSharesATA = getAssociatedTokenAddressSync(
-      shareMintPDA,         // mint
-      walletPublicKey,      // owner
-      true,                 // allowOwnerOffCurve
-      shareMintProgram,     // programId
-      ASSOCIATED_TOKEN_PROGRAM_ID  // associatedTokenProgramId
-    );
-    
-    // IMPORTANT: Check accounts but don't break on missing vault PDA
-    console.log('\nVerifying required accounts...');
-    
-    // Log all the accounts for debugging
-    console.log('Important accounts for deposit transaction:');
-    console.log(`Vault State PDA: ${vaultStatePDA.toString()}`);
-    console.log(`Deposit Sub-Account: ${vaultData.vaultState.depositSubAccount}`);
-    console.log(`Vault PDA: ${vaultPDA.toString()}`);
-    console.log(`Share Mint: ${shareMintPDA.toString()}`);
-    console.log(`User's Share ATA: ${userSharesATA.toString()}`);
-
-    // Check jitoSOL token account
-    const jitoSolMint = new web3.PublicKey(JITO_SOL_MINT_ADDRESS);
-    const vaultJitoSolATA = getAssociatedTokenAddressSync(
-      jitoSolMint,         // mint
-      vaultPDA,            // owner
-      true,                // allowOwnerOffCurve
-      TOKEN_PROGRAM_ID,    // programId
-      ASSOCIATED_TOKEN_PROGRAM_ID // associatedTokenProgramId
-    );
-    console.log(`Vault's jitoSOL token account: ${vaultJitoSolATA.toString()}`);
-    
-    const jitoSolAtaInfo = await connection.getAccountInfo(vaultJitoSolATA);
-    if (jitoSolAtaInfo) {
-      console.log(`✅ Vault's jitoSOL token account exists`);
-      const accountData = AccountLayout.decode(jitoSolAtaInfo.data);
-      console.log(`Token Owner: ${new web3.PublicKey(accountData.owner).toString()}`);
-      console.log(`Token Mint: ${new web3.PublicKey(accountData.mint).toString()}`);
-    } else {
-      console.log(`❌ Vault's jitoSOL token account does not exist`);
-    }
-
-    
-    // Check if the user's share token account exists
-    const userSharesATAInfo = await connection.getAccountInfo(userSharesATA);
-    if (!userSharesATAInfo) {
-      console.log(`⚠️ User's share token account does not exist: ${userSharesATA.toString()}`);
-      
-      // Debug: Check share mint owner
-      const shareMintInfo = await connection.getAccountInfo(shareMintPDA);
-      if (!shareMintInfo) {
-        console.log(`❌ Share mint does not exist: ${shareMintPDA.toString()}`);
-        return;
-      }
-      
-      console.log(`\nDebug - Share Mint Info:`);
-      console.log(`Owner: ${shareMintInfo.owner.toString()}`);
-      console.log(`Data Size: ${shareMintInfo.data.length} bytes`);
-      console.log(`Standard Token Program: ${TOKEN_PROGRAM_ID.toString()}`);
-      console.log(`Standard Associated Token Program: ${ASSOCIATED_TOKEN_PROGRAM_ID.toString()}`);
-      
-      // Use the actual token program from the share mint
-      const actualTokenProgram = shareMintInfo.owner;
-      console.log(`Using the actual token program from the share mint: ${actualTokenProgram.toString()}`);
-      
-      // Create custom instruction using correct token program
-      console.log('Creating user share token account...');
-      
-      try {
-        // Use the createAssociatedTokenAccount directly instead of instruction
-        console.log('Creating token account with createAssociatedTokenAccount...');
-        
-        // Load keypair from file for signing
-        const keypairPath = process.env.KEYPAIR_PATH || '';
-        if (!keypairPath) {
-          throw new Error('Keypair path not provided. Set KEYPAIR_PATH in .env file');
-        }
-        const keyData = JSON.parse(fs.readFileSync(keypairPath, 'utf-8'));
-        const keypair = web3.Keypair.fromSecretKey(new Uint8Array(keyData));
-        
-        // Create the instruction instead of using the createAssociatedTokenAccount helper
-        // This avoids potential websocket hangs
-        console.log('Creating instruction for token account creation...');
-        const instruction = createAssociatedTokenAccountIdempotentInstructionWithDerivation(
-          keypair.publicKey,      // payer
-          walletPublicKey,        // owner
-          shareMintPDA,           // mint
-          true,                   // allowOwnerOffCurve
-          actualTokenProgram,     // programId
-          ASSOCIATED_TOKEN_PROGRAM_ID // associatedTokenProgramId
-        );
-        
-        // Create a transaction
-        const transaction = new web3.Transaction().add(instruction);
-        
-        // Get recent blockhash with HTTP connection
-        const { blockhash } = await connection.getLatestBlockhash('confirmed');
-        transaction.recentBlockhash = blockhash;
-        transaction.feePayer = keypair.publicKey;
-        
-        // Sign and send the transaction
-        transaction.sign(keypair);
-        const signature = await connection.sendRawTransaction(transaction.serialize(), {
-          skipPreflight: true,
-          preflightCommitment: 'confirmed'
-        });
-        
-        console.log(`✅ Token account creation transaction sent: ${signature}`);
-        console.log(`View on explorer: https://solscan.io/tx/${signature}`);
-        
-        // Instead of waiting for confirmation with a potential websocket hang,
-        // we'll just derive the ATA address and check if it exists after a short delay
-        const ataAddress = getAssociatedTokenAddressSync(
-          shareMintPDA,          // mint
-          walletPublicKey,       // owner 
-          true,                  // allowOwnerOffCurve
-          actualTokenProgram,    // programId
-          ASSOCIATED_TOKEN_PROGRAM_ID // associatedTokenProgramId
-        );
-        
-        console.log(`Derived ATA address: ${ataAddress.toString()}`);
-        console.log(`Waiting 5 seconds for transaction to propagate...`);
-        
-        // Wait a fixed time instead of using websocket confirmations
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        
-        // Check if it exists now
-        const ataInfo = await connection.getAccountInfo(ataAddress);
-        if (ataInfo) {
-          console.log(`✅ Token account created at: ${ataAddress.toString()}`);
-        } else {
-          console.log(`⚠️ Token account not confirmed yet. Transaction may still be processing.`);
-          console.log(`You can check the transaction status manually at: https://solscan.io/tx/${signature}`);
-          console.log(`Continuing with the derived ATA address: ${ataAddress.toString()}`);
-        }
-        
-        // Continue with deposit - passing control back to the main flow
-      } catch (error) {
-        console.error('Error creating token account:', error);
-        
-        // Fallback - just derive the ATA address and check if it exists
-        console.log('\nFalling back to manual ATA address derivation...');
-        
-        // First derive the ATA address
-        const ataAddress = getAssociatedTokenAddressSync(
-          shareMintPDA,          // mint
-          walletPublicKey,       // owner 
-          true,                  // allowOwnerOffCurve
-          actualTokenProgram,    // programId
-          ASSOCIATED_TOKEN_PROGRAM_ID // associatedTokenProgramId
-        );
-        
-        console.log(`Derived ATA address: ${ataAddress.toString()}`);
-        
-        // Check if it already exists
-        const ataInfo = await connection.getAccountInfo(ataAddress);
-        if (ataInfo) {
-          console.log(`✅ Token account already exists at: ${ataAddress.toString()}`);
-        } else {
-          console.log(`❌ Token account does not exist at: ${ataAddress.toString()}`);
-          console.log(`Attempting to proceed with deposit anyway. The program may handle creating the account.`);
-        }
-      }
-    } else {
-      console.log(`✅ User's share token account exists: ${userSharesATA.toString()}`);
+    // Load keypair from file for signing
+    const keypairPath = process.env.KEYPAIR_PATH || '';
+    if (!keypairPath) {
+      throw new Error('Keypair path not provided. Set KEYPAIR_PATH in .env file');
     }
     
-    // Get vault token ATA
-    const vaultTokenATA = getAssociatedTokenAddressSync(
-      new web3.PublicKey(TOKEN_MINTS.JITO_SOL), // mint
-      vaultPDA,                                 // owner
-      true,                                     // allowOwnerOffCurve
-      TOKEN_PROGRAM_ID,                         // programId
-      ASSOCIATED_TOKEN_PROGRAM_ID               // associatedTokenProgramId
-    );
-    console.log(`Vault's jitoSOL token account: ${vaultTokenATA.toString()}`);
-
-    // Get asset data account PDA - fix by passing vaultStatePDA instead of vaultId
-    const assetDataPDA = await boringVault.getAssetDataPDA(vaultStatePDA, new web3.PublicKey(TOKEN_MINTS.JITO_SOL));
-    console.log(`jitoSOL asset data account: ${assetDataPDA.toString()}`);
-
-    // Check if it exists
-    const assetDataInfo = await connection.getAccountInfo(assetDataPDA);
-    if (assetDataInfo) {
-      console.log(`✅ jitoSOL asset data account exists`);
-    } else {
-      console.log(`❌ jitoSOL asset data account does not exist. Cannot proceed with deposit.`);
-      return undefined;
-    }
-
-    // Check for program config account 
+    const keyData = JSON.parse(fs.readFileSync(keypairPath, 'utf-8'));
+    const keypair = web3.Keypair.fromSecretKey(new Uint8Array(keyData));
+    
+    console.log('\nExecuting deposit transaction...');
+    
+    // Use the enhanced deposit function from VaultSDK
     try {
-      const accountAddress = new web3.PublicKey('3dMB3jrRu6j6LrVWm116KGqBEUsT34fi5P7BBa2mRKSR');
-      console.log(`\nChecking for config account: ${accountAddress.toString()}`);
-      
-      const accountInfo = await connection.getAccountInfo(accountAddress);
-      if (accountInfo) {
-        console.log(`✅ Program config account exists with the following details:`);
-        console.log(`   Owner: ${accountInfo.owner.toString()}`);
-        console.log(`   Data Size: ${accountInfo.data.length} bytes`);
-      } else {
-        console.log(`❌ Program config account does not exist: ${accountAddress.toString()}`);
-        console.log(`This account is required by the program but is missing.`);
-        console.log(`This may need to be initialized by an admin or the program owner.`);
-        return undefined;
-      }
-    } catch (error) {
-      console.log(`Error checking program config account: ${error}`);
-    }
-
-    // Examine asset data (this is optional)
-    console.log(`\nExamining asset data:`);
-    
-    // Build deposit transaction using boring vault SDK
-    console.log('\nBuilding deposit transaction...');
-      
-    // Log arguments for clarity
-    console.log('Deposit Arguments:');
-    console.log(`- Wallet Public Key: ${walletPublicKey.toString()}`);
-    console.log(`- Vault ID: ${vaultId}`);
-    console.log(`- Deposit Mint: ${TOKEN_MINTS.JITO_SOL.toString()}`);
-    console.log(`- Deposit Amount: ${depositLamports.toString()}`);
-    console.log(`- Min Mint Amount: ${minMintAmount.toString()}`);
-    
-    try {
-
-
-      // Get share mint info to determine the correct token program
-      console.log('\nFetching share mint information...');
-      const shareMintInfo = await connection.getAccountInfo(shareMintPDA);
-      if (!shareMintInfo) {
-        console.log(`❌ Share mint does not exist at ${shareMintPDA.toString()}`);
-        return;
-      }
-      console.log(`Share Mint Owner (Token Program): ${shareMintInfo.owner.toString()}`);
-
-      // Get the correct price feed address from constants
-      const JITO_SOL_PRICE_FEED_ADDRESS = require('../utils/constants').JITO_SOL_PRICE_FEED_ADDRESS;
-      const priceFeedPublicKey = new web3.PublicKey(JITO_SOL_PRICE_FEED_ADDRESS);
-      console.log(`Using jito-sol price feed: ${priceFeedPublicKey.toString()}`);
-      
-      // Get user's current ATA for share token
-      const correctUserShareATA = getAssociatedTokenAddressSync(
-        shareMintPDA,         // mint
-        walletPublicKey,      // owner
-        true,                 // allowOwnerOffCurve
-        new web3.PublicKey(shareMintInfo.owner.toString()), // Use the actual token program from share mint
-        ASSOCIATED_TOKEN_PROGRAM_ID  // associatedTokenProgramId
-      );
-      console.log(`Corrected user's share token account: ${correctUserShareATA.toString()}`);
-      
-      // Check if user's share token account exists after our creation attempt
-      const shareTokenAccountInfo = await connection.getAccountInfo(correctUserShareATA);
-      if (!shareTokenAccountInfo) {
-        console.log(`❌ User's share token account still doesn't exist at: ${correctUserShareATA.toString()}`);
-        console.log('Creating it one more time with the correct token program...');
-        
-        // Load keypair from file for signing
-        const keypairPath = process.env.KEYPAIR_PATH || '';
-        if (!keypairPath) {
-          throw new Error('Keypair path not provided. Set KEYPAIR_PATH in .env file');
-        }
-        const keyData = JSON.parse(fs.readFileSync(keypairPath, 'utf-8'));
-        const keypair = web3.Keypair.fromSecretKey(new Uint8Array(keyData));
-        
-        // Create the token account instruction using the correct token program
-        const instruction = createAssociatedTokenAccountIdempotentInstructionWithDerivation(
-          keypair.publicKey,                          // payer
-          walletPublicKey,                            // owner
-          shareMintPDA,                               // mint
-          true,                                       // allowOwnerOffCurve
-          new web3.PublicKey(shareMintInfo.owner.toString()), // actual token program
-          ASSOCIATED_TOKEN_PROGRAM_ID                 // associatedTokenProgramId
-        );
-        
-        // Create and send transaction
-        const transaction = new web3.Transaction().add(instruction);
-        const { blockhash } = await connection.getLatestBlockhash('confirmed');
-        transaction.recentBlockhash = blockhash;
-        transaction.feePayer = keypair.publicKey;
-        
-        // Sign and send
-        transaction.sign(keypair);
-        const signature = await connection.sendRawTransaction(transaction.serialize(), {
-          skipPreflight: true,
-          preflightCommitment: 'confirmed'
-        });
-        
-        console.log(`✅ Token account creation transaction sent: ${signature}`);
-        console.log(`View on explorer: https://solscan.io/tx/${signature}`);
-        
-        // Wait for confirmation with HTTP polling
-        console.log('Waiting for token account creation to confirm...');
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        
-        // Check again if it exists
-        const newAccountInfo = await connection.getAccountInfo(correctUserShareATA);
-        if (!newAccountInfo) {
-          console.log(`❌ Failed to create user's share token account. Cannot proceed with deposit.`);
-          return;
-        }
-        console.log(`✅ User's share token account successfully created: ${correctUserShareATA.toString()}`);
-      }
-
-      // Now build the deposit transaction with customized account list to ensure we include the price feed
-      console.log('\nCustomizing deposit transaction...');
-      
-      const tx = await boringVault.buildDepositTransaction(
-        walletPublicKey,
+      const signature = await vaultService.deposit(
+        keypair, // Pass the keypair directly
         vaultId,
-        new web3.PublicKey(TOKEN_MINTS.JITO_SOL.toString()),
+        TOKEN_MINTS.JITO_SOL.toString(),
         depositLamports,
-        minMintAmount
+        minMintAmount,
+        {
+          skipPreflight: true, // Skip preflight to avoid rejections for valid transactions
+          maxRetries: 30
+        }
       );
       
-      // Get recent blockhash from direct connection (HTTP only)
-      console.log('\nGetting recent blockhash...');
-      const { blockhash } = await connection.getLatestBlockhash();
-      tx.recentBlockhash = blockhash;
-      tx.feePayer = walletPublicKey;
+      // Poll for transaction status
+      console.log('Polling for transaction status...');
+      const maxAttempts = 30;
       
-      console.log('Signing transaction...');
-      
-      // Load keypair from file for signing
-      const keypairPath = process.env.KEYPAIR_PATH || '';
-      if (!keypairPath) {
-        throw new Error('Keypair path not provided. Set KEYPAIR_PATH in .env file');
-      }
-      
-      const keyData = JSON.parse(fs.readFileSync(keypairPath, 'utf-8'));
-      const keypair = web3.Keypair.fromSecretKey(new Uint8Array(keyData));
-      
-      // Sign the transaction
-      tx.sign(keypair);
-      
-      console.log('\nSending transaction (without waiting for confirmation)...');
-      
-      const signature = await connection.sendRawTransaction(tx.serialize(), {
-        skipPreflight: true,
-        preflightCommitment: 'confirmed'
-      });
-      
-      console.log(`\n✅ Transaction sent! Signature: ${signature}`);
-      console.log(`View on explorer: https://solscan.io/tx/${signature}`);
-      
-      // Poll for transaction status using HTTP method instead of websockets
-      console.log('\nPolling for transaction status...');
-      
-      // Function to poll transaction status using getSignatureStatuses (HTTP method)
-      const pollTransactionStatus = async (signature: string, maxAttempts = 30): Promise<string> => {
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-          try {
-            // Use getSignatureStatuses (HTTP method) instead of confirmTransaction (WebSocket)
-            const response = await connection.getSignatureStatuses([signature]);
-            
-            const status = response.value[0];
-            if (status) {
-              if (status.confirmationStatus === 'finalized') {
-                return 'finalized';
-              } else if (status.confirmationStatus === 'confirmed') {
-                return 'confirmed';
-              } else if (status.confirmationStatus === 'processed') {
-                return 'processed';
-              } else if (status.err) {
-                return `error: ${JSON.stringify(status.err)}`;
-              }
-            }
-            
-            // Wait before next poll attempt
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            process.stdout.write('.');
-          } catch (error) {
-            console.error(`\nError polling transaction: ${error}`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-        }
-        
-        return 'timeout';
-      };
-      
-      // Wait for transaction with timeout
-      console.log('Waiting for confirmation (max 30 seconds)');
-      const status = await pollTransactionStatus(signature);
-      
-      // Check final status
-      if (status === 'finalized' || status === 'confirmed') {
-        console.log(`\n✅ Transaction ${status}!`);
-        
-        // Get transaction details
-        console.log('\nFetching transaction details...');
+      // Poll transaction status
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
         try {
-          const transaction = await connection.getTransaction(signature, {
-            maxSupportedTransactionVersion: 0,
-          });
+          const response = await connection.getSignatureStatuses([signature]);
+          const status = response.value[0];
           
-          if (transaction) {
-            // Print relevant transaction details
-            console.log('\nTransaction Results:');
-            console.log(`Status: ${transaction.meta?.err ? 'Failed' : 'Success'}`);
-            
-            if (transaction.meta?.err) {
-              console.log(`Error: ${JSON.stringify(transaction.meta.err)}`);
-              
-              // Enhanced error analysis
-              const errorStr = JSON.stringify(transaction.meta.err);
-              if (errorStr.includes('MissingAccount')) {
-                console.log('\nAnalyzing MissingAccount error...');
-                console.log('This error occurs when a required account doesn\'t exist or is invalid.');
-                
-                // Get logs if available to see which account is missing
-                if (transaction.meta?.logMessages && transaction.meta.logMessages.length > 0) {
-                  console.log('\nProgram logs:');
-                  transaction.meta.logMessages.forEach(log => {
-                    if (log.includes('not found') || log.includes('missing') || log.includes('invalid')) {
-                      console.log(`  ${log}`);
-                    }
-                  });
-                }
-                
-                // Check each account referenced in the transaction
-                console.log('\nChecking all accounts in transaction:');
-                const accountKeys = transaction.transaction.message.getAccountKeys 
-                  ? transaction.transaction.message.getAccountKeys().keySegments().flat()
-                  : transaction.transaction.message.staticAccountKeys;
-                
-                // Create connection and check accounts in parallel
-                console.log('Validating key accounts (this may take a few seconds)...');
-                Promise.all(accountKeys.map(async (pubkey, i) => {
-                  try {
-                    const info = await connection.getAccountInfo(pubkey);
-                    return { 
-                      index: i, 
-                      pubkey: pubkey.toString(), 
-                      exists: !!info,
-                      owner: info ? info.owner.toString() : 'N/A',
-                      dataSize: info ? info.data.length : 0
-                    };
-                  } catch (e: unknown) {
-                    const errorMessage = e instanceof Error ? e.message : String(e);
-                    return { 
-                      index: i, 
-                      pubkey: pubkey.toString(), 
-                      exists: false,
-                      error: errorMessage
-                    };
-                  }
-                })).then(results => {
-                  // Print account validation results with focus on missing accounts
-                  results.forEach((result, i) => {
-                    if (!result.exists) {
-                      console.log(`❌ [${i}] Account ${result.pubkey} DOES NOT EXIST`);
-                    }
-                  });
-                  
-                  console.log('\nMost likely causes:');
-                  console.log('1. One of the accounts needed for the transaction does not exist and needs to be created first');
-                  console.log('2. The vault PDA or another program-derived address may need initialization');
-                  console.log('3. The price feed address may be incorrect or missing');
-                });
-              }
-            } else {
-              // Post balance changes
-              if (transaction.meta?.postBalances && transaction.meta?.postTokenBalances) {
-                console.log('\nToken Balance Changes:');
-                transaction.meta.postTokenBalances.forEach((balance, i) => {
-                  const preBalance = transaction.meta?.preTokenBalances?.find(
-                    (pre) => pre.accountIndex === balance.accountIndex
-                  );
-                  
-                  if (preBalance) {
-                    // Use the accountKeys from transaction meta which works for all transaction versions
-                    const accountKey = transaction.meta?.loadedAddresses?.writable[balance.accountIndex] || 
-                                     transaction.transaction.message.staticAccountKeys[balance.accountIndex];
-                    console.log(`  Account: ${accountKey.toString()}`);
-                    console.log(`  Mint: ${balance.mint}`);
-                    console.log(`  Owner: ${balance.owner}`);
-                    console.log(`  Pre-balance: ${preBalance.uiTokenAmount.uiAmount}`);
-                    console.log(`  Post-balance: ${balance.uiTokenAmount.uiAmount}`);
-                    console.log(`  Change: ${(balance.uiTokenAmount.uiAmount || 0) - (preBalance.uiTokenAmount.uiAmount || 0)}`);
-                    console.log('  ---');
-                  }
-                });
-              }
-              
-              // Log log messages
-              if (transaction.meta?.logMessages && transaction.meta.logMessages.length > 0) {
-                console.log('\nRelevant Log Messages:');
-                const relevantLogs = transaction.meta.logMessages.filter(log => 
-                  log.includes('boring') || 
-                  log.includes('deposit') || 
-                  log.includes('mint') ||
-                  log.includes('error') ||
-                  log.includes('fail')
-                );
-                relevantLogs.forEach(log => console.log(`  ${log}`));
-              }
+          if (status) {
+            if (status.err) {
+              console.error(`Transaction failed: ${JSON.stringify(status.err)}`);
+              throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
             }
-          } else {
-            console.log(`\n❌ Failed to fetch transaction details`);
+            
+            if (status.confirmationStatus === 'finalized' || status.confirmationStatus === 'confirmed') {
+              console.log(`Transaction ${status.confirmationStatus}!`);
+              
+              // Get transaction details for debugging
+              try {
+                const txDetails = await connection.getTransaction(signature, {
+                  maxSupportedTransactionVersion: 0,
+                });
+                
+                if (txDetails && txDetails.meta) {
+                  if (txDetails.meta.err) {
+                    console.error(`Transaction error: ${JSON.stringify(txDetails.meta.err)}`);
+                  } else {
+                    console.log('Transaction successful!');
+                    
+                    // Log token balance changes if available
+                    if (txDetails.meta.postTokenBalances && txDetails.meta.preTokenBalances) {
+                      console.log('Token balance changes:');
+                      txDetails.meta.postTokenBalances.forEach((postBalance) => {
+                        const preBalance = txDetails.meta?.preTokenBalances?.find(
+                          (pre) => pre.accountIndex === postBalance.accountIndex
+                        );
+                        
+                        if (preBalance) {
+                          const change = (postBalance.uiTokenAmount.uiAmount || 0) - 
+                                        (preBalance.uiTokenAmount.uiAmount || 0);
+                          console.log(`  Mint: ${postBalance.mint}, Change: ${change}`);
+                        }
+                      });
+                    }
+                  }
+                }
+              } catch (detailsError) {
+                console.warn(`Could not fetch transaction details: ${detailsError}`);
+              }
+              
+              return signature;
+            }
           }
+          
+          // Wait before next poll
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          process.stdout.write('.');
         } catch (error) {
-          console.error(`\nError fetching transaction details: ${error}`);
+          console.warn(`Error checking transaction status (attempt ${attempt + 1}/${maxAttempts}): ${error}`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
-      } else if (status.startsWith('error')) {
-        console.log(`\n❌ Transaction failed: ${status}`);
-      } else {
-        console.log(`\n⚠️ Transaction not confirmed after timeout: ${status}`);
-        console.log('Transaction may still be processing. Check status manually:');
-        console.log(`https://solscan.io/tx/${signature}`);
       }
       
       return signature;

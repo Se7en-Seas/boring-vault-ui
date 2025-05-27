@@ -275,7 +275,7 @@ export class BoringVaultSolana {
       shareMintProgram = new web3.PublicKey(shareMintResponse.value.owner);
       console.log(`DEBUG: Share Mint Program: ${shareMintProgram.toString()}`);
     } else {
-      throw new Error(`Could not retrieve share mint info, using default TOKEN_PROGRAM_ID`);
+      throw new Error(`Could not retrieve share mint info for ${shareMintPDA.toString()}`);
     }
     
     // Get the asset data PDA

@@ -1,6 +1,6 @@
 // Seeds from the smart contract
-export const BASE_SEED_BORING_VAULT_STATE = "boring-vault-state";
-export const BASE_SEED_BORING_VAULT = "boring-vault";
+export const BASE_SEED_BORING_VAULT_STATE = 'boring-vault-state';
+export const BASE_SEED_BORING_VAULT = 'boring-vault';
 export const BASE_SEED_SHARE_TOKEN = 'share-token';
 export const BASE_SEED_ASSET_DATA = 'asset-data';
 export const CONFIG_SEED = 'config';
