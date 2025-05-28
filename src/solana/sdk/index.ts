@@ -1,7 +1,7 @@
 import { web3 } from '@coral-xyz/anchor';
 import { BoringVaultSolana } from './boring-vault-solana';
 import { parseFullVaultData, FullVaultData } from './vault-state';
-import * as boringVaultIdl from './boring-vault-svm-idl.json';
+import vaultIdl from '../idls/boring-vault-svm-idl.json';
 import { 
   AccountLayout
 } from '@solana/spl-token';
@@ -27,7 +27,7 @@ export class VaultSDK {
     // Get program ID from env or IDL
     this.programId = new web3.PublicKey(
       process.env.BORING_VAULT_PROGRAM_ID || 
-      boringVaultIdl.address 
+      vaultIdl.address 
     );
     
     // Initialize the BoringVaultSolana with the solanaClient
@@ -198,6 +198,108 @@ export class VaultSDK {
     } catch (error) {
       console.error('Deposit error:', error);
       throw new Error(`Failed to deposit: ${error}`);
+    }
+  }
+
+  /**
+   * Queues a withdraw request from a Boring Vault, which can later be fulfilled by external parties (solvers) at a discount
+   * 
+   * @param wallet The wallet that will sign the transaction
+   * @param vaultId The ID of the vault to withdraw from
+   * @param tokenOut The mint of the token to withdraw
+   * @param shareAmount The amount of share tokens to queue for withdrawal
+   * @param discount The discount rate in basis points (BPS)
+   * @param secondsToDeadline The number of seconds until the withdraw request expires
+   * @param queueSharesAccount Optional queue shares account address
+   * @param options Additional options for the transaction
+   * @returns The transaction signature
+   */
+  async queueBoringWithdraw(
+    wallet: { publicKey: web3.PublicKey; signTransaction: (tx: web3.Transaction) => Promise<web3.Transaction> } | web3.Keypair,
+    vaultId: number,
+    tokenOut: web3.PublicKey | string,
+    shareAmount: bigint | string,
+    discount: number = 0,
+    secondsToDeadline: number = 86400 * 7, // Default to 7 days
+    queueSharesAccount?: web3.PublicKey,
+    options: {
+      skipPreflight?: boolean;
+      maxRetries?: number;
+      skipStatusCheck?: boolean;
+    } = {}
+  ): Promise<string> {
+    // Convert string inputs to proper types
+    const withdrawMint = typeof tokenOut === 'string' 
+      ? new web3.PublicKey(tokenOut) 
+      : tokenOut;
+    
+    const amount = typeof shareAmount === 'string' 
+      ? BigInt(shareAmount) 
+      : shareAmount;
+    
+    try {
+      // Validate inputs
+      if (discount < 0 || discount > 10000) {
+        throw new Error('Discount must be between 0 and 10000 basis points (0-100%)');
+      }
+      
+      if (secondsToDeadline < 3600) {
+        throw new Error('Deadline must be at least 1 hour');
+      }
+      
+      // Create direct web3.js connection for transaction sending
+      const connection = new web3.Connection(
+        process.env.ALCHEMY_RPC_URL || this.rpcUrl,
+        { commitment: 'confirmed' }
+      );
+      
+      // Get the wallet's public key
+      const payerPublicKey = 'signTransaction' in wallet 
+        ? wallet.publicKey 
+        : wallet.publicKey;
+      
+      // Build the transaction using the core implementation
+      const transaction = await this.boringVault.buildQueueWithdrawTransaction(
+        payerPublicKey,
+        vaultId,
+        withdrawMint,
+        amount,
+        discount,
+        secondsToDeadline,
+        queueSharesAccount
+      );
+      
+      // Add recent blockhash
+      const { blockhash } = await connection.getLatestBlockhash('confirmed');
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = payerPublicKey;
+      
+      // Sign the transaction
+      let signedTx: web3.Transaction;
+      if ('signTransaction' in wallet) {
+        // Using wallet adapter
+        signedTx = await wallet.signTransaction(transaction);
+      } else {
+        // Using keypair
+        transaction.sign(wallet);
+        signedTx = transaction;
+      }
+      
+      console.log('Transaction signed, sending to network...');
+      
+      // Send transaction
+      const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+        skipPreflight: options.skipPreflight || false,
+        preflightCommitment: 'confirmed'
+      });
+      
+      console.log(`Transaction sent! Signature: ${signature}`);
+      console.log(`View on explorer: https://solscan.io/tx/${signature}`);
+
+      return signature;
+    } catch (error) {
+      console.error('Queue Withdraw error:', error);
+      throw new Error(`Failed to queue withdraw: ${error}`);
     }
   }
 }

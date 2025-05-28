@@ -1,5 +1,5 @@
 import { web3, Idl, BorshCoder } from '@coral-xyz/anchor';
-import idl from './boring-vault-svm-idl.json';
+import vaultIdl from '../idls/boring-vault-svm-idl.json';
 
 // Complete Vault State structure from IDL
 export interface VaultState {
@@ -75,7 +75,7 @@ export function parseFullVaultData(data: Buffer): FullVaultData {
   const rawData = Buffer.from(data);
   
   // Initialize BorshCoder with the IDL
-  const coder = new BorshCoder(idl as Idl);
+  const coder = new BorshCoder(vaultIdl as Idl);
   
   // Extract the account discriminator (first 8 bytes)
   const discriminator = data.slice(0, 8);
@@ -85,7 +85,7 @@ export function parseFullVaultData(data: Buffer): FullVaultData {
   let accountType = '';
   
   // Go through all account types in the IDL
-  const accountTypes = Object.keys((idl as any).accounts || []);
+  const accountTypes = Object.keys((vaultIdl as any).accounts || []);
   for (const name of accountTypes) {
     try {
       // Get discriminator for this account type
@@ -103,7 +103,7 @@ export function parseFullVaultData(data: Buffer): FullVaultData {
   // If we couldn't identify the account type, try with defined discriminators from IDL
   if (!accountType) {
     // Try to use the discriminators directly from the IDL if available
-    for (const account of (idl as any).accounts || []) {
+    for (const account of (vaultIdl as any).accounts || []) {
       if (account.discriminator) {
         const accDiscBuffer = Buffer.from(account.discriminator);
         if (accDiscBuffer.toString('hex') === discriminatorHex) {
