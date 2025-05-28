@@ -1,12 +1,15 @@
-import { web3 } from '@coral-xyz/anchor';
 import * as fs from 'fs';
 import * as dotenv from 'dotenv';
-
-// Import shared utilities
-import {
-  rl,
-  question
+import { 
+  solanaClient, 
+  MAINNET_CONFIG,
+  loadKeypair
 } from './mainnet-test-utils';
+import { 
+  testDeposit,
+  testQueueWithdraw,
+  checkQueueConfig,
+} from './mainnet-test-write';
 
 // Import read operations
 import {
@@ -16,108 +19,81 @@ import {
   fetchUserShares
 } from './mainnet-test-read';
 
-// Import write operations
-import {
-  testDeposit
-} from './mainnet-test-write';
-
 // Load environment variables
 dotenv.config();
 
 /**
- * Main function to run all tests sequentially
+ * Displays help text showing available commands
+ * @param errorMessage Optional error message to display before help text
  */
-async function main() {
+function displayHelpText(errorMessage?: string): void {
+  if (errorMessage) {
+    console.error(errorMessage);
+  }
+  console.log('\n=== BORING VAULT MAINNET TEST ===');
+  console.log('Available commands:');
+  console.log('  1. analyze-vault - Analyze all vault accounts for debugging');
+  console.log('  2. read-vault - Read the vault data');
+  console.log('  3. check-balance - Check the JITOSOL and share token balances');
+  console.log('  4. deposit - Test deposit functionality');
+  console.log('  5. queue-withdraw - Test queue withdraw functionality');
+  console.log('  6. check-queue-config - Check the queue program configuration');
+  console.log('\nRun with a command to execute that test. Example: node dist/src/solana/tests/mainnet-test.js queue-withdraw');
+}
+
+// Helper function to execute a test function and handle errors
+async function executeTest(testFn: () => Promise<any>) {
   try {
-    // Explain available commands
-    console.log('\n=== BORING VAULT MAINNET TEST ===');
-    console.log('Available commands:');
-    console.log('  - analyze: Scan and analyze vault account');
-    console.log('  - read: Show vault data details');
-    console.log('  - balance: Check your balance in the vault');
-    console.log('  - accounts: List all token accounts and balances');
-    console.log('  - deposit: Test jitoSOL deposit functionality');
-    console.log('  - exit: Exit the program');
-    
-    const command = await question('\nEnter command (or "exit" to quit): ');
-    
-    switch (command.toLowerCase()) {
-      case 'analyze':
-        await analyzeVaultAccount();
-        break;
-      case 'read':
-        await testReadOperations();
-        break;
-      case 'balance':
-      case 'shares':
-        await fetchUserShares();
-        break;
-      case 'accounts':
-      case 'tokens':
-        await testUserBalances();
-        break;
-      case 'deposit':
-        await testDeposit();
-        break;
-      case 'exit':
-        console.log('Exiting...');
-        break;
-      default:
-        console.log('Unknown command. Try again.');
-    }
-    
-    rl.close();
-    
+    console.log('\n=== EXECUTING TEST ===');
+    await testFn();
+    console.log('\n=== TEST COMPLETED ===');
+    process.exit(0); // Exit successfully after test completes
   } catch (error) {
-    console.error('\nTesting failed with error:', error);
-    rl.close();
+    console.error('\nTest failed with error:', error);
     process.exit(1);
   }
 }
 
-// Execute the appropriate function based on arguments if this file is run directly
-if (require.main === module) {
-  const args = process.argv.slice(2);
-  const command = args[0];
-  
-  // Function to execute a test and gracefully close
-  const executeTest = async (testFn: () => Promise<any>) => {
-    try {
-      const result = await testFn();
-      return result;
-    } catch (error) {
-      console.error(error);
-      throw error;
-    } finally {
-      rl.close();
+// Main function to run the tests
+async function main() {
+  try {
+    // Parse command line args
+    const args = process.argv.slice(2);
+    const command = args[0]?.toLowerCase();
+    
+    // Route commands to the appropriate test function
+    if (command === 'analyze-vault' || command === 'analyze') {
+      executeTest(() => analyzeVaultAccount());
+    } else if (command === 'read-vault' || command === 'read') {
+      executeTest(() => testReadOperations());
+    } else if (command === 'check-balance' || command === 'balance') {
+      executeTest(() => fetchUserShares());
+    } else if (command === 'deposit') {
+      executeTest(() => testDeposit());
+    } else if (command === 'queue-withdraw') {
+      executeTest(() => testQueueWithdraw());
+    } else if (command === 'check-queue-config') {
+      executeTest(() => checkQueueConfig());
+    } else if (!command) {
+      // Show help instead of entering interactive mode
+      displayHelpText();
+      process.exit(0);
+    } else {
+      displayHelpText(`Unrecognized command: ${command}`);
+      process.exit(1);
     }
-  };
-  
-  if (command === 'analyze') {
-    executeTest(() => analyzeVaultAccount());
-  } else if (command === 'read') {
-    executeTest(() => testReadOperations());
-  } else if (command === 'fetchshares' || command === 'shares' || command === 'balance') {
-    executeTest(() => fetchUserShares());
-  } else if (command === 'accounts' || command === 'tokens' || command === 'list' || command === 'balances') {
-    executeTest(() => testUserBalances());
-  } else if (command === 'deposit') {
-    executeTest(() => testDeposit());
-  } else if (!command) {
-    // Interactive mode if no command is provided
-    main().catch(console.error);
-  } else {
-    // Show error for unrecognized commands
-    console.error(`Unrecognized command: ${command}`);
-    console.log('\nAvailable commands:');
-    console.log('  - analyze: Scan and analyze vault account');
-    console.log('  - read: Show vault data details');
-    console.log('  - balance: Check your balance in the vault');
-    console.log('  - accounts: List all token accounts and balances');
-    console.log('  - deposit: Test jitoSOL deposit functionality');
-    console.log('\nOr run without arguments for interactive mode.');
+  } catch (error) {
+    console.error('Error in main:', error);
     process.exit(1);
   }
+}
+
+// Execute the main function if this file is run directly
+if (require.main === module) {
+  main().catch(error => {
+    console.error('Unhandled error:', error);
+    process.exit(1);
+  });
 } else {
   // If this file is imported, export the test functions
   module.exports = {
@@ -126,6 +102,8 @@ if (require.main === module) {
     testUserBalances,
     fetchUserShares,
     testDeposit,
+    testQueueWithdraw,
+    checkQueueConfig,
     main
   };
 }
