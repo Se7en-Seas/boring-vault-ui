@@ -25,7 +25,8 @@ import {
   JITO_SOL_MINT_ADDRESS,
   BORING_VAULT_PROGRAM_ID,
   BORING_QUEUE_PROGRAM_ID,
-  TOKEN_2022_PROGRAM_ID
+  TOKEN_2022_PROGRAM_ID,
+  DEFAULT_DECIMALS
 } from '../utils/constants';
 
 // Import necessary dependencies at the top of the file
@@ -290,22 +291,24 @@ export async function testQueueWithdraw(): Promise<string | undefined> {
       return;
     }
     
-    // Use a larger share amount (1/10 of available shares) to avoid decimal conversion issues
-    const withdrawShareAmount = userShares.raw / BigInt(10);
-    const maxWithdrawAmount = userShares.raw;
+    // Convert current balance to human-readable amount using fixed decimals
+    const currentFormattedBalance = Number(userShares.raw) / 10**DEFAULT_DECIMALS;
+    const withdrawHumanReadable = currentFormattedBalance / 10;
+    const maxWithdrawAmount = currentFormattedBalance;
     
     // Validate the amount is within limits
-    if (withdrawShareAmount > maxWithdrawAmount) {
-      console.log(`❌ Insufficient share balance. Need ${withdrawShareAmount} shares but only have ${maxWithdrawAmount}`);
+    if (withdrawHumanReadable > maxWithdrawAmount) {
+      console.log(`❌ Insufficient share balance. Need ${withdrawHumanReadable} shares but only have ${maxWithdrawAmount}`);
       return;
     }
     
     // Calculate parameters for withdraw request
-    console.log(`Using amount: ${withdrawShareAmount} shares (${Number(withdrawShareAmount) / 10**userShares.decimals} formatted)`);
-    const discount = 0; // 0% discount (0 basis points) to simplify calculation
+    console.log(`Using amount: ${withdrawHumanReadable} shares (human-readable amount)`);
+    console.log(`This will be converted to ${withdrawHumanReadable * 10**DEFAULT_DECIMALS} raw units in the SDK`);
+    const discountPercent = 0; // 0% discount to simplify calculation
     const secondsToDeadline = 86400; // 1 day (24 hours)
     
-    console.log(`Discount: ${discount} basis points (${discount/100}%)`);
+    console.log(`Discount: ${discountPercent}%`);
     console.log(`Deadline: ${secondsToDeadline} seconds (${secondsToDeadline/3600} hours)`);
     
     // Create a direct web3.js connection for transaction sending
@@ -553,8 +556,8 @@ export async function testQueueWithdraw(): Promise<string | undefined> {
         keypair, // Pass the keypair directly
         vaultId,
         JITO_SOL_MINT_ADDRESS, // Request withdrawing to jitoSOL
-        withdrawShareAmount,
-        discount,
+        withdrawHumanReadable,
+        discountPercent,
         secondsToDeadline,
         queueSharesATA, // Pass the queue shares ATA address
         {
@@ -616,11 +619,22 @@ export async function testQueueWithdraw(): Promise<string | undefined> {
                       const newShareBalance = await boringVault.fetchUserShares(signer.address, vaultId);
                       console.log(`\nNew share balance: ${newShareBalance.formatted} (${newShareBalance.raw.toString()} raw)`);
                       
-                      const balanceChange = Number(userShares.raw) - Number(newShareBalance.raw);
-                      console.log(`Share balance change: -${balanceChange} (${(balanceChange / 10**userShares.decimals).toFixed(9)} shares)`);
+                      // Calculate the balance change in raw terms
+                      const rawBalanceChange = Number(userShares.raw) - Number(newShareBalance.raw);
                       
-                      if (balanceChange !== Number(withdrawShareAmount)) {
-                        console.warn(`⚠️ Balance change doesn't match requested amount! Expected -${withdrawShareAmount}, got -${balanceChange}`);
+                      // Convert the raw balance change to a human-readable amount using fixed decimals
+                      const humanReadableBalanceChange = rawBalanceChange / 10**DEFAULT_DECIMALS;
+                      
+                      console.log(`Share balance change: -${rawBalanceChange} raw (-${humanReadableBalanceChange.toFixed(9)} shares)`);
+                      
+                      // Compare the human-readable amounts
+                      const expectedAmount = withdrawHumanReadable;
+                      const actualAmount = humanReadableBalanceChange;
+                      
+                      // Use approximate comparison with a small tolerance due to potential rounding
+                      const tolerance = 0.000001; // Allow for tiny rounding differences
+                      if (Math.abs(actualAmount - expectedAmount) > tolerance) {
+                        console.warn(`⚠️ Balance change doesn't match requested amount! Expected -${expectedAmount.toFixed(9)}, got -${actualAmount.toFixed(9)}`);
                       } else {
                         console.log('✅ Share balance change matches requested amount');
                       }

@@ -238,21 +238,6 @@ async function testTransactionFunctionality() {
   try {
     console.log('\nTest 8: Testing queueBoringWithdraw transaction building...');
     
-    // Create mock for asset data response
-    const mockAssetDataResponse = {
-      value: {
-        data: [
-          Buffer.from(JSON.stringify({
-            assetData: {
-              priceFeed: new web3.PublicKey('4Z1SLH9g4ikNBV8uP2ZctEouqjYmVqB2Tz5SZxKYBN7z').toBase58()
-            }
-          })).toString('base64')
-        ],
-        owner: mockSigner.address,
-        lamports: 1000000
-      }
-    };
-    
     // Create a complete mock of the buildQueueWithdrawTransaction method instead of trying to mock its dependencies
     vault.buildQueueWithdrawTransaction = async (
       ownerAddress: web3.PublicKey,

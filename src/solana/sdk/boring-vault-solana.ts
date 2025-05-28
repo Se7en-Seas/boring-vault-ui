@@ -823,7 +823,7 @@ export class BoringVaultSolana {
     vaultId: number,
     tokenOut: web3.PublicKey,
     shareAmount: bigint,
-    discount: number = 0, // Default to 0 discount
+    discount: number = 0.01, // Default to 0 discount
     secondsToDeadline: number = 86400 * 7, // Default to 7 days
     queueSharesAccount?: web3.PublicKey // Optional custom queue shares account
   ): Promise<web3.Transaction> {

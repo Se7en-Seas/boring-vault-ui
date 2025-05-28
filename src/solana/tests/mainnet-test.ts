@@ -22,6 +22,25 @@ import {
 // Load environment variables
 dotenv.config();
 
+/**
+ * Displays help text showing available commands
+ * @param errorMessage Optional error message to display before help text
+ */
+function displayHelpText(errorMessage?: string): void {
+  if (errorMessage) {
+    console.error(errorMessage);
+  }
+  console.log('\n=== BORING VAULT MAINNET TEST ===');
+  console.log('Available commands:');
+  console.log('  1. analyze-vault - Analyze all vault accounts for debugging');
+  console.log('  2. read-vault - Read the vault data');
+  console.log('  3. check-balance - Check the JITOSOL and share token balances');
+  console.log('  4. deposit - Test deposit functionality');
+  console.log('  5. queue-withdraw - Test queue withdraw functionality');
+  console.log('  6. check-queue-config - Check the queue program configuration');
+  console.log('\nRun with a command to execute that test. Example: node dist/src/solana/tests/mainnet-test.js queue-withdraw');
+}
+
 // Helper function to execute a test function and handle errors
 async function executeTest(testFn: () => Promise<any>) {
   try {
@@ -57,26 +76,10 @@ async function main() {
       executeTest(() => checkQueueConfig());
     } else if (!command) {
       // Show help instead of entering interactive mode
-      console.log('\n=== BORING VAULT MAINNET TEST ===');
-      console.log('Available commands:');
-      console.log('  1. analyze-vault - Analyze all vault accounts for debugging');
-      console.log('  2. read-vault - Read the vault data');
-      console.log('  3. check-balance - Check the JITOSOL and share token balances');
-      console.log('  4. deposit - Test deposit functionality');
-      console.log('  5. queue-withdraw - Test queue withdraw functionality');
-      console.log('  6. check-queue-config - Check the queue program configuration');
-      console.log('\nRun with a command to execute that test. Example: node dist/src/solana/tests/mainnet-test.js queue-withdraw');
+      displayHelpText();
       process.exit(0);
     } else {
-      console.error(`Unrecognized command: ${command}`);
-      console.log('\nAvailable commands:');
-      console.log('  1. analyze-vault - Analyze all vault accounts for debugging');
-      console.log('  2. read-vault - Read the vault data');
-      console.log('  3. check-balance - Check the JITOSOL and share token balances');
-      console.log('  4. deposit - Test deposit functionality');
-      console.log('  5. queue-withdraw - Test queue withdraw functionality');
-      console.log('  6. check-queue-config - Check the queue program configuration');
-      console.log('\nRun with a command to execute that test. Example: node dist/src/solana/tests/mainnet-test.js queue-withdraw');
+      displayHelpText(`Unrecognized command: ${command}`);
       process.exit(1);
     }
   } catch (error) {

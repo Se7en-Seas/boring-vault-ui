@@ -6,7 +6,10 @@ import {
   AccountLayout
 } from '@solana/spl-token';
 import { createSolanaClient, type SolanaClient, Address } from 'gill';
-import { JITO_SOL_MINT_ADDRESS } from '../utils/constants';
+import { 
+  JITO_SOL_MINT_ADDRESS,
+  DEFAULT_DECIMALS
+} from '../utils/constants';
 
 /**
  * Vault SDK adapter for mainnet testing
@@ -18,6 +21,7 @@ export class VaultSDK {
   private programId: web3.PublicKey;
   private solanaClient: SolanaClient;
   private rpcUrl: string;
+  private connection: web3.Connection;
   
   constructor(urlOrMoniker: string) {
     this.rpcUrl = urlOrMoniker;
@@ -35,6 +39,12 @@ export class VaultSDK {
       solanaClient: this.solanaClient,
       programId: this.programId.toString()
     });
+    
+    // Initialize the shared connection
+    this.connection = new web3.Connection(
+      process.env.ALCHEMY_RPC_URL || this.rpcUrl,
+      { commitment: 'confirmed' }
+    );
   }
 
   /**
@@ -147,12 +157,6 @@ export class VaultSDK {
       : minMintAmount;
     
     try {
-      // Create direct web3.js connection for transaction sending
-      const connection = new web3.Connection(
-        process.env.ALCHEMY_RPC_URL || this.rpcUrl,
-        { commitment: 'confirmed' }
-      );
-      
       // Get the wallet's public key
       const payerPublicKey = 'signTransaction' in wallet 
         ? wallet.publicKey 
@@ -168,7 +172,7 @@ export class VaultSDK {
       );
       
       // Add recent blockhash
-      const { blockhash } = await connection.getLatestBlockhash('confirmed');
+      const { blockhash } = await this.connection.getLatestBlockhash('confirmed');
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = payerPublicKey;
       
@@ -186,7 +190,7 @@ export class VaultSDK {
       console.log('Transaction signed, sending to network...');
       
       // Send transaction
-      const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+      const signature = await this.connection.sendRawTransaction(signedTx.serialize(), {
         skipPreflight: options.skipPreflight || false,
         preflightCommitment: 'confirmed'
       });
@@ -207,8 +211,8 @@ export class VaultSDK {
    * @param wallet The wallet that will sign the transaction
    * @param vaultId The ID of the vault to withdraw from
    * @param tokenOut The mint of the token to withdraw
-   * @param shareAmount The amount of share tokens to queue for withdrawal
-   * @param discount The discount rate in basis points (BPS)
+   * @param shareAmount The human-readable amount of share tokens to queue for withdrawal (e.g., 1.0 for 1 share)
+   * @param discountPercent The discount rate in percentage (e.g., 2.5 for 2.5%)
    * @param secondsToDeadline The number of seconds until the withdraw request expires
    * @param queueSharesAccount Optional queue shares account address
    * @param options Additional options for the transaction
@@ -218,8 +222,8 @@ export class VaultSDK {
     wallet: { publicKey: web3.PublicKey; signTransaction: (tx: web3.Transaction) => Promise<web3.Transaction> } | web3.Keypair,
     vaultId: number,
     tokenOut: web3.PublicKey | string,
-    shareAmount: bigint | string,
-    discount: number = 0,
+    shareAmount: number | string,
+    discountPercent: number = 0,
     secondsToDeadline: number = 86400 * 7, // Default to 7 days
     queueSharesAccount?: web3.PublicKey,
     options: {
@@ -233,44 +237,57 @@ export class VaultSDK {
       ? new web3.PublicKey(tokenOut) 
       : tokenOut;
     
-    const amount = typeof shareAmount === 'string' 
-      ? BigInt(shareAmount) 
+    // Convert the human-readable shareAmount to a number
+    const humanReadableAmount = typeof shareAmount === 'string'
+      ? parseFloat(shareAmount)
       : shareAmount;
     
     try {
-      // Validate inputs
-      if (discount < 0 || discount > 10000) {
-        throw new Error('Discount must be between 0 and 10000 basis points (0-100%)');
+      // Validate inputs and convert percentage to basis points
+      if (discountPercent < 0 || discountPercent > 5) {
+        throw new Error('Discount percentage must be between 0% and 5%');
+      }
+      
+      // Convert percentage to basis points (100 basis points = 1%)
+      const discountBasisPoints = Math.round(discountPercent * 100);
+      console.log(`Converting discount ${discountPercent}% to ${discountBasisPoints} basis points`);
+      
+      // Ensure the basis points value is an integer
+      if (!Number.isInteger(discountBasisPoints)) {
+        throw new Error('Discount percentage must convert to an integer number of basis points');
+      }
+      
+      if (humanReadableAmount <= 0) {
+        throw new Error('Share amount must be greater than 0');
       }
       
       if (secondsToDeadline < 3600) {
         throw new Error('Deadline must be at least 1 hour');
       }
       
-      // Create direct web3.js connection for transaction sending
-      const connection = new web3.Connection(
-        process.env.ALCHEMY_RPC_URL || this.rpcUrl,
-        { commitment: 'confirmed' }
-      );
-      
       // Get the wallet's public key
       const payerPublicKey = 'signTransaction' in wallet 
         ? wallet.publicKey 
         : wallet.publicKey;
+      
+      // Convert human-readable amount to raw amount with fixed 9 decimals (like SOL)
+      // 1.0 share becomes 1,000,000,000 raw units
+      const rawAmount = BigInt(Math.floor(humanReadableAmount * 10**DEFAULT_DECIMALS));
+      console.log(`Converting ${humanReadableAmount} shares to raw amount: ${rawAmount} (using fixed ${DEFAULT_DECIMALS} decimals)`);
       
       // Build the transaction using the core implementation
       const transaction = await this.boringVault.buildQueueWithdrawTransaction(
         payerPublicKey,
         vaultId,
         withdrawMint,
-        amount,
-        discount,
+        rawAmount,
+        discountBasisPoints,
         secondsToDeadline,
         queueSharesAccount
       );
       
       // Add recent blockhash
-      const { blockhash } = await connection.getLatestBlockhash('confirmed');
+      const { blockhash } = await this.connection.getLatestBlockhash('confirmed');
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = payerPublicKey;
       
@@ -288,7 +305,7 @@ export class VaultSDK {
       console.log('Transaction signed, sending to network...');
       
       // Send transaction
-      const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+      const signature = await this.connection.sendRawTransaction(signedTx.serialize(), {
         skipPreflight: options.skipPreflight || false,
         preflightCommitment: 'confirmed'
       });
