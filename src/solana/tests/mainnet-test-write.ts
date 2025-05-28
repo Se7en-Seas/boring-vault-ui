@@ -452,53 +452,6 @@ export async function testQueueWithdraw(): Promise<string | undefined> {
       
       console.log(`Calculated Withdraw Request PDA with nonce ${userNonce}: ${withdrawRequestPDA.toString()}`);
       
-      // Let's try a few different nonce encodings to see which one matches the program's expectation
-      
-      // Option 1: Little-endian 64-bit unsigned integer
-      const leBuffer = Buffer.alloc(8);
-      leBuffer.writeBigUInt64LE(BigInt(userNonce), 0);
-      
-      // Option 2: Big-endian 64-bit unsigned integer
-      const beBuffer = Buffer.alloc(8);
-      beBuffer.writeBigUInt64BE(BigInt(userNonce), 0);
-      
-      // Option 3: Hex string directly
-      const hexBuffer = Buffer.from(userNonce.toString(16).padStart(16, '0'), 'hex');
-      
-      // Option 4: String representation
-      const strBuffer = Buffer.from(userNonce.toString(), 'utf8');
-      
-      console.log(`Option 1 (LE) bytes: [${Array.from(leBuffer).join(', ')}]`);
-      console.log(`Option 2 (BE) bytes: [${Array.from(beBuffer).join(', ')}]`);
-      console.log(`Option 3 (HEX) bytes: [${Array.from(hexBuffer).join(', ')}]`);
-      console.log(`Option 4 (STR) bytes: [${Array.from(strBuffer).join(', ')}]`);
-      
-      // Calculate PDAs for each option
-      const [lePDA] = await web3.PublicKey.findProgramAddress(
-        [Buffer.from("boring-queue-withdraw-request"), keypair.publicKey.toBuffer(), leBuffer], 
-        queueProgramId
-      );
-      
-      const [bePDA] = await web3.PublicKey.findProgramAddress(
-        [Buffer.from("boring-queue-withdraw-request"), keypair.publicKey.toBuffer(), beBuffer], 
-        queueProgramId
-      );
-      
-      const [hexPDA] = await web3.PublicKey.findProgramAddress(
-        [Buffer.from("boring-queue-withdraw-request"), keypair.publicKey.toBuffer(), hexBuffer], 
-        queueProgramId
-      );
-      
-      const [strPDA] = await web3.PublicKey.findProgramAddress(
-        [Buffer.from("boring-queue-withdraw-request"), keypair.publicKey.toBuffer(), strBuffer], 
-        queueProgramId
-      );
-      
-      console.log(`Option 1 (LE) PDA: ${lePDA.toString()}`);
-      console.log(`Option 2 (BE) PDA: ${bePDA.toString()}`);
-      console.log(`Option 3 (HEX) PDA: ${hexPDA.toString()}`);
-      console.log(`Option 4 (STR) PDA: ${strPDA.toString()}`);
-      console.log(`Expected PDA (Right from error): AKqMAefYeyuJS8cBYHtSoxcrw1i2wewQVj5ZpHs23FPW`);
       
       // Derive queue shares ATA address
       const queueSharesATA = getAssociatedTokenAddressSync(
