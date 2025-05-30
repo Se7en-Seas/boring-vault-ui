@@ -17,7 +17,8 @@ import { VaultSDK } from '../sdk';
 import { 
   JITO_SOL_MINT_ADDRESS, 
   BORING_VAULT_PROGRAM_ID, 
-  CONFIG_SEED 
+  CONFIG_SEED,
+  KNOWN_MINTS
 } from '../utils/constants';
 
 /**
@@ -73,21 +74,12 @@ export async function analyzeVaultAccount(): Promise<void> {
     console.log(`Withdraw Sub-Account: ${vaultData.vaultState.withdrawSubAccount}`);
     console.log(`Paused: ${vaultData.vaultState.paused}`);
     
-    // Add base asset log
-    if (vaultData.tellerState) {
-      const KNOWN_MINTS: { [key: string]: string } = {
-        "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn": "JITO SOL",
-        // Add more known mints here if needed
-      };
-      const baseAssetMint = vaultData.tellerState.baseAsset.toString();
-      const baseAssetName = KNOWN_MINTS[baseAssetMint] || "Unknown";
-      console.log(`Base Asset Mint: ${baseAssetMint} (${baseAssetName})`);
-    }
-    
     // Display asset data if available
     if (vaultData.tellerState) {
       console.log('\n--- Teller State ---');
-      console.log(`Base Asset: ${vaultData.tellerState.baseAsset.toString()}`);
+      const baseAssetMint = vaultData.tellerState.baseAsset.toString();
+      const baseAssetName = KNOWN_MINTS[baseAssetMint] || "Unknown";
+      console.log(`Base Asset: ${baseAssetMint} (${baseAssetName})`);
       console.log(`Decimals: ${vaultData.tellerState.decimals}`);
       console.log(`Exchange Rate Provider: ${vaultData.tellerState.exchangeRateProvider.toString()}`);
       console.log(`Exchange Rate: ${vaultData.tellerState.exchangeRate.toString()}`);
