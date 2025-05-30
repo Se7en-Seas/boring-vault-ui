@@ -250,24 +250,14 @@ export class BoringVaultSolana {
   /**
    * Extracts the instruction discriminator from the IDL for a given instruction name
    */
-  private getInstructionDiscriminator(instructionName: string): Buffer {
-    const instruction = (vaultIdl.instructions as any[]).find(
+  private getInstructionDiscriminator(instructionName: string, idl: any = vaultIdl): Buffer {
+    const instruction = (idl.instructions as any[]).find(
       (instr) => instr.name === instructionName
     );
-    
     if (!instruction || !instruction.discriminator) {
       throw new Error(`Instruction '${instructionName}' or its discriminator not found in IDL`);
     }
-    
     return Buffer.from(instruction.discriminator);
-  }
-
-  /**
-   * Extracts the deposit instruction discriminator from the IDL
-   */
-  private getDepositInstructionDiscriminator(): Buffer {
-    // The deposit instruction discriminator from the IDL
-    return Buffer.from([242, 35, 198, 137, 82, 225, 242, 182]);
   }
 
   /**
@@ -378,7 +368,7 @@ export class BoringVaultSolana {
         { pubkey: priceFeedAddress, isSigner: false, isWritable: false },
       ],
       data: Buffer.concat([
-        this.getDepositInstructionDiscriminator(),
+        this.getInstructionDiscriminator('deposit'),
         this.serializeDepositArgs(vaultId, depositAmount, minMintAmount)
       ])
     });
@@ -456,20 +446,6 @@ export class BoringVaultSolana {
     
     // Return the serialized transaction for signing
     return transaction.serialize({ requireAllSignatures: false }).toString('base64');
-  }
-  /**
-   * Extracts the request_withdraw instruction discriminator from the IDL
-   */
-  private getRequestWithdrawInstructionDiscriminator(): Buffer {
-    const instruction = (queueIdl.instructions as any[]).find(
-      (instr) => instr.name === 'request_withdraw'
-    );
-    
-    if (!instruction || !instruction.discriminator) {
-      throw new Error('request_withdraw instruction or its discriminator not found in IDL');
-    }
-    
-    return Buffer.from(instruction.discriminator);
   }
 
   /**
@@ -650,102 +626,6 @@ export class BoringVaultSolana {
   }
 
   /**
-   * Get the setup_user_withdraw_state instruction discriminator
-   */
-  private getSetupUserWithdrawStateInstructionDiscriminator(): Buffer {
-    const instruction = (queueIdl.instructions as any[]).find(
-      (instr) => instr.name === 'setup_user_withdraw_state'
-    );
-    
-    if (!instruction || !instruction.discriminator) {
-      throw new Error('setup_user_withdraw_state instruction or its discriminator not found in IDL');
-    }
-    
-    return Buffer.from(instruction.discriminator);
-  }
-
-  /**
-   * Creates an instruction to initialize the user withdraw state
-   */
-  private async createSetupUserWithdrawStateInstruction(
-    ownerAddress: web3.PublicKey
-  ): Promise<web3.TransactionInstruction> {
-    // Get user withdraw state PDA
-    const userWithdrawStatePDA = await this.getUserWithdrawStatePDA(ownerAddress);
-    
-    // Create setup_user_withdraw_state instruction
-    return new web3.TransactionInstruction({
-      programId: new web3.PublicKey(BORING_QUEUE_PROGRAM_ID),
-      keys: [
-        { pubkey: ownerAddress, isSigner: true, isWritable: true },
-        { pubkey: userWithdrawStatePDA, isSigner: false, isWritable: true },
-        { pubkey: web3.SystemProgram.programId, isSigner: false, isWritable: false },
-      ],
-      data: this.getSetupUserWithdrawStateInstructionDiscriminator()
-    });
-  }
-
-  /**
-   * Get the deploy instruction discriminator from the IDL
-   */
-  private getDeployInstructionDiscriminator(): Buffer {
-    const instruction = (queueIdl.instructions as any[]).find(
-      (instr) => instr.name === 'deploy'
-    );
-    
-    if (!instruction || !instruction.discriminator) {
-      throw new Error('deploy instruction or its discriminator not found in IDL');
-    }
-    
-    return Buffer.from(instruction.discriminator);
-  }
-
-  /**
-   * Serializes deploy arguments into a buffer
-   */
-  private serializeDeployArgs(
-    authority: web3.PublicKey,
-    boringVaultProgram: web3.PublicKey,
-    vaultId: number,
-    shareMint: web3.PublicKey,
-    solveAuthority: web3.PublicKey
-  ): Buffer {
-    // DeployArgs: authority (pubkey), boring_vault_program (pubkey), vault_id (u64), share_mint (pubkey), solve_authority (pubkey)
-    const buffer = Buffer.alloc(32 + 32 + 8 + 32 + 32); // 136 bytes total
-    
-    console.log(`DEBUG: Serializing deploy args:`);
-    console.log(`  - authority: ${authority.toString()}`);
-    console.log(`  - boringVaultProgram: ${boringVaultProgram.toString()}`);
-    console.log(`  - vaultId: ${vaultId}`);
-    console.log(`  - shareMint: ${shareMint.toString()}`);
-    console.log(`  - solveAuthority: ${solveAuthority.toString()}`);
-    
-    // Write pubkeys and vaultId in the correct order
-    let offset = 0;
-    
-    // Write authority (pubkey)
-    buffer.set(authority.toBuffer(), offset);
-    offset += 32;
-    
-    // Write boring_vault_program (pubkey)
-    buffer.set(boringVaultProgram.toBuffer(), offset);
-    offset += 32;
-    
-    // Write vault_id (u64)
-    this.writeUint64LE(buffer, BigInt(vaultId), offset);
-    offset += 8;
-    
-    // Write share_mint (pubkey)
-    buffer.set(shareMint.toBuffer(), offset);
-    offset += 32;
-    
-    // Write solve_authority (pubkey)
-    buffer.set(solveAuthority.toBuffer(), offset);
-    
-    return buffer;
-  }
-
-  /**
    * Gets the PDA for the config account of the queue program
    */
   async getQueueConfigPDA(): Promise<web3.PublicKey> {
@@ -759,51 +639,6 @@ export class BoringVaultSolana {
     );
     
     return pda;
-  }
-
-  /**
-   * Creates an instruction to deploy a queue state
-   */
-  private async createDeployQueueStateInstruction(
-    ownerAddress: web3.PublicKey,
-    vaultId: number,
-    shareMint: web3.PublicKey
-  ): Promise<web3.TransactionInstruction> {
-    // Get queue state PDA
-    const queueStatePDA = await this.getQueueStatePDA(vaultId);
-    console.log(`DEBUG: Queue State PDA to deploy: ${queueStatePDA.toString()}`);
-    
-    // Get config PDA
-    const configPDA = await this.getQueueConfigPDA();
-    console.log(`DEBUG: Queue Config PDA: ${configPDA.toString()}`);
-    
-    // Parameters for deploy
-    const boringVaultProgram = new web3.PublicKey(BORING_VAULT_PROGRAM_ID);
-    
-    // Use the owner as the solve authority for simplicity
-    // In production, this might be a different key
-    const solveAuthority = ownerAddress;
-    
-    // Create deploy instruction
-    return new web3.TransactionInstruction({
-      programId: new web3.PublicKey(BORING_QUEUE_PROGRAM_ID),
-      keys: [
-        { pubkey: ownerAddress, isSigner: true, isWritable: true },
-        { pubkey: configPDA, isSigner: false, isWritable: false },
-        { pubkey: queueStatePDA, isSigner: false, isWritable: true },
-        { pubkey: web3.SystemProgram.programId, isSigner: false, isWritable: false },
-      ],
-      data: Buffer.concat([
-        this.getDeployInstructionDiscriminator(),
-        this.serializeDeployArgs(
-          ownerAddress,
-          boringVaultProgram,
-          vaultId,
-          shareMint,
-          solveAuthority
-        )
-      ])
-    });
   }
 
   /**
@@ -829,101 +664,35 @@ export class BoringVaultSolana {
   ): Promise<web3.Transaction> {
     // Get the vault state PDA
     const vaultStatePDA = await this.getVaultStatePDA(vaultId);
-    console.log(`DEBUG: Vault State PDA: ${vaultStatePDA.toString()}`);
-    
     // Get the share token mint PDA
     const shareMintPDA = await this.getShareTokenPDA(vaultStatePDA);
-    console.log(`DEBUG: Share Token Mint PDA: ${shareMintPDA.toString()}`);
-    
     // Get queue state PDA
     const queueStatePDA = await this.getQueueStatePDA(vaultId);
-    console.log(`DEBUG: Queue State PDA: ${queueStatePDA.toString()}`);
-    
-    // Check if queue state account exists
-    const queueStateExists = await this.doesAccountExist(queueStatePDA);
-    console.log(`DEBUG: Queue State exists: ${queueStateExists}`);
-    
-    // Create a new transaction
-    const transaction = new web3.Transaction();
-    
-    // If queue state doesn't exist, add instruction to deploy it
-    if (!queueStateExists) {
-      console.log(`DEBUG: Adding instruction to deploy Queue State`);
-      const deployInstruction = await this.createDeployQueueStateInstruction(
-        ownerAddress,
-        vaultId,
-        shareMintPDA
-      );
-      transaction.add(deployInstruction);
-    }
-    
     // Get queue PDA
     const queuePDA = await this.getQueuePDA(vaultId);
-    console.log(`DEBUG: Queue PDA: ${queuePDA.toString()}`);
-    
     // Get withdraw asset data PDA
     const withdrawAssetDataPDA = await this.getWithdrawAssetDataPDA(queueStatePDA, tokenOut);
-    console.log(`DEBUG: Withdraw Asset Data PDA: ${withdrawAssetDataPDA.toString()}`);
-    
-    // Check if withdraw asset data account exists
-    const withdrawAssetDataExists = await this.doesAccountExist(withdrawAssetDataPDA);
-    console.log(`DEBUG: Withdraw Asset Data exists: ${withdrawAssetDataExists}`);
-    
-    // If withdraw asset data doesn't exist, add instruction to initialize it
-    if (!withdrawAssetDataExists) {
-      console.log(`DEBUG: Adding instruction to initialize Withdraw Asset Data`);
-      const updateWithdrawAssetDataInstruction = await this.createUpdateWithdrawAssetDataInstruction(
-        ownerAddress,
-        vaultId,
-        queueStatePDA,
-        tokenOut
-      );
-      transaction.add(updateWithdrawAssetDataInstruction);
-    }
-    
     // Get user withdraw state PDA
     const userWithdrawStatePDA = await this.getUserWithdrawStatePDA(ownerAddress);
-    console.log(`DEBUG: User Withdraw State PDA: ${userWithdrawStatePDA.toString()}`);
-    
-    // Check if user withdraw state account exists
-    const userWithdrawStateExists = await this.doesAccountExist(userWithdrawStatePDA);
-    console.log(`DEBUG: User Withdraw State exists: ${userWithdrawStateExists}`);
-    
-    // If user withdraw state doesn't exist, add instruction to create it
-    if (!userWithdrawStateExists) {
-      console.log(`DEBUG: Adding instruction to create User Withdraw State`);
-      const setupInstruction = await this.createSetupUserWithdrawStateInstruction(ownerAddress);
-      transaction.add(setupInstruction);
-    }
-    
     // Get current user withdraw state to determine next request ID
     // Fetch the actual nonce from the user withdraw state account
     let requestId = 0;
-    if (userWithdrawStateExists) {
-      try {
-        const userWithdrawStateAddress = userWithdrawStatePDA.toBase58() as Address;
-        const response = await this.rpc.getAccountInfo(
-          userWithdrawStateAddress,
-          { encoding: 'base64' }
-        ).send();
-        
-        if (response.value && response.value.data.length) {
-          const data = Buffer.from(response.value.data[0], 'base64');
-          // Skip the 8-byte discriminator, the next 8 bytes are the nonce
-          requestId = Number(data.readBigUInt64LE(8));
-          console.log(`DEBUG: Fetched user withdraw state nonce: ${requestId}`);
-        } else {
-          console.log(`DEBUG: Failed to fetch User Withdraw State data. Using default nonce: ${requestId}`);
-        }
-      } catch (error) {
-        console.error(`ERROR: Failed to fetch User Withdraw State nonce: ${error}`);
+    try {
+      const userWithdrawStateAddress = userWithdrawStatePDA.toBase58() as Address;
+      const response = await this.rpc.getAccountInfo(
+        userWithdrawStateAddress,
+        { encoding: 'base64' }
+      ).send();
+      if (response.value && response.value.data.length) {
+        const data = Buffer.from(response.value.data[0], 'base64');
+        // Skip the 8-byte discriminator, the next 8 bytes are the nonce
+        requestId = Number(data.readBigUInt64LE(8));
       }
+    } catch (error) {
+      // If we can't fetch, just use 0 (should not happen if setup is correct)
     }
-    
     // Get withdraw request PDA
     const withdrawRequestPDA = await this.getWithdrawRequestPDA(ownerAddress, requestId);
-    console.log(`DEBUG: Withdraw Request PDA: ${withdrawRequestPDA.toString()}`);
-    
     // Get the user's token 2022 account for the share token
     const userSharesATA = await web3.PublicKey.findProgramAddress(
       [
@@ -933,20 +702,11 @@ export class BoringVaultSolana {
       ],
       ASSOCIATED_TOKEN_PROGRAM_ID
     );
-    console.log(`DEBUG: User's Share Token Account: ${userSharesATA[0].toString()}`);
-    
-    // Check if user shares ATA exists
-    const userSharesATAExists = await this.doesAccountExist(userSharesATA[0]);
-    console.log(`DEBUG: User's Share Token Account exists: ${userSharesATAExists}`);
-    
     // Get or use the provided queue shares account
     let queueSharesAccountPubkey;
     if (queueSharesAccount) {
-      // Use the provided queue shares account
-      console.log(`DEBUG: Using provided Queue Shares Account: ${queueSharesAccount.toString()}`);
       queueSharesAccountPubkey = queueSharesAccount;
     } else {
-      // Get the queue's token 2022 account for the share token
       const queueSharesATA = await web3.PublicKey.findProgramAddress(
         [
           queuePDA.toBuffer(),
@@ -956,95 +716,25 @@ export class BoringVaultSolana {
         ASSOCIATED_TOKEN_PROGRAM_ID
       );
       queueSharesAccountPubkey = queueSharesATA[0];
-      console.log(`DEBUG: Queue's Share Token Account: ${queueSharesAccountPubkey.toString()}`);
     }
-    
     // Get the asset data PDA from the Boring Vault program
     const assetDataPDA = await this.getAssetDataPDA(vaultStatePDA, tokenOut);
-    console.log(`DEBUG: Asset Data PDA: ${assetDataPDA.toString()}`);
-    
     // Fetch the asset data to get the price feed
     const assetDataAddress = assetDataPDA.toBase58() as Address;
     const assetDataResponse = await this.rpc.getAccountInfo(
       assetDataAddress,
       { encoding: 'base64' }
     ).send();
-    
     if (!assetDataResponse.value || !assetDataResponse.value.data.length) {
       throw new Error(`Asset data not found for mint ${tokenOut.toString()}`);
     }
-    
     // Parse asset data to get the price feed
     const assetDataBuffer = Buffer.from(assetDataResponse.value.data[0], 'base64');
     const parsedAssetData = parseFullVaultData(assetDataBuffer);
-
-    // Get price feed address from the parsed asset data
-    if (!parsedAssetData.assetData || !parsedAssetData.assetData.priceFeed) {
+    const priceFeedAddress = parsedAssetData.assetData?.priceFeed;
+    if (!priceFeedAddress) {
       throw new Error(`Price feed not found in asset data for mint ${tokenOut.toString()}`);
     }
-    
-    const priceFeedAddress = parsedAssetData.assetData.priceFeed;
-    console.log(`DEBUG: Price Feed Address: ${priceFeedAddress.toString()}`);
-    
-    // Get withdraw asset data constraints
-    try {
-      const withdrawAssetDataAddress = withdrawAssetDataPDA.toBase58() as Address;
-      const withdrawAssetDataResponse = await this.rpc.getAccountInfo(
-        withdrawAssetDataAddress,
-        { encoding: 'base64' }
-      ).send();
-      
-      if (withdrawAssetDataResponse.value && withdrawAssetDataResponse.value.data.length) {
-        console.log(`DEBUG: Found Withdraw Asset Data, parsing constraints...`);
-        
-        // The first 8 bytes are the account discriminator, then comes the data
-        const data = Buffer.from(withdrawAssetDataResponse.value.data[0], 'base64');
-        
-        // WithdrawAssetData layout:
-        // - allow_withdrawals: bool (1 byte)
-        // - seconds_to_maturity: u32 (4 bytes)
-        // - minimum_seconds_to_deadline: u32 (4 bytes)
-        // - minimum_discount: u16 (2 bytes)
-        // - maximum_discount: u16 (2 bytes)
-        // - minimum_shares: u64 (8 bytes)
-        
-        const offset = 8; // Skip discriminator
-        const allowWithdrawals = data[offset] === 1;
-        const secondsToMaturity = data.readUInt32LE(offset + 1);
-        const minimumSecondsToDeadline = data.readUInt32LE(offset + 5);
-        const minimumDiscount = data.readUInt16LE(offset + 9);
-        const maximumDiscount = data.readUInt16LE(offset + 11);
-        const minimumShares = data.readBigUInt64LE(offset + 13);
-        
-        console.log(`DEBUG: Withdraw Asset Data Constraints:`);
-        console.log(`  - allowWithdrawals: ${allowWithdrawals}`);
-        console.log(`  - secondsToMaturity: ${secondsToMaturity}`);
-        console.log(`  - minimumSecondsToDeadline: ${minimumSecondsToDeadline}`);
-        console.log(`  - minimumDiscount: ${minimumDiscount}`);
-        console.log(`  - maximumDiscount: ${maximumDiscount}`);
-        console.log(`  - minimumShares: ${minimumShares.toString()}`);
-        
-        // Validate the parameters against constraints
-        if (!allowWithdrawals) {
-          console.warn(`WARNING: Withdrawals are not allowed for this asset!`);
-        }
-        
-        if (discount < minimumDiscount || discount > maximumDiscount) {
-          console.warn(`WARNING: Discount ${discount} is outside allowed range (${minimumDiscount}-${maximumDiscount})`);
-        }
-        
-        if (shareAmount < minimumShares) {
-          console.warn(`WARNING: Share amount ${shareAmount} is below minimum ${minimumShares}`);
-        }
-        
-        if (secondsToDeadline < minimumSecondsToDeadline) {
-          console.warn(`WARNING: Seconds to deadline ${secondsToDeadline} is below minimum ${minimumSecondsToDeadline}`);
-        }
-      }
-    } catch (error) {
-      console.error(`ERROR: Failed to parse withdraw asset data: ${error}`);
-    }
-    
     // Create request_withdraw instruction
     const requestWithdrawInstruction = new web3.TransactionInstruction({
       programId: new web3.PublicKey(BORING_QUEUE_PROGRAM_ID),
@@ -1067,133 +757,15 @@ export class BoringVaultSolana {
         { pubkey: priceFeedAddress, isSigner: false, isWritable: false },
       ],
       data: Buffer.concat([
-        this.getRequestWithdrawInstructionDiscriminator(),
+        this.getInstructionDiscriminator('request_withdraw', queueIdl),
         this.serializeRequestWithdrawArgs(vaultId, shareAmount, discount, secondsToDeadline)
       ])
     });
-    
-    console.log(`DEBUG: Instruction accounts:`);
-    requestWithdrawInstruction.keys.forEach((key, index) => {
-      console.log(`  [${index}] ${key.pubkey.toString()} (signer: ${key.isSigner}, writable: ${key.isWritable})`);
-    });
-    
+    // Create a new transaction
+    const transaction = new web3.Transaction();
     // Add the request_withdraw instruction to the transaction
     transaction.add(requestWithdrawInstruction);
-    
     return transaction;
-  }
-
-  /**
-   * Get the update_withdraw_asset_data instruction discriminator from the IDL
-   */
-  private getUpdateWithdrawAssetDataInstructionDiscriminator(): Buffer {
-    const instruction = (queueIdl.instructions as any[]).find(
-      (instr) => instr.name === 'update_withdraw_asset_data'
-    );
-    
-    if (!instruction || !instruction.discriminator) {
-      throw new Error('update_withdraw_asset_data instruction or its discriminator not found in IDL');
-    }
-    
-    return Buffer.from(instruction.discriminator);
-  }
-
-  /**
-   * Serializes update_withdraw_asset_data arguments into a buffer
-   */
-  private serializeUpdateWithdrawAssetDataArgs(
-    vaultId: number,
-    allowWithdraws: boolean = true,
-    secondsToMaturity: number = 0, // Immediately available
-    minimumSecondsToDeadline: number = 86400, // 1 day
-    minimumDiscount: number = 0, // No discount required
-    maximumDiscount: number = 500, // 5% maximum discount
-    minimumShares: bigint = BigInt(1) // Minimum 1 lamport equivalent
-  ): Buffer {
-    // UpdateWithdrawAssetArgs layout:
-    // vault_id (u64), allow_withdraws (bool), seconds_to_maturity (u32),
-    // minimum_seconds_to_deadline (u32), minimum_discount (u16),
-    // maximum_discount (u16), minimum_shares (u64)
-    
-    const buffer = Buffer.alloc(8 + 1 + 4 + 4 + 2 + 2 + 8); // 29 bytes total
-    
-    console.log(`DEBUG: Serializing update_withdraw_asset_data args:`);
-    console.log(`  - vaultId: ${vaultId}`);
-    console.log(`  - allowWithdraws: ${allowWithdraws}`);
-    console.log(`  - secondsToMaturity: ${secondsToMaturity}`);
-    console.log(`  - minimumSecondsToDeadline: ${minimumSecondsToDeadline}`);
-    console.log(`  - minimumDiscount: ${minimumDiscount}`);
-    console.log(`  - maximumDiscount: ${maximumDiscount}`);
-    console.log(`  - minimumShares: ${minimumShares.toString()}`);
-    
-    let offset = 0;
-    
-    // Write vault_id (u64)
-    this.writeUint64LE(buffer, BigInt(vaultId), offset);
-    offset += 8;
-    
-    // Write allow_withdraws (bool)
-    buffer.writeUInt8(allowWithdraws ? 1 : 0, offset);
-    offset += 1;
-    
-    // Write seconds_to_maturity (u32)
-    buffer.writeUInt32LE(secondsToMaturity, offset);
-    offset += 4;
-    
-    // Write minimum_seconds_to_deadline (u32)
-    buffer.writeUInt32LE(minimumSecondsToDeadline, offset);
-    offset += 4;
-    
-    // Write minimum_discount (u16)
-    buffer.writeUInt16LE(minimumDiscount, offset);
-    offset += 2;
-    
-    // Write maximum_discount (u16)
-    buffer.writeUInt16LE(maximumDiscount, offset);
-    offset += 2;
-    
-    // Write minimum_shares (u64)
-    this.writeUint64LE(buffer, minimumShares, offset);
-    
-    return buffer;
-  }
-
-  /**
-   * Creates an instruction to initialize or update withdraw asset data
-   */
-  private async createUpdateWithdrawAssetDataInstruction(
-    ownerAddress: web3.PublicKey,
-    vaultId: number,
-    queueStatePDA: web3.PublicKey,
-    withdrawMint: web3.PublicKey
-  ): Promise<web3.TransactionInstruction> {
-    // Get withdraw asset data PDA
-    const withdrawAssetDataPDA = await this.getWithdrawAssetDataPDA(queueStatePDA, withdrawMint);
-    console.log(`DEBUG: Withdraw Asset Data PDA to initialize: ${withdrawAssetDataPDA.toString()}`);
-    
-    // Create update_withdraw_asset_data instruction
-    return new web3.TransactionInstruction({
-      programId: new web3.PublicKey(BORING_QUEUE_PROGRAM_ID),
-      keys: [
-        { pubkey: ownerAddress, isSigner: true, isWritable: true },
-        { pubkey: queueStatePDA, isSigner: false, isWritable: false },
-        { pubkey: withdrawMint, isSigner: false, isWritable: false },
-        { pubkey: withdrawAssetDataPDA, isSigner: false, isWritable: true },
-        { pubkey: web3.SystemProgram.programId, isSigner: false, isWritable: false },
-      ],
-      data: Buffer.concat([
-        this.getUpdateWithdrawAssetDataInstructionDiscriminator(),
-        this.serializeUpdateWithdrawAssetDataArgs(
-          vaultId,
-          true, // Allow withdrawals
-          0,    // No maturity period
-          3600, // Min 1 hour deadline
-          0,    // Min 0% discount
-          500,  // Max 5% discount
-          BigInt(1000) // Min 1000 lamports (to prevent dust withdrawals)
-        )
-      ])
-    });
   }
 
   // Add a private property to cache the last vault ID

@@ -19,3 +19,8 @@ export const JITO_SOL_PRICE_FEED_ADDRESS = '4Z1SLH9g4ikNBV8uP2ZctEouqjYmVqB2Tz5S
 export const BORING_VAULT_PROGRAM_ID = '5ZRnXG4GsUMLaN7w2DtJV1cgLgcXHmuHCmJ2MxoorWCE'; 
 export const BORING_QUEUE_PROGRAM_ID = '4yfE2VJQmxmcnUhrb8vdz7H8w313EZ3eJh5DbANBgtmd';
 export const TOKEN_2022_PROGRAM_ID = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'; 
+
+export const KNOWN_MINTS: { [key: string]: string } = {
+  "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn": "JITO SOL",
+  // Add more known mints here if needed
+}; 
