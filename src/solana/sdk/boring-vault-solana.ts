@@ -14,7 +14,8 @@ import {
   BASE_SEED_USER_WITHDRAW_STATE,
   BORING_VAULT_PROGRAM_ID,
   BORING_QUEUE_PROGRAM_ID,
-  TOKEN_2022_PROGRAM_ID
+  TOKEN_2022_PROGRAM_ID,
+  NATIVE_SOL_MINT
 } from '../utils/constants';
 import { BalanceInfo, BoringVaultSolanaConfig } from '../types';
 import { parseFullVaultData } from './vault-state';
@@ -261,15 +262,15 @@ export class BoringVaultSolana {
   }
 
   /**
-   * Builds a deposit transaction for SPL tokens
+   * Helper function to fetch common vault PDAs and state information
    */
-  async buildDepositTransaction(
-    payer: web3.PublicKey,
-    vaultId: number,
-    depositMint: web3.PublicKey,
-    depositAmount: bigint,
-    minMintAmount: bigint
-  ): Promise<web3.Transaction> {
+  private async getCommonVaultInfo(vaultId: number): Promise<{
+    vaultStatePDA: web3.PublicKey;
+    vaultState: { depositSubAccount: number; withdrawSubAccount: number };
+    vaultPDA: web3.PublicKey;
+    shareMintPDA: web3.PublicKey;
+    shareMintProgram: web3.PublicKey;
+  }> {
     // Get the vault state PDA
     const vaultStatePDA = await this.getVaultStatePDA(vaultId);
     console.log(`DEBUG: Vault State PDA: ${vaultStatePDA.toString()}`);
@@ -292,7 +293,6 @@ export class BoringVaultSolana {
       { encoding: 'base64' }
     ).send();
     
-    // Default to TOKEN_PROGRAM_ID if we can't retrieve the share mint info
     let shareMintProgram;
     
     if (shareMintResponse.value) {
@@ -302,19 +302,24 @@ export class BoringVaultSolana {
     } else {
       throw new Error(`Could not retrieve share mint info for ${shareMintPDA.toString()}`);
     }
-    
-    // Get the asset data PDA
-    const assetDataPDA = await this.getAssetDataPDA(vaultStatePDA, depositMint);
-    console.log(`DEBUG: Asset Data PDA: ${assetDataPDA.toString()}`);
-    
-    // Get the user's associated token account for the deposit mint
-    const userATA = await this.getTokenAccount(payer, depositMint);
-    console.log(`DEBUG: User's Token Account: ${userATA.toString()}`);
-    
-    // Get the vault's associated token account for the deposit mint
-    const vaultATA = await this.getTokenAccount(vaultPDA, depositMint);
-    console.log(`DEBUG: Vault's Token Account: ${vaultATA.toString()}`);
-    
+
+    return {
+      vaultStatePDA,
+      vaultState,
+      vaultPDA,
+      shareMintPDA,
+      shareMintProgram
+    };
+  }
+
+  /**
+   * Helper function to get user's share token account
+   */
+  private async getUserSharesAccount(
+    payer: web3.PublicKey,
+    shareMintPDA: web3.PublicKey,
+    shareMintProgram: web3.PublicKey
+  ): Promise<web3.PublicKey> {
     // Get the user's associated token account for the share token using the standard SPL token function
     const userSharesATA = await getAssociatedTokenAddress(
       shareMintPDA,    // mint
@@ -324,6 +329,23 @@ export class BoringVaultSolana {
       ASSOCIATED_TOKEN_PROGRAM_ID // associatedTokenProgramId
     );
     console.log(`DEBUG: User's Share Token Account: ${userSharesATA.toString()}`);
+    return userSharesATA;
+  }
+
+  /**
+   * Helper function to fetch asset data and price feed information
+   */
+  private async getAssetDataInfo(
+    vaultStatePDA: web3.PublicKey,
+    assetMint: web3.PublicKey,
+    assetType: string
+  ): Promise<{
+    assetDataPDA: web3.PublicKey;
+    priceFeedAddress: web3.PublicKey;
+  }> {
+    // Get the asset data PDA
+    const assetDataPDA = await this.getAssetDataPDA(vaultStatePDA, assetMint);
+    console.log(`DEBUG: ${assetType} Asset Data PDA: ${assetDataPDA.toString()}`);
     
     // Fetch the asset data to get the price feed
     const assetDataAddress = assetDataPDA.toBase58() as Address;
@@ -333,7 +355,7 @@ export class BoringVaultSolana {
     ).send();
     
     if (!assetDataResponse.value || !assetDataResponse.value.data.length) {
-      throw new Error(`Asset data not found for mint ${depositMint.toString()}`);
+      throw new Error(`Asset data not found for ${assetType} deposits`);
     }
     
     // Parse asset data using the parseFullVaultData function
@@ -342,11 +364,61 @@ export class BoringVaultSolana {
 
     // Get price feed address from the parsed asset data
     if (!parsedAssetData.assetData || !parsedAssetData.assetData.priceFeed) {
-      throw new Error(`Price feed not found in asset data for mint ${depositMint.toString()}`);
+      throw new Error(`Price feed not found in asset data for ${assetType} deposits`);
     }
     
     const priceFeedAddress = parsedAssetData.assetData.priceFeed;
     console.log(`DEBUG: Price Feed Address: ${priceFeedAddress.toString()}`);
+
+    return {
+      assetDataPDA,
+      priceFeedAddress
+    };
+  }
+
+  /**
+   * Builds a deposit transaction for SPL tokens
+   */
+  async buildDepositTransaction(
+    payer: web3.PublicKey,
+    vaultId: number,
+    depositMint: web3.PublicKey,
+    depositAmount: bigint,
+    minMintAmount: bigint
+  ): Promise<web3.Transaction> {
+    // Validate input parameters
+    if (depositAmount <= BigInt(0)) {
+      throw new Error(`Invalid depositAmount: ${depositAmount.toString()}. Must be a positive non-zero value.`);
+    }
+    if (minMintAmount <= BigInt(0)) {
+      throw new Error(`Invalid minMintAmount: ${minMintAmount.toString()}. Must be a positive non-zero value.`);
+    }
+
+    // Get common vault information
+    const {
+      vaultStatePDA,
+      vaultPDA,
+      shareMintPDA,
+      shareMintProgram
+    } = await this.getCommonVaultInfo(vaultId);
+    
+    // Get asset data and price feed information
+    const { assetDataPDA, priceFeedAddress } = await this.getAssetDataInfo(
+      vaultStatePDA,
+      depositMint,
+      depositMint.toString()
+    );
+    
+    // Get the user's associated token account for the deposit mint
+    const userATA = await this.getTokenAccount(payer, depositMint);
+    console.log(`DEBUG: User's Token Account: ${userATA.toString()}`);
+    
+    // Get the vault's associated token account for the deposit mint
+    const vaultATA = await this.getTokenAccount(vaultPDA, depositMint);
+    console.log(`DEBUG: Vault's Token Account: ${vaultATA.toString()}`);
+    
+    // Get user's share token account
+    const userSharesATA = await this.getUserSharesAccount(payer, shareMintPDA, shareMintProgram);
     
     // Create deposit instruction
     const depositInstruction = new web3.TransactionInstruction({
@@ -765,6 +837,80 @@ export class BoringVaultSolana {
     const transaction = new web3.Transaction();
     // Add the request_withdraw instruction to the transaction
     transaction.add(requestWithdrawInstruction);
+    return transaction;
+  }
+
+  /**
+   * Builds a deposit transaction for native SOL
+   */
+  async buildDepositSolTransaction(
+    payer: web3.PublicKey,
+    vaultId: number,
+    depositAmount: bigint,
+    minMintAmount: bigint
+  ): Promise<web3.Transaction> {
+    // Validate input parameters
+    if (depositAmount <= BigInt(0)) {
+      throw new Error(`Invalid depositAmount: ${depositAmount.toString()}. Must be a positive non-zero value.`);
+    }
+    if (minMintAmount <= BigInt(0)) {
+      throw new Error(`Invalid minMintAmount: ${minMintAmount.toString()}. Must be a positive non-zero value.`);
+    }
+
+    // Get common vault information
+    const {
+      vaultStatePDA,
+      vaultPDA,
+      shareMintPDA,
+      shareMintProgram
+    } = await this.getCommonVaultInfo(vaultId);
+    
+    // For SOL deposits, use the native SOL mint constant (zero address)
+    // This matches the IDL constant value for native SOL
+    const solAssetMint = new web3.PublicKey(NATIVE_SOL_MINT);
+    
+    // Get asset data and price feed information for SOL
+    const { assetDataPDA, priceFeedAddress } = await this.getAssetDataInfo(
+      vaultStatePDA,
+      solAssetMint,
+      'SOL'
+    );
+    
+    // Get user's share token account
+    const userSharesATA = await this.getUserSharesAccount(payer, shareMintPDA, shareMintProgram);
+    
+    // Create deposit_sol instruction
+    const depositSolInstruction = new web3.TransactionInstruction({
+      programId: this.programId,
+      keys: [
+        { pubkey: payer, isSigner: true, isWritable: true },
+        { pubkey: new web3.PublicKey(TOKEN_2022_PROGRAM_ID), isSigner: false, isWritable: false },
+        { pubkey: web3.SystemProgram.programId, isSigner: false, isWritable: false },
+        { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+        { pubkey: vaultStatePDA, isSigner: false, isWritable: false },
+        { pubkey: vaultPDA, isSigner: false, isWritable: true },
+        { pubkey: assetDataPDA, isSigner: false, isWritable: false },
+        { pubkey: shareMintPDA, isSigner: false, isWritable: true },
+        { pubkey: userSharesATA, isSigner: false, isWritable: true },
+        { pubkey: priceFeedAddress, isSigner: false, isWritable: false },
+      ],
+      data: Buffer.concat([
+        this.getInstructionDiscriminator('deposit_sol'),
+        this.serializeDepositArgs(vaultId, depositAmount, minMintAmount)
+      ])
+    });
+    
+    console.log(`DEBUG: SOL Deposit Instruction accounts:`);
+    depositSolInstruction.keys.forEach((key, index) => {
+      console.log(`  [${index}] ${key.pubkey.toString()} (signer: ${key.isSigner}, writable: ${key.isWritable})`);
+    });
+    
+    // Create a new transaction
+    const transaction = new web3.Transaction();
+    
+    // Add the deposit_sol instruction to the transaction
+    transaction.add(depositSolInstruction);
+    
     return transaction;
   }
 

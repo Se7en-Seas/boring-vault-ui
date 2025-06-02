@@ -7,6 +7,7 @@ import {
 } from './mainnet-test-utils';
 import { 
   testDeposit,
+  testDepositSol,
   testQueueWithdraw,
   checkQueueConfig,
 } from './mainnet-test-write';
@@ -36,8 +37,9 @@ function displayHelpText(errorMessage?: string): void {
   console.log('  2. read-vault - Read the vault data');
   console.log('  3. check-balance - Check the JITOSOL and share token balances');
   console.log('  4. deposit - Test deposit functionality');
-  console.log('  5. queue-withdraw - Test queue withdraw functionality');
-  console.log('  6. check-queue-config - Check the queue program configuration');
+  console.log('  5. deposit-sol - Test SOL deposit functionality');
+  console.log('  6. queue-withdraw - Test queue withdraw functionality');
+  console.log('  7. check-queue-config - Check the queue program configuration');
   console.log('\nRun with a command to execute that test. Example: node dist/src/solana/tests/mainnet-test.js queue-withdraw');
 }
 
@@ -70,6 +72,8 @@ async function main() {
       executeTest(() => fetchUserShares());
     } else if (command === 'deposit') {
       executeTest(() => testDeposit());
+    } else if (command === 'deposit-sol') {
+      executeTest(() => testDepositSol());
     } else if (command === 'queue-withdraw') {
       executeTest(() => testQueueWithdraw());
     } else if (command === 'check-queue-config') {
@@ -102,6 +106,7 @@ if (require.main === module) {
     testUserBalances,
     fetchUserShares,
     testDeposit,
+    testDepositSol,
     testQueueWithdraw,
     checkQueueConfig,
     main

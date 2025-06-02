@@ -1,69 +1,64 @@
 ---
 title: Solana Vault Integration
-description: Tools and utilities for interacting with Boring Vault on Solana
+description: Complete SDK for interacting with Boring Vault on Solana blockchain
 ---
 
 ## Introduction
 
-The SDK provides Solana support for interacting with Boring Vault on the Solana blockchain. This documentation covers the functionality for retrieving vault balances and other Solana-specific interactions.
+The Boring Vault Solana SDK provides comprehensive tools for interacting with Boring Vault on the Solana blockchain. This SDK supports both SPL token deposits and native SOL deposits, along with queued withdrawals and comprehensive vault management.
+
+## Features
+
+- ✅ **SPL Token Deposits** - Deposit any supported SPL token into vaults
+- ✅ **Native SOL Deposits** - Direct SOL deposits without wrapping
+- ✅ **Queued Withdrawals** - Request withdrawals through the Boring Queue system
+- ✅ **Input Validation** - Automatic validation of deposit amounts and parameters
+- ✅ **Wallet Support** - Compatible with both wallet adapters and keypairs
+- ✅ **Error Handling** - Comprehensive error handling with detailed messages
+- ✅ **Transaction Monitoring** - Built-in transaction status polling and explorer links
 
 ## VaultSDK
 
-The `VaultSDK` class provides a streamlined interface for interacting with Boring Vault on Solana. 
+The `VaultSDK` class is the main interface for interacting with Boring Vault on Solana.
 
-### Initializing the SDK
-
-To use the Solana integration, you first need to create a connection to the Solana network and initialize the SDK:
+### Installation & Setup
 
 ```tsx
-import { createSolanaClient } from 'gill';
 import { VaultSDK } from 'boring-vault-ui';
 
-// Initialize a Solana client using gill
-const rpcUrl = 'https://api.mainnet-beta.solana.com';
-// You can also use moniker shortcuts like 'mainnet', 'devnet', etc.
-const solanaClient = createSolanaClient({ urlOrMoniker: rpcUrl });
-
-// Create the SDK instance
-const vaultSDK = new VaultSDK(rpcUrl);
+// Initialize the SDK with an RPC URL
+const vaultSDK = new VaultSDK('https://api.mainnet-beta.solana.com');
+// You can also use shortcuts like 'mainnet', 'devnet', 'testnet'
+const vaultSDK = new VaultSDK('mainnet');
 ```
 
-### Getting Vault Balances
+### Getting Vault Information
 
-You can retrieve the current balance of a vault using the `getVaultBalance` method:
-
-```tsx
-import { Address } from 'gill';
-
-// The vault address
-const vaultAddress = 'your_vault_address_here' as Address;
-
-async function checkVaultBalance() {
-  try {
-    // Fetch the vault balance
-    const balance = await vaultSDK.getVaultBalance(vaultAddress);
-    console.log(`Vault balance: ${balance}`);
-    return balance;
-  } catch (error) {
-    console.error('Error fetching vault balance:', error);
-    return '0';
-  }
-}
-```
-
-### Getting Full Vault Data
-
-For more comprehensive vault information, use the `getVaultData` method:
+#### Get Complete Vault Data
 
 ```tsx
+import { web3 } from '@coral-xyz/anchor';
+
 async function getVaultInfo() {
+  const vaultAddress = new web3.PublicKey('your_vault_address_here');
+  
   try {
-    // Fetch the complete vault data
     const vaultData = await vaultSDK.getVaultData(vaultAddress);
     
     console.log('Vault ID:', vaultData.vaultState.vaultId.toString());
-    console.log('Token Mint:', vaultData.tokenMint.toString());
+    console.log('Authority:', vaultData.vaultState.authority.toString());
+    console.log('Share Mint:', vaultData.vaultState.shareMint.toString());
+    console.log('Paused:', vaultData.vaultState.paused);
     console.log('Deposit Sub-Account:', vaultData.vaultState.depositSubAccount);
+    console.log('Withdraw Sub-Account:', vaultData.vaultState.withdrawSubAccount);
+    
+    // Teller state information
+    if (vaultData.tellerState) {
+      console.log('Base Asset:', vaultData.tellerState.baseAsset.toString());
+      console.log('Exchange Rate:', vaultData.tellerState.exchangeRate.toString());
+      console.log('Platform Fee:', vaultData.tellerState.platformFeeBps / 100, '%');
+      console.log('Performance Fee:', vaultData.tellerState.performanceFeeBps / 100, '%');
+    }
     
     return vaultData;
   } catch (error) {
@@ -73,33 +68,166 @@ async function getVaultInfo() {
 }
 ```
 
-## BoringVaultSolana
+#### Get Vault Balance
 
-The `BoringVaultSolana` class provides low-level access to the Boring Vault program on Solana.
+```tsx
+async function checkVaultBalance() {
+  const vaultAddress = new web3.PublicKey('your_vault_address_here');
+  
+  try {
+    const balance = await vaultSDK.getVaultBalance(vaultAddress);
+    console.log(`Vault balance: ${balance} lamports`);
+    return balance;
+  } catch (error) {
+    console.error('Error fetching vault balance:', error);
+    return '0';
+  }
+}
+```
+
+### Depositing Assets
+
+#### SPL Token Deposits
+
+```tsx
+import { web3 } from '@coral-xyz/anchor';
+
+async function depositTokens() {
+  // Your wallet (can be wallet adapter or keypair)
+  const wallet = {
+    publicKey: new web3.PublicKey('user_wallet_address'),
+    signTransaction: async (tx: web3.Transaction) => {
+      // Wallet adapter signing logic
+      return signedTransaction;
+    }
+  };
+  
+  // Or use a keypair directly
+  // const wallet = web3.Keypair.fromSecretKey(secretKey);
+  
+  const vaultId = 1;
+  const tokenMint = 'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn'; // jitoSOL
+  const depositAmount = BigInt('1000000000'); // 1 token (with 9 decimals)
+  const minMintAmount = BigInt('950000000');  // 5% slippage tolerance
+  
+  try {
+    const signature = await vaultSDK.deposit(
+      wallet,
+      vaultId,
+      tokenMint,
+      depositAmount,
+      minMintAmount,
+      {
+        skipPreflight: false,
+        maxRetries: 30
+      }
+    );
+    
+    console.log(`Deposit successful! Transaction: ${signature}`);
+    console.log(`View on explorer: https://solscan.io/tx/${signature}`);
+    
+    return signature;
+  } catch (error) {
+    console.error('Deposit failed:', error);
+    throw error;
+  }
+}
+```
+
+#### Native SOL Deposits
+
+```tsx
+async function depositSOL() {
+  const wallet = /* your wallet */;
+  const vaultId = 1;
+  const depositAmount = BigInt('1000000000'); // 1 SOL in lamports
+  const minMintAmount = BigInt('950000000');  // 5% slippage tolerance
+  
+  try {
+    const signature = await vaultSDK.depositSol(
+      wallet,
+      vaultId,
+      depositAmount,
+      minMintAmount,
+      {
+        skipPreflight: false,
+        maxRetries: 30
+      }
+    );
+    
+    console.log(`SOL deposit successful! Transaction: ${signature}`);
+    console.log(`View on explorer: https://solscan.io/tx/${signature}`);
+    
+    return signature;
+  } catch (error) {
+    console.error('SOL deposit failed:', error);
+    throw error;
+  }
+}
+```
+
+### Queued Withdrawals
+
+The SDK supports queued withdrawals through the Boring Queue system, allowing users to request withdrawals that can be fulfilled by external solvers at a discount.
+
+```tsx
+async function queueWithdrawal() {
+  const wallet = /* your wallet */;
+  const vaultId = 1;
+  const tokenOut = 'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn'; // jitoSOL
+  const shareAmount = 0.5; // Human-readable amount (0.5 shares)
+  const discountPercent = 2.5; // 2.5% discount for solvers
+  const secondsToDeadline = 86400 * 7; // 7 days
+  
+  try {
+    const signature = await vaultSDK.queueBoringWithdraw(
+      wallet,
+      vaultId,
+      tokenOut,
+      shareAmount,
+      discountPercent,
+      secondsToDeadline,
+      undefined, // Optional queue shares account
+      {
+        skipPreflight: false,
+        maxRetries: 30
+      }
+    );
+    
+    console.log(`Withdrawal queued! Transaction: ${signature}`);
+    console.log(`View on explorer: https://solscan.io/tx/${signature}`);
+    
+    return signature;
+  } catch (error) {
+    console.error('Queue withdrawal failed:', error);
+    throw error;
+  }
+}
+```
+
+## BoringVaultSolana (Low-Level API)
+
+For advanced use cases, you can access the low-level `BoringVaultSolana` class directly.
 
 ### Creating a BoringVaultSolana Instance
 
 ```tsx
 import { createBoringVaultSolana } from 'boring-vault-ui';
 
-// Create the BoringVaultSolana instance with gill integration
 const boringVault = createBoringVaultSolana({
-  urlOrMoniker: 'https://api.mainnet-beta.solana.com',
-  programId: 'your_program_id_here'
+  urlOrMoniker: 'mainnet',
+  programId: '5ZRnXG4GsUMLaN7w2DtJV1cgLgcXHmuHCmJ2MxoorWCE'
 });
 ```
 
-### Getting User Share Balances
-
-To retrieve a user's balance of vault shares:
+### User Share Balances
 
 ```tsx
-async function getUserShareBalance() {
+async function getUserShares() {
   const walletAddress = 'user_wallet_address_here';
-  const vaultId = 123; // The numeric ID of the vault
+  const vaultId = 1;
   
   try {
-    // Get the user's share balance in the vault
     const balanceInfo = await boringVault.fetchUserShares(walletAddress, vaultId);
     
     console.log('Raw Balance:', balanceInfo.raw.toString());
@@ -108,117 +236,261 @@ async function getUserShareBalance() {
     
     return balanceInfo;
   } catch (error) {
-    console.error('Error fetching user share balance:', error);
+    console.error('Error fetching user shares:', error);
     return null;
   }
 }
 ```
 
-## Loading a Keypair
+### Building Transactions
 
-When you need to use a keypair from a Solana CLI-formatted JSON file (e.g., for testing or administrative operations):
+#### SPL Token Deposit Transaction
+
+```tsx
+async function buildDepositTx() {
+  const payerPublicKey = new web3.PublicKey('payer_address');
+  const vaultId = 1;
+  const depositMint = new web3.PublicKey('J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn');
+  const depositAmount = BigInt('1000000000');
+  const minMintAmount = BigInt('950000000');
+  
+  try {
+    const transaction = await boringVault.buildDepositTransaction(
+      payerPublicKey,
+      vaultId,
+      depositMint,
+      depositAmount,
+      minMintAmount
+    );
+    
+    console.log('Transaction built successfully');
+    return transaction;
+  } catch (error) {
+    console.error('Error building transaction:', error);
+    throw error;
+  }
+}
+```
+
+#### SOL Deposit Transaction
+
+```tsx
+async function buildSOLDepositTx() {
+  const payerPublicKey = new web3.PublicKey('payer_address');
+  const vaultId = 1;
+  const depositAmount = BigInt('1000000000'); // 1 SOL
+  const minMintAmount = BigInt('950000000');
+  
+  try {
+    const transaction = await boringVault.buildDepositSolTransaction(
+      payerPublicKey,
+      vaultId,
+      depositAmount,
+      minMintAmount
+    );
+    
+    console.log('SOL deposit transaction built successfully');
+    return transaction;
+  } catch (error) {
+    console.error('Error building SOL deposit transaction:', error);
+    throw error;
+  }
+}
+```
+
+### PDA Derivations
+
+```tsx
+// Get vault state PDA
+const vaultStatePDA = await boringVault.getVaultStatePDA(vaultId);
+
+// Get vault PDA for specific sub-account
+const vaultPDA = await boringVault.getVaultPDA(vaultId, subAccount);
+
+// Get share token mint PDA
+const shareMintPDA = await boringVault.getShareTokenPDA(vaultStatePDA);
+
+// Get asset data PDA
+const assetDataPDA = await boringVault.getAssetDataPDA(vaultStatePDA, assetMint);
+
+// Queue-related PDAs
+const queueStatePDA = await boringVault.getQueueStatePDA(vaultId);
+const queuePDA = await boringVault.getQueuePDA(vaultId);
+const userWithdrawStatePDA = await boringVault.getUserWithdrawStatePDA(userPublicKey);
+```
+
+## Working with Keypairs
+
+For testing or administrative operations, you may need to load keypairs from Solana CLI format:
 
 ```tsx
 import { createKeyPairSignerFromPrivateKeyBytes } from 'gill';
 import * as fs from 'fs';
 
-/**
- * Load keypair from file using gill's keypair signer
- */
 async function loadKeypair(keypairPath: string) {
   try {
-    // Load key data using fs
     const keyData = JSON.parse(fs.readFileSync(keypairPath, 'utf-8'));
     const secretKey = new Uint8Array(keyData);
     
-    // Solana keypair JSON has 64 bytes: first 32 are private key, last 32 are public key
-    // Extract just the private key (first 32 bytes)
+    // Extract private key bytes (first 32 bytes)
     const privateKeyBytes = secretKey.slice(0, 32);
     
-    // Create keypair signer using just the private key bytes
+    // Create keypair signer
     const keypairSigner = await createKeyPairSignerFromPrivateKeyBytes(privateKeyBytes);
     
-    console.log(`Loaded keypair with address: ${keypairSigner.address}`);
-    
+    console.log(`Loaded keypair: ${keypairSigner.address}`);
     return keypairSigner;
   } catch (error) {
     console.error('Failed to load keypair:', error);
-    throw new Error('Failed to load keypair from file');
+    throw error;
   }
 }
 ```
 
-## Working with RPC Calls and Encoding
+## Input Validation
 
-When working with the Solana RPC, it's important to use base64 encoding for account data:
+The SDK automatically validates input parameters:
+
+- **Deposit amounts** must be positive non-zero values
+- **Minimum mint amounts** must be positive non-zero values  
+- **Discount percentages** must be between 0% and 5%
+- **Share amounts** must be greater than 0
+- **Deadline seconds** must be at least 1 hour
 
 ```tsx
-import { createSolanaClient, Address } from 'gill';
+// These will throw validation errors:
+await vaultSDK.deposit(wallet, vaultId, mint, BigInt(0), minAmount); // ❌ Zero deposit
+await vaultSDK.depositSol(wallet, vaultId, BigInt(-1), minAmount); // ❌ Negative amount
+await vaultSDK.queueBoringWithdraw(wallet, vaultId, tokenOut, 0, 10); // ❌ 10% discount too high
+```
 
-const solanaClient = createSolanaClient({ urlOrMoniker: 'mainnet' });
+## Error Handling
 
-async function getAccountInfo(address: Address) {
-  // Always use base64 encoding for account data
-  const response = await solanaClient.rpc.getAccountInfo(
-    address,
-    { encoding: 'base64' }
-  ).send();
-  
-  if (response.value) {
-    // Extract data from the gill response
-    const data = Buffer.from(response.value.data[0], 'base64');
-    console.log('Account data:', data);
-    return data;
+The SDK provides comprehensive error handling with detailed messages:
+
+```tsx
+try {
+  await vaultSDK.deposit(/* ... */);
+} catch (error) {
+  if (error.message.includes('Invalid depositAmount')) {
+    console.error('Deposit amount validation failed');
+  } else if (error.message.includes('Asset not allowed')) {
+    console.error('This asset is not supported for deposits');
+  } else if (error.message.includes('Vault paused')) {
+    console.error('Vault is currently paused');
+  } else {
+    console.error('Unexpected error:', error);
   }
-  
-  return null;
 }
 ```
 
 ## Complete Example
 
-Here's a complete example showing how to check a vault's balance and a user's share in that vault:
+Here's a comprehensive example showing common vault operations:
 
 ```tsx
-import { createSolanaClient, Address } from 'gill';
 import { VaultSDK, createBoringVaultSolana } from 'boring-vault-ui';
+import { web3 } from '@coral-xyz/anchor';
 
-async function checkVaultAndUserBalances() {
-  // Initialize Solana client and SDK
-  const rpcUrl = 'https://api.mainnet-beta.solana.com';
-  const solanaClient = createSolanaClient({ urlOrMoniker: rpcUrl });
-  const vaultSDK = new VaultSDK(rpcUrl);
+async function vaultOperationsExample() {
+  // Initialize SDK
+  const vaultSDK = new VaultSDK('mainnet');
+  const vaultAddress = new web3.PublicKey('your_vault_address_here');
+  const vaultId = 1;
   
-  // Vault information
-  const vaultAddress = 'your_vault_address_here' as Address;
-  const vaultId = 123; // The numeric ID of the vault
-  const userWallet = 'user_wallet_address_here';
+  // Your wallet setup
+  const wallet = /* your wallet */;
   
   try {
-    // 1. Get the vault balance
-    const vaultBalance = await vaultSDK.getVaultBalance(vaultAddress);
-    console.log(`Vault balance: ${vaultBalance}`);
-    
-    // 2. Get detailed vault information
+    // 1. Get vault information
+    console.log('=== Fetching Vault Data ===');
     const vaultData = await vaultSDK.getVaultData(vaultAddress);
-    console.log('Vault data:', vaultData);
+    console.log(`Vault ID: ${vaultData.vaultState.vaultId}`);
+    console.log(`Authority: ${vaultData.vaultState.authority}`);
+    console.log(`Paused: ${vaultData.vaultState.paused}`);
     
-    // 3. Get the user's share balance
-    const boringVault = createBoringVaultSolana({
-      urlOrMoniker: rpcUrl,
-      programId: vaultSDK.getProgramId() // Get the program ID from the VaultSDK
-    });
+    // 2. Check vault balance
+    console.log('\n=== Checking Vault Balance ===');
+    const vaultBalance = await vaultSDK.getVaultBalance(vaultAddress);
+    console.log(`Vault Balance: ${vaultBalance} lamports`);
     
-    const userShareBalance = await boringVault.fetchUserShares(userWallet, vaultId);
-    console.log(`User share balance: ${userShareBalance.formatted}`);
+    // 3. Check user share balance
+    console.log('\n=== Checking User Shares ===');
+    const boringVault = vaultSDK.getBoringVault();
+    const userShares = await boringVault.fetchUserShares(
+      wallet.publicKey.toString(),
+      vaultId
+    );
+    console.log(`User Shares: ${userShares.formatted}`);
     
-    return {
-      vaultBalance,
-      vaultData,
-      userShareBalance
-    };
+    // 4. Deposit SOL
+    console.log('\n=== Depositing SOL ===');
+    const depositAmount = BigInt('100000000'); // 0.1 SOL
+    const minMintAmount = BigInt('95000000');  // 5% slippage
+    
+    const depositSignature = await vaultSDK.depositSol(
+      wallet,
+      vaultId,
+      depositAmount,
+      minMintAmount
+    );
+    console.log(`SOL Deposit Success: ${depositSignature}`);
+    
+    // 5. Queue withdrawal
+    console.log('\n=== Queuing Withdrawal ===');
+    const withdrawSignature = await vaultSDK.queueBoringWithdraw(
+      wallet,
+      vaultId,
+      'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn', // jitoSOL
+      0.05, // 0.05 shares
+      1.0,  // 1% discount
+      86400 * 7 // 7 days deadline
+    );
+    console.log(`Withdrawal Queued: ${withdrawSignature}`);
+    
   } catch (error) {
-    console.error('Error checking balances:', error);
-    return null;
+    console.error('Operation failed:', error);
   }
-} 
+}
+```
+
+## Constants
+
+The SDK includes useful constants for Solana operations:
+
+```tsx
+import {
+  BORING_VAULT_PROGRAM_ID,
+  BORING_QUEUE_PROGRAM_ID,
+  JITO_SOL_MINT_ADDRESS,
+  TOKEN_2022_PROGRAM_ID,
+  DEFAULT_DECIMALS
+} from 'boring-vault-ui/solana/utils/constants';
+
+console.log('Boring Vault Program:', BORING_VAULT_PROGRAM_ID);
+console.log('Boring Queue Program:', BORING_QUEUE_PROGRAM_ID);
+console.log('JitoSOL Mint:', JITO_SOL_MINT_ADDRESS);
+console.log('Default Decimals:', DEFAULT_DECIMALS);
+```
+
+## Transaction Options
+
+All transaction methods support the following options:
+
+```tsx
+interface TransactionOptions {
+  skipPreflight?: boolean;    // Skip transaction simulation (default: false)
+  maxRetries?: number;        // Maximum retry attempts (default: 30)
+  skipStatusCheck?: boolean;  // Skip status polling (default: false)
+}
+```
+
+## Best Practices
+
+1. **Always validate inputs** - The SDK validates automatically, but check business logic too
+2. **Handle errors gracefully** - Network issues and program errors can occur
+3. **Use appropriate slippage** - 5% is usually safe for most operations
+4. **Monitor transactions** - Use the provided explorer links to track status
+5. **Test on devnet first** - Always test new integrations on devnet
+6. **Reserve SOL for fees** - Keep ~0.01 SOL for transaction fees when depositing SOL
+7. **Check vault status** - Ensure vaults aren't paused before attempting operations 

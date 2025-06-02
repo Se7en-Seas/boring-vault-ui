@@ -233,6 +233,55 @@ async function testTransactionFunctionality() {
     testFailures++;
     console.error('✗ Deposit test failed:', error);
   }
+
+  // Test SOL deposit functionality
+  try {
+    console.log('\nTest 7.1: Testing SOL deposit functionality...');
+    
+    // Implement a mock for buildDepositSolTransaction
+    vault.buildDepositSolTransaction = async (
+      payer: web3.PublicKey,
+      vaultId: number,
+      depositAmount: bigint,
+      minMintAmount: bigint
+    ) => {
+      console.log(`Mock: Building SOL deposit transaction for vault ${vaultId}`);
+      console.log(`Mock: SOL deposit amount: ${depositAmount.toString()} lamports`);
+      console.log(`Mock: Min mint amount: ${minMintAmount.toString()}`);
+      
+      const mockTransaction = new Transaction();
+      // Add a dummy instruction to make it a valid transaction with different data than SPL token deposit
+      mockTransaction.add(new web3.TransactionInstruction({
+        keys: [],
+        programId: new web3.PublicKey(mockSigner.address),
+        data: Buffer.from([1]) // Different opcode to distinguish from SPL deposit
+      }));
+      
+      return mockTransaction;
+    };
+    
+    // Create test data for SOL
+    const solDepositAmount = BigInt(1000000000); // 1 SOL in lamports
+    const solMinMintAmount = BigInt(900000000); // 0.9 shares
+    
+    // Test building a SOL deposit transaction
+    const solTransaction = await vault.buildDepositSolTransaction(
+      new web3.PublicKey(mockSigner.address),
+      1, // vaultId
+      solDepositAmount,
+      solMinMintAmount
+    );
+    
+    console.log(`✓ SOL deposit transaction build succeeded with ${solTransaction.instructions.length} instruction(s)`);
+    
+    // Verify the transaction has the expected structure
+    const solInstruction = solTransaction.instructions[0];
+    console.log(`  SOL instruction data: ${solInstruction.data.toString('hex')}`);
+    console.log(`  SOL instruction program ID: ${solInstruction.programId.toString()}`);
+  } catch (error) {
+    testFailures++;
+    console.error('✗ SOL deposit test failed:', error);
+  }
   
   // Test queue withdraw functionality
   try {
