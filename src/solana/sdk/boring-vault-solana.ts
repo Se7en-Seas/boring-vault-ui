@@ -385,6 +385,14 @@ export class BoringVaultSolana {
     depositAmount: bigint,
     minMintAmount: bigint
   ): Promise<web3.Transaction> {
+    // Validate input parameters
+    if (depositAmount <= BigInt(0)) {
+      throw new Error(`Invalid depositAmount: ${depositAmount.toString()}. Must be a positive non-zero value.`);
+    }
+    if (minMintAmount <= BigInt(0)) {
+      throw new Error(`Invalid minMintAmount: ${minMintAmount.toString()}. Must be a positive non-zero value.`);
+    }
+
     // Get common vault information
     const {
       vaultStatePDA,
@@ -840,6 +848,14 @@ export class BoringVaultSolana {
     depositAmount: bigint,
     minMintAmount: bigint
   ): Promise<web3.Transaction> {
+    // Validate input parameters
+    if (depositAmount <= BigInt(0)) {
+      throw new Error(`Invalid depositAmount: ${depositAmount.toString()}. Must be a positive non-zero value.`);
+    }
+    if (minMintAmount <= BigInt(0)) {
+      throw new Error(`Invalid minMintAmount: ${minMintAmount.toString()}. Must be a positive non-zero value.`);
+    }
+
     // Get common vault information
     const {
       vaultStatePDA,
