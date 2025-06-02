@@ -768,6 +768,121 @@ export class BoringVaultSolana {
     return transaction;
   }
 
+  /**
+   * Builds a deposit transaction for native SOL
+   */
+  async buildDepositSolTransaction(
+    payer: web3.PublicKey,
+    vaultId: number,
+    depositAmount: bigint,
+    minMintAmount: bigint
+  ): Promise<web3.Transaction> {
+    // Get the vault state PDA
+    const vaultStatePDA = await this.getVaultStatePDA(vaultId);
+    console.log(`DEBUG: Vault State PDA: ${vaultStatePDA.toString()}`);
+    
+    // Get the vault state to find deposit subaccount
+    const vaultState = await this.getVaultState(vaultId);
+    
+    // Get the vault PDA for the deposit subaccount
+    const vaultPDA = await this.getVaultPDA(vaultId, vaultState.depositSubAccount);
+    console.log(`DEBUG: Vault PDA (deposit sub-account ${vaultState.depositSubAccount}): ${vaultPDA.toString()}`);
+    
+    // Get the share token mint PDA
+    const shareMintPDA = await this.getShareTokenPDA(vaultStatePDA);
+    console.log(`DEBUG: Share Token Mint PDA: ${shareMintPDA.toString()}`);
+    
+    // Get the share mint account info to find the token program
+    const shareMintAddress = shareMintPDA.toBase58() as Address;
+    const shareMintResponse = await this.rpc.getAccountInfo(
+      shareMintAddress,
+      { encoding: 'base64' }
+    ).send();
+    
+    let shareMintProgram;
+    
+    if (shareMintResponse.value) {
+      // Extract the owner (token program) from the account info
+      shareMintProgram = new web3.PublicKey(shareMintResponse.value.owner);
+      console.log(`DEBUG: Share Mint Program: ${shareMintProgram.toString()}`);
+    } else {
+      throw new Error(`Could not retrieve share mint info for ${shareMintPDA.toString()}`);
+    }
+    
+    // For SOL deposits, the asset data PDA uses a zero address (32 bytes of zeros)
+    // This matches the IDL constant value for native SOL
+    const solAssetMint = new web3.PublicKey(new Uint8Array(32)); // Zero address for native SOL
+    const assetDataPDA = await this.getAssetDataPDA(vaultStatePDA, solAssetMint);
+    console.log(`DEBUG: SOL Asset Data PDA: ${assetDataPDA.toString()}`);
+    
+    // Get the user's associated token account for the share token
+    const userSharesATA = await getAssociatedTokenAddress(
+      shareMintPDA,    // mint
+      payer,           // owner
+      true,            // allowOwnerOffCurve
+      shareMintProgram, // programId - use shareMintProgram
+      ASSOCIATED_TOKEN_PROGRAM_ID // associatedTokenProgramId
+    );
+    console.log(`DEBUG: User's Share Token Account: ${userSharesATA.toString()}`);
+    
+    // Fetch the asset data to get the price feed
+    const assetDataAddress = assetDataPDA.toBase58() as Address;
+    const assetDataResponse = await this.rpc.getAccountInfo(
+      assetDataAddress,
+      { encoding: 'base64' }
+    ).send();
+    
+    if (!assetDataResponse.value || !assetDataResponse.value.data.length) {
+      throw new Error(`Asset data not found for SOL deposits`);
+    }
+    
+    // Parse asset data using the parseFullVaultData function
+    const assetDataBuffer = Buffer.from(assetDataResponse.value.data[0], 'base64');
+    const parsedAssetData = parseFullVaultData(assetDataBuffer);
+
+    // Get price feed address from the parsed asset data
+    if (!parsedAssetData.assetData || !parsedAssetData.assetData.priceFeed) {
+      throw new Error(`Price feed not found in asset data for SOL deposits`);
+    }
+    
+    const priceFeedAddress = parsedAssetData.assetData.priceFeed;
+    console.log(`DEBUG: Price Feed Address: ${priceFeedAddress.toString()}`);
+    
+    // Create deposit_sol instruction
+    const depositSolInstruction = new web3.TransactionInstruction({
+      programId: this.programId,
+      keys: [
+        { pubkey: payer, isSigner: true, isWritable: true },
+        { pubkey: new web3.PublicKey(TOKEN_2022_PROGRAM_ID), isSigner: false, isWritable: false },
+        { pubkey: web3.SystemProgram.programId, isSigner: false, isWritable: false },
+        { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+        { pubkey: vaultStatePDA, isSigner: false, isWritable: false },
+        { pubkey: vaultPDA, isSigner: false, isWritable: true },
+        { pubkey: assetDataPDA, isSigner: false, isWritable: false },
+        { pubkey: shareMintPDA, isSigner: false, isWritable: true },
+        { pubkey: userSharesATA, isSigner: false, isWritable: true },
+        { pubkey: priceFeedAddress, isSigner: false, isWritable: false },
+      ],
+      data: Buffer.concat([
+        this.getInstructionDiscriminator('deposit_sol'),
+        this.serializeDepositArgs(vaultId, depositAmount, minMintAmount)
+      ])
+    });
+    
+    console.log(`DEBUG: SOL Deposit Instruction accounts:`);
+    depositSolInstruction.keys.forEach((key, index) => {
+      console.log(`  [${index}] ${key.pubkey.toString()} (signer: ${key.isSigner}, writable: ${key.isWritable})`);
+    });
+    
+    // Create a new transaction
+    const transaction = new web3.Transaction();
+    
+    // Add the deposit_sol instruction to the transaction
+    transaction.add(depositSolInstruction);
+    
+    return transaction;
+  }
+
   // Add a private property to cache the last vault ID
   private _lastVaultId?: number;
 }

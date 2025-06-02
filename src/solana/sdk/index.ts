@@ -206,6 +206,84 @@ export class VaultSDK {
   }
 
   /**
+   * Deposits native SOL into a vault
+   * 
+   * @param wallet The wallet that will sign the transaction
+   * @param vaultId The ID of the vault to deposit into
+   * @param depositAmount The amount of SOL to deposit (in lamports)
+   * @param minMintAmount The minimum amount of shares to mint
+   * @param options Additional options for the deposit transaction
+   * @returns The transaction signature
+   */
+  async depositSol(
+    wallet: { publicKey: web3.PublicKey; signTransaction: (tx: web3.Transaction) => Promise<web3.Transaction> } | web3.Keypair,
+    vaultId: number,
+    depositAmount: bigint | string,
+    minMintAmount: bigint | string,
+    options: {
+      skipPreflight?: boolean;
+      maxRetries?: number;
+      skipStatusCheck?: boolean;
+    } = {}
+  ): Promise<string> {
+    // Convert string inputs to proper types
+    const amount = typeof depositAmount === 'string' 
+      ? BigInt(depositAmount) 
+      : depositAmount;
+    
+    const minAmount = typeof minMintAmount === 'string' 
+      ? BigInt(minMintAmount) 
+      : minMintAmount;
+    
+    try {
+      // Get the wallet's public key
+      const payerPublicKey = 'signTransaction' in wallet 
+        ? wallet.publicKey 
+        : wallet.publicKey;
+      
+      // Build the transaction using the core implementation
+      const transaction = await this.boringVault.buildDepositSolTransaction(
+        payerPublicKey,
+        vaultId,
+        amount,
+        minAmount
+      );
+      
+      // Add recent blockhash
+      const { blockhash } = await this.connection.getLatestBlockhash('confirmed');
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = payerPublicKey;
+      
+      // Sign the transaction
+      let signedTx: web3.Transaction;
+      if ('signTransaction' in wallet) {
+        // Using wallet adapter
+        signedTx = await wallet.signTransaction(transaction);
+      } else {
+        // Using keypair
+        transaction.sign(wallet);
+        signedTx = transaction;
+      }
+      
+      console.log('SOL deposit transaction signed, sending to network...');
+      
+      // Send transaction
+      const signature = await this.connection.sendRawTransaction(signedTx.serialize(), {
+        skipPreflight: options.skipPreflight || false,
+        preflightCommitment: 'confirmed'
+      });
+      
+      console.log(`SOL deposit transaction sent! Signature: ${signature}`);
+      console.log(`View on explorer: https://solscan.io/tx/${signature}`);
+
+      return signature;
+    } catch (error) {
+      console.error('SOL deposit error:', error);
+      throw new Error(`Failed to deposit SOL: ${error}`);
+    }
+  }
+
+  /**
    * Queues a withdraw request from a Boring Vault, which can later be fulfilled by external parties (solvers) at a discount
    * 
    * @param wallet The wallet that will sign the transaction

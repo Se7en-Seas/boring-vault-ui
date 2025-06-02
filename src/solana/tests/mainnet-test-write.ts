@@ -746,3 +746,191 @@ export async function checkQueueConfig(): Promise<string | undefined> {
     return undefined;
   }
 }
+
+export async function testDepositSol(): Promise<string | undefined> {
+  console.log('\n=== TESTING SOL DEPOSIT ===');
+  
+  try {
+    // Print constants for debugging
+    console.log('Constants used in test:');
+    console.log(`BORING_VAULT_PROGRAM_ID: ${BORING_VAULT_PROGRAM_ID}`);
+    
+    // Create service instance
+    const vaultService = new VaultSDK(MAINNET_CONFIG.rpcUrl);
+    const vaultPubkey = MAINNET_CONFIG.vaultPubkey;
+    
+    // Print key configuration
+    console.log('\nTest Configuration:');
+    console.log(`Vault Pubkey (from .env): ${vaultPubkey.toString()}`);
+    
+    // Load signer for transaction signing
+    const signer = await loadKeypair();
+    console.log(`Using signer: ${signer.address}`);
+    
+    // Get vault data to extract vault ID
+    console.log(`\nFetching data for vault: ${vaultPubkey.toString()}`);
+    const vaultData = await vaultService.getVaultData(vaultPubkey);
+    const vaultId = Number(vaultData.vaultState.vaultId);
+    console.log(`Vault ID: ${vaultId}`);
+    console.log(`Vault Authority: ${vaultData.vaultState.authority.toString()}`);
+    console.log(`Paused: ${vaultData.vaultState.paused}`);
+    console.log(`Deposit Sub-Account: ${vaultData.vaultState.depositSubAccount}`);
+    console.log(`Withdraw Sub-Account: ${vaultData.vaultState.withdrawSubAccount}`);
+    
+    // Check asset data if available
+    if (vaultData.tellerState) {
+      console.log('\nTeller State:');
+      console.log(`Base Asset: ${vaultData.tellerState.baseAsset.toString()}`);
+      console.log(`Exchange Rate: ${vaultData.tellerState.exchangeRate.toString()}`);
+      console.log(`Exchange Rate Provider: ${vaultData.tellerState.exchangeRateProvider.toString()}`);
+    }
+    
+    // Create a direct web3.js connection for transaction sending
+    const connection = createConnection();
+    
+    // Check user's SOL balance
+    const signerAddress = signer.address;
+    const solBalanceResponse = await solanaClient.rpc.getBalance(signerAddress).send();
+    const solBalance = Number(solBalanceResponse.value);
+    console.log(`> Found SOL balance: ${solBalance} lamports (${solBalance / 1e9} SOL)`);
+    
+    // Always use fixed amount of 0.001 SOL (small amount for testing)
+    const depositAmount = 0.001;
+    const maxDepositAmount = solBalance / 1e9;
+    
+    // Validate the amount is within limits (reserve some SOL for transaction fees)
+    const reserveForFees = 0.01; // Reserve 0.01 SOL for fees
+    if (depositAmount > (maxDepositAmount - reserveForFees)) {
+      console.log(`❌ Insufficient SOL balance. Need ${depositAmount} SOL but only have ${maxDepositAmount - reserveForFees} available (reserving ${reserveForFees} for fees)`);
+      return;
+    }
+    
+    console.log(`Using amount: ${depositAmount} SOL`);
+    
+    // Convert to lamports
+    const depositLamports = BigInt(Math.floor(depositAmount * 1e9));
+    console.log(`Deposit amount: ${depositAmount} SOL (${depositLamports} lamports)`);
+    
+    // Calculate minimum shares to receive (applying 5% slippage tolerance)
+    const minMintAmount = depositLamports * BigInt(95) / BigInt(100);
+    console.log(`Minimum shares to receive: ${minMintAmount} (5% slippage tolerance)`);
+    
+    // Load keypair from file for signing
+    const keypairPath = process.env.KEYPAIR_PATH || '';
+    if (!keypairPath) {
+      throw new Error('Keypair path not provided. Set KEYPAIR_PATH in .env file');
+    }
+    
+    const keyData = JSON.parse(fs.readFileSync(keypairPath, 'utf-8'));
+    const keypair = web3.Keypair.fromSecretKey(new Uint8Array(keyData));
+    
+    console.log('\nExecuting SOL deposit transaction...');
+    
+    // Use the enhanced depositSol function from VaultSDK
+    try {
+      const signature = await vaultService.depositSol(
+        keypair, // Pass the keypair directly
+        vaultId,
+        depositLamports,
+        minMintAmount,
+        {
+          skipPreflight: true, // Skip preflight to avoid rejections for valid transactions
+          maxRetries: 30
+        }
+      );
+      
+      // Poll for transaction status
+      console.log('Polling for transaction status...');
+      const maxAttempts = 30;
+      
+      // Poll transaction status
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+          const response = await connection.getSignatureStatuses([signature]);
+          const status = response.value[0];
+          
+          if (status) {
+            if (status.err) {
+              console.error(`Transaction failed: ${JSON.stringify(status.err)}`);
+              throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+            }
+            
+            if (status.confirmationStatus === 'finalized' || status.confirmationStatus === 'confirmed') {
+              console.log(`Transaction ${status.confirmationStatus}!`);
+              
+              // Get transaction details for debugging
+              try {
+                const txDetails = await connection.getTransaction(signature, {
+                  maxSupportedTransactionVersion: 0,
+                });
+                
+                if (txDetails && txDetails.meta) {
+                  if (txDetails.meta.err) {
+                    console.error(`Transaction error: ${JSON.stringify(txDetails.meta.err)}`);
+                  } else {
+                    console.log('SOL deposit transaction successful!');
+                    
+                    // Log token balance changes if available
+                    if (txDetails.meta.postTokenBalances && txDetails.meta.preTokenBalances) {
+                      console.log('Token balance changes:');
+                      txDetails.meta.postTokenBalances.forEach((postBalance) => {
+                        const preBalance = txDetails.meta?.preTokenBalances?.find(
+                          (pre) => pre.accountIndex === postBalance.accountIndex
+                        );
+                        
+                        if (preBalance) {
+                          const change = (postBalance.uiTokenAmount.uiAmount || 0) - 
+                                        (preBalance.uiTokenAmount.uiAmount || 0);
+                          console.log(`  Mint: ${postBalance.mint}, Change: ${change}`);
+                        }
+                      });
+                    }
+                    
+                    // Log SOL balance changes
+                    if (txDetails.meta.postBalances && txDetails.meta.preBalances) {
+                      console.log('SOL balance changes:');
+                      txDetails.meta.postBalances.forEach((postBalance, index) => {
+                        const preBalance = txDetails.meta?.preBalances?.[index] || 0;
+                        const change = postBalance - preBalance;
+                        if (change !== 0) {
+                          console.log(`  Account ${index}: ${change / 1e9} SOL change`);
+                        }
+                      });
+                    }
+                  }
+                }
+              } catch (detailsError) {
+                console.warn(`Could not fetch transaction details: ${detailsError}`);
+              }
+              
+              return signature;
+            }
+          }
+          
+          // Wait before next poll
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          process.stdout.write('.');
+        } catch (error) {
+          console.warn(`Error checking transaction status (attempt ${attempt + 1}/${maxAttempts}): ${error}`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+      
+      return signature;
+    } catch (error: any) {
+      console.error('\nError executing SOL deposit:', error);
+      
+      if (error.logs) {
+        console.log('\nTransaction logs:');
+        error.logs.forEach((log: string, i: number) => {
+          console.log(`[${i}] ${log}`);
+        });
+      }
+      
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error testing SOL deposit:', error);
+    return undefined;
+  }
+}
