@@ -156,6 +156,14 @@ export class VaultSDK {
       ? BigInt(minMintAmount) 
       : minMintAmount;
     
+    // Validate input parameters
+    if (amount <= BigInt(0)) {
+      throw new Error(`Invalid depositAmount: ${amount.toString()}. Must be a positive non-zero value.`);
+    }
+    if (minAmount <= BigInt(0)) {
+      throw new Error(`Invalid minMintAmount: ${minAmount.toString()}. Must be a positive non-zero value.`);
+    }
+    
     try {
       // Get the wallet's public key
       const payerPublicKey = 'signTransaction' in wallet 
@@ -234,6 +242,14 @@ export class VaultSDK {
     const minAmount = typeof minMintAmount === 'string' 
       ? BigInt(minMintAmount) 
       : minMintAmount;
+    
+    // Validate input parameters
+    if (amount <= BigInt(0)) {
+      throw new Error(`Invalid depositAmount: ${amount.toString()}. Must be a positive non-zero value.`);
+    }
+    if (minAmount <= BigInt(0)) {
+      throw new Error(`Invalid minMintAmount: ${minAmount.toString()}. Must be a positive non-zero value.`);
+    }
     
     try {
       // Get the wallet's public key

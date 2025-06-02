@@ -14,7 +14,8 @@ import {
   BASE_SEED_USER_WITHDRAW_STATE,
   BORING_VAULT_PROGRAM_ID,
   BORING_QUEUE_PROGRAM_ID,
-  TOKEN_2022_PROGRAM_ID
+  TOKEN_2022_PROGRAM_ID,
+  NATIVE_SOL_MINT
 } from '../utils/constants';
 import { BalanceInfo, BoringVaultSolanaConfig } from '../types';
 import { parseFullVaultData } from './vault-state';
@@ -864,9 +865,9 @@ export class BoringVaultSolana {
       shareMintProgram
     } = await this.getCommonVaultInfo(vaultId);
     
-    // For SOL deposits, the asset data PDA uses a zero address (32 bytes of zeros)
+    // For SOL deposits, use the native SOL mint constant (zero address)
     // This matches the IDL constant value for native SOL
-    const solAssetMint = new web3.PublicKey(new Uint8Array(32)); // Zero address for native SOL
+    const solAssetMint = new web3.PublicKey(NATIVE_SOL_MINT);
     
     // Get asset data and price feed information for SOL
     const { assetDataPDA, priceFeedAddress } = await this.getAssetDataInfo(

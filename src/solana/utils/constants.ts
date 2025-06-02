@@ -11,6 +11,9 @@ export const BASE_SEED_USER_WITHDRAW_STATE = 'boring-queue-user-withdraw-state';
 // Default values
 export const DEFAULT_DECIMALS = 9; 
 
+// Special addresses
+export const NATIVE_SOL_MINT = new Uint8Array(32); // Zero address for native SOL
+
 // Token addresses
 export const JITO_SOL_MINT_ADDRESS = 'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn';
 export const JITO_SOL_PRICE_FEED_ADDRESS = '4Z1SLH9g4ikNBV8uP2ZctEouqjYmVqB2Tz5SZxKYBN7z'; 
