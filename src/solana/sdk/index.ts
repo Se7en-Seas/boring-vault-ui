@@ -162,7 +162,7 @@ export class VaultSDK {
         ? wallet.publicKey 
         : wallet.publicKey;
       
-      // Build the transaction using the core implementation
+      // Build the deposit transaction using the core implementation
       const transaction = await this.boringVault.buildDepositTransaction(
         payerPublicKey,
         vaultId,
