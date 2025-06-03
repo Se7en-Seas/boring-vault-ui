@@ -58,30 +58,59 @@ export async function testOracleCrank(): Promise<string | undefined> {
     };
     
     try {
-      // Get Switchboard crank instructions (always returns instructions since we removed staleness check)
-      const crankInstructions = await getSwitchboardCrankInstruction(switchboardConfig);
+      // Get Switchboard crank instructions (returns object with instructions and lookup tables)
+      const crankResult = await getSwitchboardCrankInstruction(switchboardConfig);
       
-      console.log(`✓ Generated ${crankInstructions.length} Switchboard crank instructions for 3 oracle responses`);
+      console.log(`✓ Generated ${crankResult.instructions.length} Switchboard crank instructions for 3 oracle responses`);
+      console.log(`✓ Got ${crankResult.lookupTables.length} lookup tables`);
       
       // Create transaction with just the crank instructions
       const transaction = new web3.Transaction();
-      transaction.add(...crankInstructions);
+      transaction.add(...crankResult.instructions);
       
       // Add recent blockhash
       const { blockhash } = await connection.getLatestBlockhash('confirmed');
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = keypair.publicKey;
       
-      // Sign the transaction
-      transaction.sign(keypair);
+      // Check if we need versioned transaction for size optimization
+      const serializedSize = transaction.serialize({ requireAllSignatures: false }).length;
+      console.log(`Transaction size: ${serializedSize} bytes`);
       
-      console.log('\nSending oracle crank transaction...');
+      let signature: string;
       
-      // Send transaction
-      const signature = await connection.sendRawTransaction(transaction.serialize(), {
-        skipPreflight: true, // Skip preflight to avoid rejections for valid transactions
-        preflightCommitment: 'confirmed'
-      });
+      if (serializedSize > 1232 && crankResult.lookupTables.length > 0) {
+        console.log('🔄 Using Versioned Transaction with lookup tables...');
+        
+        // Create versioned transaction message
+        const message = new web3.TransactionMessage({
+          payerKey: keypair.publicKey,
+          recentBlockhash: blockhash,
+          instructions: crankResult.instructions,
+        }).compileToV0Message(crankResult.lookupTables);
+        
+        // Create versioned transaction
+        const versionedTx = new web3.VersionedTransaction(message);
+        versionedTx.sign([keypair]);
+        
+        // Send versioned transaction
+        signature = await connection.sendRawTransaction(versionedTx.serialize(), {
+          skipPreflight: true, // Skip preflight to avoid rejections for valid transactions
+          preflightCommitment: 'confirmed'
+        });
+        
+      } else {
+        console.log('🔄 Using Legacy Transaction...');
+        
+        // Sign the legacy transaction
+        transaction.sign(keypair);
+        
+        // Send legacy transaction
+        signature = await connection.sendRawTransaction(transaction.serialize(), {
+          skipPreflight: true, // Skip preflight to avoid rejections for valid transactions
+          preflightCommitment: 'confirmed'
+        });
+      }
       
       console.log(`Transaction sent! Signature: ${signature}`);
       console.log(`View on explorer: https://solscan.io/tx/${signature}`);
