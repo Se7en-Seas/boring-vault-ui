@@ -8,8 +8,13 @@ import {
 import { createSolanaClient, type SolanaClient, Address } from 'gill';
 import { 
   JITO_SOL_MINT_ADDRESS,
-  DEFAULT_DECIMALS
+  DEFAULT_DECIMALS,
+  JITO_SOL_PRICE_FEED_ADDRESS
 } from '../utils/constants';
+import {
+  bundleSwitchboardCrank,
+  type SwitchboardCrankConfig
+} from '../utils/switchboard-crank';
 
 /**
  * Vault SDK adapter for mainnet testing
@@ -214,7 +219,7 @@ export class VaultSDK {
   }
 
   /**
-   * Deposits native SOL into a vault
+   * Deposits native SOL into a vault with automatic oracle cranking
    * 
    * @param wallet The wallet that will sign the transaction
    * @param vaultId The ID of the vault to deposit into
@@ -232,6 +237,7 @@ export class VaultSDK {
       skipPreflight?: boolean;
       maxRetries?: number;
       skipStatusCheck?: boolean;
+      enableOracleCrank?: boolean; // New option to enable/disable oracle cranking
     } = {}
   ): Promise<string> {
     // Convert string inputs to proper types
@@ -257,37 +263,110 @@ export class VaultSDK {
         ? wallet.publicKey 
         : wallet.publicKey;
       
-      // Build the transaction using the core implementation
-      const transaction = await this.boringVault.buildDepositSolTransaction(
+      // Build the base deposit transaction
+      const baseTransaction = await this.boringVault.buildDepositSolTransaction(
         payerPublicKey,
         vaultId,
         amount,
         minAmount
       );
       
-      // Add recent blockhash
-      const { blockhash } = await this.connection.getLatestBlockhash('confirmed');
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = payerPublicKey;
+      let finalTransaction: web3.Transaction;
+      let lookupTables: any[] = [];
       
-      // Sign the transaction
-      let signedTx: web3.Transaction;
-      if ('signTransaction' in wallet) {
-        // Using wallet adapter
-        signedTx = await wallet.signTransaction(transaction);
+      // Add oracle cranking (enabled by default)
+      if (options.enableOracleCrank !== false) {
+        console.log('Adding automatic oracle cranking to SOL deposit with 3 responses...');
+        
+        try {
+          // Configure Switchboard cranking for jitoSOL price feed with 3 responses
+          const switchboardConfig: SwitchboardCrankConfig = {
+            connection: this.connection,
+            feedAddress: new web3.PublicKey(JITO_SOL_PRICE_FEED_ADDRESS),
+            payer: payerPublicKey,
+            numResponses: 3 // Always use 3 oracle responses
+          };
+          
+          // Bundle the oracle crank with the deposit transaction
+          const bundledResult = await bundleSwitchboardCrank(
+            switchboardConfig,
+            baseTransaction.instructions
+          );
+          
+          console.log(`✓ Added ${bundledResult.instructions.length - baseTransaction.instructions.length} oracle crank instructions`);
+          
+          // Create a new transaction with bundled instructions
+          finalTransaction = new web3.Transaction();
+          finalTransaction.add(...bundledResult.instructions);
+          lookupTables = bundledResult.lookupTables;
+          
+        } catch (oracleError) {
+          console.warn('Oracle cranking failed, proceeding with deposit only:', oracleError);
+          // Fallback to base transaction if oracle cranking fails
+          finalTransaction = baseTransaction;
+        }
       } else {
-        // Using keypair
-        transaction.sign(wallet);
-        signedTx = transaction;
+        console.log('Oracle cranking disabled, using deposit-only transaction');
+        finalTransaction = baseTransaction;
       }
       
-      console.log('SOL deposit transaction signed, sending to network...');
+      // Add recent blockhash
+      const { blockhash } = await this.connection.getLatestBlockhash('confirmed');
+      finalTransaction.recentBlockhash = blockhash;
+      finalTransaction.feePayer = payerPublicKey;
       
-      // Send transaction
-      const signature = await this.connection.sendRawTransaction(signedTx.serialize(), {
-        skipPreflight: options.skipPreflight || false,
-        preflightCommitment: 'confirmed'
-      });
+      // Check transaction size and use versioned transaction if needed
+      const serializedSize = finalTransaction.serialize({ requireAllSignatures: false }).length;
+      console.log(`Transaction size: ${serializedSize} bytes`);
+      
+      let signature: string;
+      
+      if (serializedSize > 1232 && lookupTables.length > 0) {
+        console.log('🔄 Using Versioned Transaction with lookup tables for large transaction...');
+        
+        // Create versioned transaction message
+        const message = new web3.TransactionMessage({
+          payerKey: payerPublicKey,
+          recentBlockhash: blockhash,
+          instructions: finalTransaction.instructions,
+        }).compileToV0Message(lookupTables);
+        
+        // Create versioned transaction
+        const versionedTx = new web3.VersionedTransaction(message);
+        
+        // Sign the versioned transaction
+        if ('signTransaction' in wallet) {
+          throw new Error('Versioned transactions with wallet adapter not yet supported. Please use smaller transactions or disable oracle cranking.');
+        } else {
+          versionedTx.sign([wallet]);
+        }
+        
+        // Send versioned transaction
+        signature = await this.connection.sendRawTransaction(versionedTx.serialize(), {
+          skipPreflight: options.skipPreflight || false,
+          preflightCommitment: 'confirmed'
+        });
+        
+      } else {
+        console.log('🔄 Using Legacy Transaction...');
+        
+        // Sign the transaction
+        let signedTx: web3.Transaction;
+        if ('signTransaction' in wallet) {
+          // Using wallet adapter
+          signedTx = await wallet.signTransaction(finalTransaction);
+        } else {
+          // Using keypair
+          finalTransaction.sign(wallet);
+          signedTx = finalTransaction;
+        }
+        
+        // Send transaction
+        signature = await this.connection.sendRawTransaction(signedTx.serialize(), {
+          skipPreflight: options.skipPreflight || false,
+          preflightCommitment: 'confirmed'
+        });
+      }
       
       console.log(`SOL deposit transaction sent! Signature: ${signature}`);
       console.log(`View on explorer: https://solscan.io/tx/${signature}`);
