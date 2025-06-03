@@ -4,7 +4,8 @@ import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   AccountLayout,
   MintLayout,
-  getAssociatedTokenAddress
+  getAssociatedTokenAddress,
+  createAssociatedTokenAccountIdempotentInstruction
 } from '@solana/spl-token';
 import { 
   BASE_SEED_BORING_VAULT_STATE, 
@@ -420,6 +421,47 @@ export class BoringVaultSolana {
     // Get user's share token account
     const userSharesATA = await this.getUserSharesAccount(payer, shareMintPDA, shareMintProgram);
     
+    // Determine token program for the deposit mint
+    const mintAddress = depositMint.toBase58() as Address;
+    const mintResponse = await this.rpc.getAccountInfo(
+      mintAddress,
+      { encoding: 'base64' }
+    ).send();
+    
+    let tokenProgram = TOKEN_PROGRAM_ID;
+    if (mintResponse.value) {
+      tokenProgram = new web3.PublicKey(mintResponse.value.owner);
+    }
+    
+    // Create a new transaction
+    const transaction = new web3.Transaction();
+    
+    // Check if accounts exist and create them if needed
+    const accountsToCheck = [
+      { address: userATA, owner: payer, mint: depositMint, tokenProgram, description: "User's deposit token account" },
+      { address: vaultATA, owner: vaultPDA, mint: depositMint, tokenProgram, description: "Vault's deposit token account" },
+    ];
+    
+    for (const account of accountsToCheck) {
+      const exists = await this.doesAccountExist(account.address);
+      if (!exists) {
+        console.log(`Creating ${account.description}: ${account.address.toString()}`);
+        
+        const createATAInstruction = createAssociatedTokenAccountIdempotentInstruction(
+          payer,           // payer
+          account.address, // associatedToken
+          account.owner,   // owner
+          account.mint,    // mint
+          account.tokenProgram, // programId
+          ASSOCIATED_TOKEN_PROGRAM_ID // associatedTokenProgramId
+        );
+        
+        transaction.add(createATAInstruction);
+      } else {
+        console.log(`${account.description} already exists: ${account.address.toString()}`);
+      }
+    }
+    
     // Create deposit instruction
     const depositInstruction = new web3.TransactionInstruction({
       programId: this.programId,
@@ -449,9 +491,6 @@ export class BoringVaultSolana {
     depositInstruction.keys.forEach((key, index) => {
       console.log(`  [${index}] ${key.pubkey.toString()} (signer: ${key.isSigner}, writable: ${key.isWritable})`);
     });
-    
-    // Create a new transaction
-    const transaction = new web3.Transaction();
     
     // Add the deposit instruction to the transaction
     transaction.add(depositInstruction);
