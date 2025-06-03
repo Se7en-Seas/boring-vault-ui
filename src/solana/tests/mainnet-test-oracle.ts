@@ -4,7 +4,6 @@ import * as fs from 'fs';
 // Import shared utilities
 import { 
   MAINNET_CONFIG, 
-  loadKeypair,
   createConnection,
 } from './mainnet-test-utils';
 
@@ -30,10 +29,6 @@ export async function testOracleCrank(): Promise<string | undefined> {
     console.log('Oracle Configuration:');
     console.log(`JITO_SOL_PRICE_FEED_ADDRESS: ${JITO_SOL_PRICE_FEED_ADDRESS}`);
     
-    // Load signer for transaction signing
-    const signer = await loadKeypair();
-    console.log(`Using signer: ${signer.address}`);
-    
     // Load keypair from file for signing
     const keypairPath = process.env.KEYPAIR_PATH || '';
     if (!keypairPath) {
@@ -42,6 +37,7 @@ export async function testOracleCrank(): Promise<string | undefined> {
     
     const keyData = JSON.parse(fs.readFileSync(keypairPath, 'utf-8'));
     const keypair = web3.Keypair.fromSecretKey(new Uint8Array(keyData));
+    console.log(`Using signer: ${keypair.publicKey.toString()}`);
     
     // Create a direct web3.js connection for transaction sending
     const connection = createConnection();
@@ -53,7 +49,6 @@ export async function testOracleCrank(): Promise<string | undefined> {
       connection: connection,
       feedAddress: new web3.PublicKey(JITO_SOL_PRICE_FEED_ADDRESS),
       payer: keypair.publicKey,
-      maxStaleness: 300, // 5 minutes
       numResponses: 3 // Require 3 oracle responses for proper price aggregation
     };
     

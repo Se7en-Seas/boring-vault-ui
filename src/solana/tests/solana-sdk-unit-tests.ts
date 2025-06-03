@@ -20,8 +20,6 @@ import {
 import {
   getSwitchboardCrankInstruction,
   bundleSwitchboardCrank,
-  needsSwitchboardUpdate,
-  getSwitchboardValue,
   type SwitchboardCrankConfig
 } from '../utils/switchboard-crank';
 
@@ -420,9 +418,7 @@ async function testSwitchboardFunctionality() {
     connection,
     feedAddress,
     payer: mockPayer,
-    maxStaleness: 300,
-    numSignatures: 1,
-    mockMode: true // Enable mock mode for local testing
+    numResponses: 1
   };
   
   // Test 1: Test getSwitchboardCrankInstruction
@@ -430,13 +426,13 @@ async function testSwitchboardFunctionality() {
     console.log('\nTest 9: Testing getSwitchboardCrankInstruction...');
     console.log(`Using feed address: ${feedAddress.toString()}`);
     
-    const instructions = await getSwitchboardCrankInstruction(config);
+    const result = await getSwitchboardCrankInstruction(config);
     
-    if (instructions) {
-      console.log(`✓ Generated ${instructions.length} Switchboard crank instructions`);
+    if (result && result.instructions) {
+      console.log(`✓ Generated ${result.instructions.length} Switchboard crank instructions`);
       
       // Validate instruction structure
-      instructions.forEach((ix, index) => {
+      result.instructions.forEach((ix: any, index: number) => {
         console.log(`  Instruction ${index + 1}:`);
         console.log(`    Program ID: ${ix.programId.toString()}`);
         console.log(`    Accounts: ${ix.keys.length}`);
@@ -464,12 +460,12 @@ async function testSwitchboardFunctionality() {
       })
     ];
     
-    const bundledInstructions = await bundleSwitchboardCrank(config, mockInstructions);
+    const bundledResult = await bundleSwitchboardCrank(config, mockInstructions);
     
-    console.log(`✓ Bundled ${bundledInstructions.length} total instructions`);
+    console.log(`✓ Bundled ${bundledResult.instructions.length} total instructions`);
     
     // The result should include at least the mock instructions
-    const hasOriginalInstructions = bundledInstructions.some(ix => 
+    const hasOriginalInstructions = bundledResult.instructions.some((ix: any) => 
       ix.data.toString('utf-8').includes('mock_deposit_instruction')
     );
     console.log(`✓ Original instructions preserved: ${hasOriginalInstructions}`);
@@ -477,38 +473,6 @@ async function testSwitchboardFunctionality() {
   } catch (error) {
     console.log(`ℹ️ Test 10 expected behavior: ${error}`);
     console.log('✓ Test correctly handles bundling with non-existent feed');
-  }
-  
-  // Test 3: Test needsSwitchboardUpdate (with mock to avoid network calls)
-  try {
-    console.log('\nTest 11: Testing needsSwitchboardUpdate...');
-    
-    // For this test, we'll mock the staleness check to avoid network dependency
-    const needsUpdate = true; // Mock result
-    console.log(`✓ Feed needs update check result: ${needsUpdate} (mocked)`);
-    console.log('✓ needsSwitchboardUpdate function executed successfully');
-    
-  } catch (error) {
-    testFailures++;
-    console.error('✗ Test 11 failed:', error);
-  }
-  
-  // Test 4: Test getSwitchboardValue (mocked)
-  try {
-    console.log('\nTest 12: Testing getSwitchboardValue...');
-    
-    // Mock the value since we can't connect to the network
-    const mockValue = {
-      value: 105.67,
-      slot: 12345678
-    };
-    
-    console.log(`✓ Retrieved feed value: $${mockValue.value.toFixed(2)} at slot ${mockValue.slot} (mocked)`);
-    console.log('✓ getSwitchboardValue function executed successfully');
-    
-  } catch (error) {
-    testFailures++;
-    console.error('✗ Test 12 failed:', error);
   }
   
   // Test 5: Test instruction bundling pattern (integration test)
@@ -526,15 +490,15 @@ async function testSwitchboardFunctionality() {
     });
     
     // Bundle Switchboard crank with deposit
-    const fullTransaction = await bundleSwitchboardCrank(config, [depositInstruction]);
+    const fullTransactionResult = await bundleSwitchboardCrank(config, [depositInstruction]);
     
-    console.log(`✓ Created complete transaction with ${fullTransaction.length} instructions`);
+    console.log(`✓ Created complete transaction with ${fullTransactionResult.instructions.length} instructions`);
     
     // Verify the structure
     let hasSwitchboardInstructions = false;
     let hasDepositInstruction = false;
     
-    fullTransaction.forEach((ix, index) => {
+    fullTransactionResult.instructions.forEach((ix: any, index: number) => {
       const dataStr = ix.data.toString('utf-8');
       if (dataStr.includes('secp256k1') || dataStr.includes('switchboard')) {
         hasSwitchboardInstructions = true;

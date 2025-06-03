@@ -29,8 +29,6 @@ export interface SwitchboardCrankConfig {
   feedAddress: PublicKey;
   /** Wallet public key that will pay for the transaction */
   payer: PublicKey;
-  /** Maximum staleness in seconds (optional, defaults to 300) */
-  maxStaleness?: number;
   /** Number of oracle responses to require (optional, defaults to 3) */
   numResponses?: number;
   /** Gateway URL (optional, defaults to Switchboard's mainnet gateway) */
@@ -169,92 +167,4 @@ export async function bundleSwitchboardCrank(
     instructions: [...crankInstructions, ...otherInstructions],
     lookupTables
   };
-}
-
-/**
- * Utility function to check if a Switchboard feed needs updating
- * 
- * @param connection Solana connection
- * @param feedAddress Feed address to check
- * @param maxStaleness Maximum staleness in seconds
- * @returns Promise<boolean> - True if feed needs updating
- */
-export async function needsSwitchboardUpdate(
-  connection: Connection,
-  feedAddress: PublicKey,
-  maxStaleness: number = 300
-): Promise<boolean> {
-  try {
-    if (!hasRealSwitchboard || !SwitchboardSDK) {
-      throw new Error('Switchboard SDK is not available');
-    }
-    
-    return await checkRealFeedStaleness(connection, feedAddress, maxStaleness);
-  } catch (error) {
-    console.warn('Error checking Switchboard feed staleness:', error);
-    // If we can't check, assume it needs updating to be safe
-    return true;
-  }
-}
-
-/**
- * Check real feed staleness using Switchboard SDK
- */
-async function checkRealFeedStaleness(
-  connection: Connection,
-  feedAddress: PublicKey,
-  maxStaleness: number
-): Promise<boolean> {
-  try {
-    // For now, always return true since staleness checking is complex
-    // In production, this would parse the feed account data properly
-    console.log(`Assuming feed ${feedAddress.toString()} needs update (staleness check not implemented)`);
-    return true;
-    
-  } catch (error) {
-    console.warn('Error in real staleness check:', error);
-    return true;
-  }
-}
-
-/**
- * Utility function to get the current value from a Switchboard feed
- * 
- * @param connection Solana connection
- * @param feedAddress Feed address to read from
- * @returns Promise<{ value: number; slot: number } | null> - Current feed value or null if unavailable
- */
-export async function getSwitchboardValue(
-  connection: Connection,
-  feedAddress: PublicKey
-): Promise<{ value: number; slot: number } | null> {
-  try {
-    if (!hasRealSwitchboard || !SwitchboardSDK) {
-      throw new Error('Switchboard SDK is not available');
-    }
-    
-    return await getRealSwitchboardValue(connection, feedAddress);
-  } catch (error) {
-    console.warn('Error reading Switchboard feed value:', error);
-    return null;
-  }
-}
-
-/**
- * Get real Switchboard value using SDK
- */
-async function getRealSwitchboardValue(
-  connection: Connection,
-  feedAddress: PublicKey
-): Promise<{ value: number; slot: number } | null> {
-  try {
-    // For now, return null since value reading is complex
-    // In production, this would use the proper SDK methods
-    console.log(`Reading feed value not implemented for ${feedAddress.toString()}`);
-    return null;
-    
-  } catch (error) {
-    console.warn('Error reading real Switchboard feed:', error);
-    return null;
-  }
 } 
