@@ -20,6 +20,11 @@ import {
   fetchUserShares
 } from './mainnet-test-read';
 
+// Import oracle operations
+import {
+  testOracleCrank
+} from './mainnet-test-oracle';
+
 // Load environment variables
 dotenv.config();
 
@@ -40,6 +45,7 @@ function displayHelpText(errorMessage?: string): void {
   console.log('  5. deposit-sol - Test SOL deposit functionality');
   console.log('  6. queue-withdraw - Test queue withdraw functionality');
   console.log('  7. check-queue-config - Check the queue program configuration');
+  console.log('  8. oracle - Test Switchboard oracle cranking');
   console.log('\nRun with a command to execute that test. Example: node dist/src/solana/tests/mainnet-test.js queue-withdraw');
 }
 
@@ -78,6 +84,8 @@ async function main() {
       executeTest(() => testQueueWithdraw());
     } else if (command === 'check-queue-config') {
       executeTest(() => checkQueueConfig());
+    } else if (command === 'oracle') {
+      executeTest(() => testOracleCrank());
     } else if (!command) {
       // Show help instead of entering interactive mode
       displayHelpText();
