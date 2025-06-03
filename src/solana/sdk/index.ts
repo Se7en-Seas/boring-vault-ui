@@ -315,13 +315,28 @@ export class VaultSDK {
       finalTransaction.recentBlockhash = blockhash;
       finalTransaction.feePayer = payerPublicKey;
       
-      // Check transaction size and use versioned transaction if needed
-      const serializedSize = finalTransaction.serialize({ requireAllSignatures: false }).length;
-      console.log(`Transaction size: ${serializedSize} bytes`);
+      // Check if we should use versioned transaction based on lookup tables availability
+      // and estimated size (avoid serializing large transactions that will fail)
+      let useVersionedTransaction = false;
+      let serializedSize = 0;
+      
+      try {
+        // Try to get transaction size safely
+        serializedSize = finalTransaction.serialize({ requireAllSignatures: false }).length;
+        console.log(`Transaction size: ${serializedSize} bytes`);
+        
+        // Use versioned transaction if size is too large and we have lookup tables
+        useVersionedTransaction = (serializedSize > 1232 && lookupTables.length > 0);
+      } catch (sizeError) {
+        // If serialization fails due to size, assume we need versioned transaction
+        console.log('Transaction too large for legacy format, using versioned transaction');
+        useVersionedTransaction = (lookupTables.length > 0);
+        serializedSize = 1400; // Estimate for logging
+      }
       
       let signature: string;
       
-      if (serializedSize > 1232 && lookupTables.length > 0) {
+      if (useVersionedTransaction) {
         console.log('🔄 Using Versioned Transaction with lookup tables for large transaction...');
         
         // Create versioned transaction message

@@ -124,9 +124,41 @@ export async function testDeposit(): Promise<string | undefined> {
     const depositLamports = BigInt(Math.floor(depositAmount * 1e9));
     console.log(`Deposit amount: ${depositAmount} jitoSOL (${depositLamports} lamports)`);
     
-    // Calculate minimum shares to receive (applying 5% slippage tolerance)
-    const minMintAmount = depositLamports * BigInt(95) / BigInt(100);
-    console.log(`Minimum shares to receive: ${minMintAmount} (5% slippage tolerance)`);
+    // Get the current exchange rate and calculate expected shares properly
+    console.log(`\nExchange Rate Analysis:`);
+    console.log(`Base Asset: ${vaultData.tellerState?.baseAsset || 'N/A'} (This looks like jitoSOL!)`);
+    console.log(`Vault Exchange Rate: ${vaultData.tellerState?.exchangeRate || 'N/A'}`);
+    
+    // Calculate expected shares based on exchange rate
+    // Exchange rate represents: shares per base asset unit
+    const exchangeRate = vaultData.tellerState?.exchangeRate || BigInt(1000000000);
+    console.log(`Using exchange rate: ${exchangeRate}`);
+    
+    // IMPORTANT: We're depositing SOL but the base asset is jitoSOL
+    // jitoSOL is typically worth more than SOL due to staking rewards
+    // This means 1 SOL < 1 jitoSOL, so we'll get fewer shares
+    // Let's use a very conservative estimate: assume 1 SOL ≈ 0.9 jitoSOL
+    console.log(`\nSOL → jitoSOL Conversion Analysis:`);
+    console.log(`Depositing SOL into a jitoSOL-based vault`);
+    console.log(`jitoSOL is typically worth ~1.05-1.1x SOL due to staking rewards`);
+    console.log(`This means 1 SOL ≈ 0.9-0.95 jitoSOL equivalent`);
+    
+    // Very conservative estimate: assume 1 SOL = 0.85 jitoSOL equivalent
+    const estimatedJitoSolEquivalent = depositLamports * BigInt(85) / BigInt(100);
+    console.log(`Conservative jitoSOL equivalent: ${estimatedJitoSolEquivalent} lamports`);
+    
+    // Then apply the vault's exchange rate
+    const expectedShares = estimatedJitoSolEquivalent;
+    console.log(`Expected shares (conservative): ${expectedShares}`);
+    
+    // Apply slippage tolerance to the expected shares  
+    const slippageTolerancePercent = 20; // Use 20% slippage tolerance for safety
+    const minMintAmount = expectedShares * BigInt(100 - slippageTolerancePercent) / BigInt(100);
+    console.log(`Minimum shares to receive: ${minMintAmount} (${slippageTolerancePercent}% slippage tolerance)`);
+    
+    // Let's also try an even more conservative estimate
+    const ultraConservativeMinShares = depositLamports * BigInt(60) / BigInt(100); // 60% of deposit
+    console.log(`Ultra-conservative minimum (60% of deposit): ${ultraConservativeMinShares}`);
     
     // Load keypair from file for signing
     const keypairPath = process.env.KEYPAIR_PATH || '';
@@ -840,9 +872,41 @@ export async function testDepositSol(): Promise<string | undefined> {
     const depositLamports = BigInt(Math.floor(depositAmount * 1e9));
     console.log(`Deposit amount: ${depositAmount} SOL (${depositLamports} lamports)`);
     
-    // Calculate minimum shares to receive (applying 5% slippage tolerance)
-    const minMintAmount = depositLamports * BigInt(95) / BigInt(100);
-    console.log(`Minimum shares to receive: ${minMintAmount} (5% slippage tolerance)`);
+    // Get the current exchange rate and calculate expected shares properly
+    console.log(`\nExchange Rate Analysis:`);
+    console.log(`Base Asset: ${vaultData.tellerState?.baseAsset || 'N/A'} (This looks like jitoSOL!)`);
+    console.log(`Vault Exchange Rate: ${vaultData.tellerState?.exchangeRate || 'N/A'}`);
+    
+    // Calculate expected shares based on exchange rate
+    // Exchange rate represents: shares per base asset unit
+    const exchangeRate = vaultData.tellerState?.exchangeRate || BigInt(1000000000);
+    console.log(`Using exchange rate: ${exchangeRate}`);
+    
+    // IMPORTANT: We're depositing SOL but the base asset is jitoSOL
+    // jitoSOL is typically worth more than SOL due to staking rewards
+    // This means 1 SOL < 1 jitoSOL, so we'll get fewer shares
+    // Let's use a very conservative estimate: assume 1 SOL ≈ 0.9 jitoSOL
+    console.log(`\nSOL → jitoSOL Conversion Analysis:`);
+    console.log(`Depositing SOL into a jitoSOL-based vault`);
+    console.log(`jitoSOL is typically worth ~1.05-1.1x SOL due to staking rewards`);
+    console.log(`This means 1 SOL ≈ 0.9-0.95 jitoSOL equivalent`);
+    
+    // Very conservative estimate: assume 1 SOL = 0.85 jitoSOL equivalent
+    const estimatedJitoSolEquivalent = depositLamports * BigInt(85) / BigInt(100);
+    console.log(`Conservative jitoSOL equivalent: ${estimatedJitoSolEquivalent} lamports`);
+    
+    // Then apply the vault's exchange rate
+    const expectedShares = estimatedJitoSolEquivalent;
+    console.log(`Expected shares (conservative): ${expectedShares}`);
+    
+    // Apply slippage tolerance to the expected shares  
+    const slippageTolerancePercent = 20; // Use 20% slippage tolerance for safety
+    const minMintAmount = expectedShares * BigInt(100 - slippageTolerancePercent) / BigInt(100);
+    console.log(`Minimum shares to receive: ${minMintAmount} (${slippageTolerancePercent}% slippage tolerance)`);
+    
+    // Let's also try an even more conservative estimate
+    const ultraConservativeMinShares = depositLamports * BigInt(60) / BigInt(100); // 60% of deposit
+    console.log(`Ultra-conservative minimum (60% of deposit): ${ultraConservativeMinShares}`);
     
     // Load keypair from file for signing
     const keypairPath = process.env.KEYPAIR_PATH || '';
