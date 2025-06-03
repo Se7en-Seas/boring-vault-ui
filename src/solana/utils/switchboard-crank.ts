@@ -41,11 +41,11 @@ export interface SwitchboardCrankConfig {
  * Creates real Switchboard oracle crank instructions
  * 
  * @param config Configuration for the Switchboard crank operation
- * @returns Promise<TransactionInstruction[]> - Array of real Switchboard instructions
+ * @returns Promise<{instructions: TransactionInstruction[], lookupTables: any[]}> - Instructions and lookup tables
  */
 export async function getSwitchboardCrankInstruction(
   config: SwitchboardCrankConfig
-): Promise<TransactionInstruction[]> {
+): Promise<{instructions: TransactionInstruction[], lookupTables: any[]}> {
   if (!hasRealSwitchboard || !SwitchboardSDK) {
     throw new Error('Switchboard SDK is not available');
   }
@@ -59,7 +59,7 @@ export async function getSwitchboardCrankInstruction(
  */
 async function generateRealSwitchboardInstructions(
   config: SwitchboardCrankConfig
-): Promise<TransactionInstruction[]> {
+): Promise<{instructions: TransactionInstruction[], lookupTables: any[]}> {
   const { connection, feedAddress, payer, numResponses = 3 } = config;
   
   try {
@@ -114,27 +114,34 @@ async function generateRealSwitchboardInstructions(
     
     console.log('Update result structure:', Array.isArray(updateResult) ? `Array with ${updateResult.length} elements` : typeof updateResult);
     
-    // Extract instructions from the result
+    // Extract instructions and lookup tables from the result
     // The fetchUpdateIx returns [instructions, responses, numSuccess, luts, errors]
     let instructions: TransactionInstruction[];
+    let lookupTables: any[] = [];
+    
     if (Array.isArray(updateResult) && updateResult.length >= 1) {
       const [instructionsArray, responses, numSuccess, luts, errors] = updateResult;
       if (Array.isArray(instructionsArray)) {
         instructions = instructionsArray;
+        lookupTables = luts || [];
         console.log(`✓ Extracted ${instructions.length} instructions from fetchUpdateIx result`);
-        console.log(`Responses: ${responses ? responses.length : 'none'}, Success: ${numSuccess}, LUTs: ${luts ? luts.length : 'none'}`);
+        console.log(`Responses: ${responses ? responses.length : 'none'}, Success: ${numSuccess}, LUTs: ${lookupTables.length}`);
       } else {
         throw new Error(`Expected instructions array as first element, got: ${typeof instructionsArray}`);
       }
     } else if (updateResult && updateResult.pullIx) {
       // Fallback: maybe it returns an object with pullIx property
       instructions = Array.isArray(updateResult.pullIx) ? updateResult.pullIx : [updateResult.pullIx];
+      lookupTables = updateResult.luts || [];
     } else {
       throw new Error(`Unexpected update result format: ${JSON.stringify(updateResult)}`);
     }
     
     console.log(`✓ Generated ${instructions.length} real Switchboard update instructions`);
-    return instructions;
+    return {
+      instructions,
+      lookupTables,
+    };
     
   } catch (error) {
     console.error('Failed to generate real Switchboard instructions:', error);
@@ -148,17 +155,20 @@ async function generateRealSwitchboardInstructions(
  * 
  * @param config Switchboard configuration
  * @param otherInstructions Array of other instructions to bundle with
- * @returns Promise<TransactionInstruction[]> - Array of all instructions
+ * @returns Promise<{instructions: TransactionInstruction[], lookupTables: any[]}> - Array of all instructions and lookup tables
  */
 export async function bundleSwitchboardCrank(
   config: SwitchboardCrankConfig,
   otherInstructions: TransactionInstruction[]
-): Promise<TransactionInstruction[]> {
-  const crankInstructions = await getSwitchboardCrankInstruction(config);
+): Promise<{instructions: TransactionInstruction[], lookupTables: any[]}> {
+  const { instructions: crankInstructions, lookupTables } = await getSwitchboardCrankInstruction(config);
   
   // Bundle the crank instructions at the beginning to ensure fresh price data
   console.log(`Bundling ${crankInstructions.length} Switchboard instructions with ${otherInstructions.length} other instructions`);
-  return [...crankInstructions, ...otherInstructions];
+  return {
+    instructions: [...crankInstructions, ...otherInstructions],
+    lookupTables
+  };
 }
 
 /**

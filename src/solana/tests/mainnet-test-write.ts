@@ -165,12 +165,13 @@ export async function testDeposit(): Promise<string | undefined> {
           
           if (status) {
             if (status.err) {
-              console.error(`Transaction failed: ${JSON.stringify(status.err)}`);
+              console.error(`\n❌ Transaction failed: ${JSON.stringify(status.err)}`);
+              console.log('Transaction polling stopped due to failure.');
               throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
             }
             
             if (status.confirmationStatus === 'finalized' || status.confirmationStatus === 'confirmed') {
-              console.log(`Transaction ${status.confirmationStatus}!`);
+              console.log(`\nTransaction ${status.confirmationStatus}!`);
               
               // Get transaction details for debugging
               try {
@@ -213,12 +214,29 @@ export async function testDeposit(): Promise<string | undefined> {
           await new Promise(resolve => setTimeout(resolve, 1000));
           process.stdout.write('.');
         } catch (error) {
-          console.warn(`Error checking transaction status (attempt ${attempt + 1}/${maxAttempts}): ${error}`);
+          // Check if this is a transaction failure error that should stop polling
+          if (error instanceof Error && error.message.includes('Transaction failed:')) {
+            // This is a transaction failure, stop polling immediately
+            throw error;
+          }
+          
+          // This is a network/API error, continue polling but warn
+          console.warn(`\nError checking transaction status (attempt ${attempt + 1}/${maxAttempts}): ${error}`);
+          
+          // If we're near the end of attempts, stop polling
+          if (attempt >= maxAttempts - 3) {
+            console.log('Too many polling errors, stopping...');
+            throw new Error(`Polling failed after ${attempt + 1} attempts: ${error}`);
+          }
+          
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
       
-      return signature;
+      // If we reach here, polling finished without confirmation
+      console.log('\n❌ Transaction polling timed out - transaction may have failed or not been processed');
+      throw new Error(`Transaction polling timed out after ${maxAttempts} attempts. Signature: ${signature}`);
+      
     } catch (error: any) {
       console.error('\nError executing deposit:', error);
       
@@ -578,13 +596,13 @@ export async function testQueueWithdraw(): Promise<string | undefined> {
           
           if (status) {
             if (status.err) {
-              console.error(`Transaction failed: ${JSON.stringify(status.err)}`);
-              console.log('❌ Stopping transaction polling due to failure');
-              return signature; // Return the signature but don't continue polling
+              console.error(`\n❌ Transaction failed: ${JSON.stringify(status.err)}`);
+              console.log('Transaction polling stopped due to failure.');
+              throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
             }
             
             if (status.confirmationStatus === 'finalized' || status.confirmationStatus === 'confirmed') {
-              console.log(`Transaction ${status.confirmationStatus}!`);
+              console.log(`\nTransaction ${status.confirmationStatus}!`);
               
               // Get transaction details for debugging
               try {
@@ -655,18 +673,29 @@ export async function testQueueWithdraw(): Promise<string | undefined> {
           await new Promise(resolve => setTimeout(resolve, 1000));
           process.stdout.write('.');
         } catch (error) {
-          // Check if this is our thrown error about transaction failure
-          if (error instanceof Error && error.message.includes('Transaction failed')) {
-            console.log('❌ Stopping transaction polling due to error');
-            return signature; // Return the signature but don't continue polling
+          // Check if this is a transaction failure error that should stop polling
+          if (error instanceof Error && error.message.includes('Transaction failed:')) {
+            // This is a transaction failure, stop polling immediately
+            throw error;
           }
           
-          console.warn(`Error checking transaction status (attempt ${attempt + 1}/${maxAttempts}): ${error}`);
+          // This is a network/API error, continue polling but warn
+          console.warn(`\nError checking transaction status (attempt ${attempt + 1}/${maxAttempts}): ${error}`);
+          
+          // If we're near the end of attempts, stop polling
+          if (attempt >= maxAttempts - 3) {
+            console.log('Too many polling errors, stopping...');
+            throw new Error(`Polling failed after ${attempt + 1} attempts: ${error}`);
+          }
+          
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
       
-      return signature;
+      // If we reach here, polling finished without confirmation
+      console.log('\n❌ Transaction polling timed out - transaction may have failed or not been processed');
+      throw new Error(`Transaction polling timed out after ${maxAttempts} attempts. Signature: ${signature}`);
+      
     } catch (error: any) {
       console.error('\nError executing queue withdraw:', error);
       
@@ -851,12 +880,13 @@ export async function testDepositSol(): Promise<string | undefined> {
           
           if (status) {
             if (status.err) {
-              console.error(`Transaction failed: ${JSON.stringify(status.err)}`);
+              console.error(`\n❌ Transaction failed: ${JSON.stringify(status.err)}`);
+              console.log('Transaction polling stopped due to failure.');
               throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
             }
             
             if (status.confirmationStatus === 'finalized' || status.confirmationStatus === 'confirmed') {
-              console.log(`Transaction ${status.confirmationStatus}!`);
+              console.log(`\nTransaction ${status.confirmationStatus}!`);
               
               // Get transaction details for debugging
               try {
@@ -911,12 +941,29 @@ export async function testDepositSol(): Promise<string | undefined> {
           await new Promise(resolve => setTimeout(resolve, 1000));
           process.stdout.write('.');
         } catch (error) {
-          console.warn(`Error checking transaction status (attempt ${attempt + 1}/${maxAttempts}): ${error}`);
+          // Check if this is a transaction failure error that should stop polling
+          if (error instanceof Error && error.message.includes('Transaction failed:')) {
+            // This is a transaction failure, stop polling immediately
+            throw error;
+          }
+          
+          // This is a network/API error, continue polling but warn
+          console.warn(`\nError checking transaction status (attempt ${attempt + 1}/${maxAttempts}): ${error}`);
+          
+          // If we're near the end of attempts, stop polling
+          if (attempt >= maxAttempts - 3) {
+            console.log('Too many polling errors, stopping...');
+            throw new Error(`Polling failed after ${attempt + 1} attempts: ${error}`);
+          }
+          
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
       
-      return signature;
+      // If we reach here, polling finished without confirmation
+      console.log('\n❌ Transaction polling timed out - transaction may have failed or not been processed');
+      throw new Error(`Transaction polling timed out after ${maxAttempts} attempts. Signature: ${signature}`);
+      
     } catch (error: any) {
       console.error('\nError executing SOL deposit:', error);
       
