@@ -315,73 +315,30 @@ export class VaultSDK {
       finalTransaction.recentBlockhash = blockhash;
       finalTransaction.feePayer = payerPublicKey;
       
-      // Check if we should use versioned transaction based on lookup tables availability
-      // and estimated size (avoid serializing large transactions that will fail)
-      let useVersionedTransaction = false;
-      let serializedSize = 0;
+      console.log('🔄 Using Versioned Transaction with lookup tables...');
       
-      try {
-        // Try to get transaction size safely
-        serializedSize = finalTransaction.serialize({ requireAllSignatures: false }).length;
-        console.log(`Transaction size: ${serializedSize} bytes`);
-        
-        // Use versioned transaction if size is too large and we have lookup tables
-        useVersionedTransaction = (serializedSize > 1232 && lookupTables.length > 0);
-      } catch (sizeError) {
-        // If serialization fails due to size, assume we need versioned transaction
-        console.log('Transaction too large for legacy format, using versioned transaction');
-        useVersionedTransaction = (lookupTables.length > 0);
-        serializedSize = 1400; // Estimate for logging
-      }
+      // Create versioned transaction message
+      const message = new web3.TransactionMessage({
+        payerKey: payerPublicKey,
+        recentBlockhash: blockhash,
+        instructions: finalTransaction.instructions,
+      }).compileToV0Message(lookupTables);
       
-      let signature: string;
+      // Create versioned transaction
+      const versionedTx = new web3.VersionedTransaction(message);
       
-      if (useVersionedTransaction) {
-        console.log('🔄 Using Versioned Transaction with lookup tables for large transaction...');
-        
-        // Create versioned transaction message
-        const message = new web3.TransactionMessage({
-          payerKey: payerPublicKey,
-          recentBlockhash: blockhash,
-          instructions: finalTransaction.instructions,
-        }).compileToV0Message(lookupTables);
-        
-        // Create versioned transaction
-        const versionedTx = new web3.VersionedTransaction(message);
-        
-        // Sign the versioned transaction
-        if ('signTransaction' in wallet) {
-          throw new Error('Versioned transactions with wallet adapter not yet supported. Please use smaller transactions or disable oracle cranking.');
-        } else {
-          versionedTx.sign([wallet]);
-        }
-        
-        // Send versioned transaction
-        signature = await this.connection.sendRawTransaction(versionedTx.serialize(), {
-          skipPreflight: options.skipPreflight || false,
-          preflightCommitment: 'confirmed'
-        });
-        
+      // Sign the versioned transaction
+      if ('signTransaction' in wallet) {
+        throw new Error('Versioned transactions with wallet adapter not yet supported. Please use keypair directly.');
       } else {
-        console.log('🔄 Using Legacy Transaction...');
-        
-        // Sign the transaction
-        let signedTx: web3.Transaction;
-        if ('signTransaction' in wallet) {
-          // Using wallet adapter
-          signedTx = await wallet.signTransaction(finalTransaction);
-        } else {
-          // Using keypair
-          finalTransaction.sign(wallet);
-          signedTx = finalTransaction;
-        }
-        
-        // Send transaction
-        signature = await this.connection.sendRawTransaction(signedTx.serialize(), {
-          skipPreflight: options.skipPreflight || false,
-          preflightCommitment: 'confirmed'
-        });
+        versionedTx.sign([wallet]);
       }
+      
+      // Send versioned transaction
+      const signature = await this.connection.sendRawTransaction(versionedTx.serialize(), {
+        skipPreflight: options.skipPreflight || false,
+        preflightCommitment: 'confirmed'
+      });
       
       console.log(`SOL deposit transaction sent! Signature: ${signature}`);
       console.log(`View on explorer: https://solscan.io/tx/${signature}`);
