@@ -328,14 +328,19 @@ export class VaultSDK {
       const versionedTx = new web3.VersionedTransaction(message);
       
       // Sign the versioned transaction
+      let signedTransaction: any;
       if ('signTransaction' in wallet) {
-        throw new Error('Versioned transactions with wallet adapter not yet supported. Please use keypair directly.');
+        // Using wallet adapter (browser extension)
+        // Cast to any to handle the type compatibility between Transaction and VersionedTransaction
+        signedTransaction = await wallet.signTransaction(versionedTx as any);
       } else {
+        // Using keypair directly
         versionedTx.sign([wallet]);
+        signedTransaction = versionedTx;
       }
       
       // Send versioned transaction
-      const signature = await this.connection.sendRawTransaction(versionedTx.serialize(), {
+      const signature = await this.connection.sendRawTransaction(signedTransaction.serialize(), {
         skipPreflight: options.skipPreflight || false,
         preflightCommitment: 'confirmed'
       });
