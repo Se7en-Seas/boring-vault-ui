@@ -4,8 +4,7 @@ import {
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountIdempotentInstructionWithDerivation,
-  getAssociatedTokenAddressSync,
-  getOrCreateAssociatedTokenAccount,
+  getAssociatedTokenAddressSync
 } from '@solana/spl-token';
 import { Address } from 'gill';
 import * as fs from 'fs';
@@ -30,7 +29,6 @@ import {
 } from '../utils/constants';
 
 // Import necessary dependencies at the top of the file
-import vaultIdl from '../idls/boring-vault-svm-idl.json';
 import queueIdl from '../idls/boring-queue-svm-idl.json';
 
 /**
@@ -147,9 +145,10 @@ export async function testDeposit(): Promise<string | undefined> {
     const estimatedJitoSolEquivalent = depositLamports * BigInt(85) / BigInt(100);
     console.log(`Conservative jitoSOL equivalent: ${estimatedJitoSolEquivalent} lamports`);
     
-    // Then apply the vault's exchange rate
-    const expectedShares = estimatedJitoSolEquivalent;
-    console.log(`Expected shares (conservative): ${expectedShares}`);
+    // Then apply the vault's exchange rate to calculate expected shares
+    // Exchange rate is in 9 decimal format, so we need to handle the scaling properly
+    const expectedShares = estimatedJitoSolEquivalent * exchangeRate / BigInt(1000000000);
+    console.log(`Expected shares (using exchange rate): ${expectedShares}`);
     
     // Apply slippage tolerance to the expected shares  
     const slippageTolerancePercent = 20; // Use 20% slippage tolerance for safety
@@ -895,9 +894,10 @@ export async function testDepositSol(): Promise<string | undefined> {
     const estimatedJitoSolEquivalent = depositLamports * BigInt(85) / BigInt(100);
     console.log(`Conservative jitoSOL equivalent: ${estimatedJitoSolEquivalent} lamports`);
     
-    // Then apply the vault's exchange rate
-    const expectedShares = estimatedJitoSolEquivalent;
-    console.log(`Expected shares (conservative): ${expectedShares}`);
+    // Then apply the vault's exchange rate to calculate expected shares
+    // Exchange rate is in 9 decimal format, so we need to handle the scaling properly
+    const expectedShares = estimatedJitoSolEquivalent * exchangeRate / BigInt(1000000000);
+    console.log(`Expected shares (using exchange rate): ${expectedShares}`);
     
     // Apply slippage tolerance to the expected shares  
     const slippageTolerancePercent = 20; // Use 20% slippage tolerance for safety

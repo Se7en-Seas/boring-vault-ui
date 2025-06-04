@@ -405,9 +405,6 @@ async function testTransactionFunctionality() {
 async function testSwitchboardFunctionality() {
   console.log('\n### SECTION 3: SWITCHBOARD ORACLE TESTS (MOCKED) ###');
   
-  // Track failures at start of this section
-  const currentFailures = testFailures;
-  
   // Create mock connection that doesn't make real network calls
   const mockConnection = {
     getLatestBlockhash: () => Promise.resolve({ blockhash: 'mock-blockhash', lastValidBlockHeight: 123456 })
