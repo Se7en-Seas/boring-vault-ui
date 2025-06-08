@@ -316,34 +316,34 @@ export class VaultSDK {
       finalTransaction.feePayer = payerPublicKey;
       
       console.log('🔄 Using Versioned Transaction with lookup tables...');
-      
-      // Create versioned transaction message
-      const message = new web3.TransactionMessage({
-        payerKey: payerPublicKey,
-        recentBlockhash: blockhash,
-        instructions: finalTransaction.instructions,
-      }).compileToV0Message(lookupTables);
-      
-      // Create versioned transaction
-      const versionedTx = new web3.VersionedTransaction(message);
-      
-      // Sign the versioned transaction
+        
+        // Create versioned transaction message
+        const message = new web3.TransactionMessage({
+          payerKey: payerPublicKey,
+          recentBlockhash: blockhash,
+          instructions: finalTransaction.instructions,
+        }).compileToV0Message(lookupTables);
+        
+        // Create versioned transaction
+        const versionedTx = new web3.VersionedTransaction(message);
+        
+        // Sign the versioned transaction
       let signedTransaction: any;
-      if ('signTransaction' in wallet) {
+        if ('signTransaction' in wallet) {
         // Using wallet adapter (browser extension)
         // Cast to any to handle the type compatibility between Transaction and VersionedTransaction
         signedTransaction = await wallet.signTransaction(versionedTx as any);
-      } else {
+        } else {
         // Using keypair directly
-        versionedTx.sign([wallet]);
+          versionedTx.sign([wallet]);
         signedTransaction = versionedTx;
-      }
-      
-      // Send versioned transaction
+        }
+        
+        // Send versioned transaction
       const signature = await this.connection.sendRawTransaction(signedTransaction.serialize(), {
-        skipPreflight: options.skipPreflight || false,
-        preflightCommitment: 'confirmed'
-      });
+          skipPreflight: options.skipPreflight || false,
+          preflightCommitment: 'confirmed'
+        });
       
       console.log(`SOL deposit transaction sent! Signature: ${signature}`);
       console.log(`View on explorer: https://solscan.io/tx/${signature}`);
