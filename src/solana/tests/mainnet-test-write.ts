@@ -355,7 +355,7 @@ export async function testQueueWithdraw(): Promise<string | undefined> {
     console.log(`Using amount: ${withdrawHumanReadable} shares (human-readable amount)`);
     console.log(`This will be converted to ${withdrawHumanReadable * 10**DEFAULT_DECIMALS} raw units in the SDK`);
     const discountPercent = 0; // 0% discount to simplify calculation
-    const secondsToDeadline = 86400; // 1 day (24 hours)
+    const secondsToDeadline = 2593200; // 30 days + 20 minutes (meets vault 9 requirement)
     
     console.log(`Discount: ${discountPercent}%`);
     console.log(`Deadline: ${secondsToDeadline} seconds (${secondsToDeadline/3600} hours)`);
@@ -745,69 +745,7 @@ export async function testQueueWithdraw(): Promise<string | undefined> {
   }
 }
 
-/**
- * Check the queue program configuration
- */
-export async function checkQueueConfig(): Promise<string | undefined> {
-  console.log('\n=== CHECKING QUEUE PROGRAM CONFIGURATION ===');
-  
-  try {
-    // Create service instance
-    const vaultService = new VaultSDK(MAINNET_CONFIG.rpcUrl);
-    const boringVault = vaultService.getBoringVault();
-    
-    // Get config PDA
-    const configPDA = await boringVault.getQueueConfigPDA();
-    console.log(`Queue Config PDA: ${configPDA.toString()}`);
-    
-    // Check if the config exists
-    const configExists = await boringVault.doesAccountExist(configPDA);
-    if (!configExists) {
-      console.log('Queue program not initialized yet!');
-      return;
-    }
-    
-    // Create connection
-    const connection = createConnection();
-    
-    // Fetch the account data
-    const accountInfo = await connection.getAccountInfo(configPDA);
-    if (!accountInfo) {
-      console.log('Failed to fetch config account data');
-      return;
-    }
-    
-    console.log(`Account owner: ${accountInfo.owner.toString()}`);
-    console.log(`Account data length: ${accountInfo.data.length} bytes`);
-    
-    // The first 8 bytes are the account discriminator
-    // Then comes the authority public key (32 bytes)
-    if (accountInfo.data.length >= 40) {
-      const authorityBytes = accountInfo.data.slice(8, 40);
-      const authority = new web3.PublicKey(authorityBytes);
-      console.log(`Config Authority: ${authority.toString()}`);
-      
-      // Load signer for comparison
-      const signer = await loadKeypair();
-      console.log(`Current signer: ${signer.address}`);
-      
-      if (authority.toString() === signer.address) {
-        console.log('✓ Current signer is the program authority!');
-      } else {
-        console.log('✗ Current signer is NOT the program authority!');
-      }
-    } else {
-      console.log('Account data too short, cannot extract authority');
-    }
-    
-    return configPDA.toString();
-  } catch (error) {
-    console.error('Error checking queue config:', error);
-    return undefined;
-  }
-}
-
-export async function testDepositSol(): Promise<string | undefined> {
+export async function testDepositSol(depositAmountSOL: number = 0.001): Promise<string | undefined> {
   console.log('\n=== TESTING SOL DEPOSIT ===');
   
   try {

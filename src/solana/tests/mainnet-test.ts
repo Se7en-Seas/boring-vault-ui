@@ -9,7 +9,6 @@ import {
   testDeposit,
   testDepositSol,
   testQueueWithdraw,
-  checkQueueConfig,
 } from './mainnet-test-write';
 
 // Import read operations
@@ -17,7 +16,8 @@ import {
   analyzeVaultAccount,
   testReadOperations,
   testUserBalances,
-  fetchUserShares
+  fetchUserShares,
+  checkQueueConfig,
 } from './mainnet-test-read';
 
 // Import oracle operations
@@ -44,9 +44,10 @@ function displayHelpText(errorMessage?: string): void {
   console.log('  4. deposit - Test deposit functionality');
   console.log('  5. deposit-sol - Test SOL deposit functionality');
   console.log('  6. queue-withdraw - Test queue withdraw functionality');
-  console.log('  7. check-queue-config - Check the queue program configuration');
+  console.log('  7. check-queue-config [vault-id] - Check the queue program configuration for a specific vault (default: vault from .env)');
   console.log('  8. oracle - Test Switchboard oracle cranking');
   console.log('\nRun with a command to execute that test. Example: node dist/src/solana/tests/mainnet-test.js queue-withdraw');
+  console.log('For check-queue-config, optionally specify vault ID: node dist/src/solana/tests/mainnet-test.js check-queue-config 9');
 }
 
 // Helper function to execute a test function and handle errors
@@ -83,7 +84,20 @@ async function main() {
     } else if (command === 'queue-withdraw') {
       executeTest(() => testQueueWithdraw());
     } else if (command === 'check-queue-config') {
-      executeTest(() => checkQueueConfig());
+      // Parse optional vault ID parameter
+      const vaultIdArg = args[1];
+      let vaultId: number | undefined;
+      
+      if (vaultIdArg) {
+        const parsedVaultId = parseInt(vaultIdArg, 10);
+        if (isNaN(parsedVaultId)) {
+          console.error(`Invalid vault ID: ${vaultIdArg}. Must be a number.`);
+          process.exit(1);
+        }
+        vaultId = parsedVaultId;
+      }
+      
+      executeTest(() => checkQueueConfig(vaultId));
     } else if (command === 'oracle') {
       executeTest(() => testOracleCrank());
     } else if (!command) {
