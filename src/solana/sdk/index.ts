@@ -364,7 +364,6 @@ export class VaultSDK {
    * @param shareAmount The human-readable amount of share tokens to queue for withdrawal (e.g., 1.0 for 1 share)
    * @param discountPercent The discount rate in percentage (e.g., 2.5 for 2.5%)
    * @param secondsToDeadline The number of seconds until the withdraw request expires
-   * @param queueSharesAccount Optional queue shares account address
    * @param options Additional options for the transaction
    * @returns The transaction signature
    */
@@ -375,7 +374,6 @@ export class VaultSDK {
     shareAmount: number | string,
     discountPercent: number = 0,
     secondsToDeadline: number = 86400 * 7, // Default to 7 days
-    queueSharesAccount?: web3.PublicKey,
     options: {
       skipPreflight?: boolean;
       maxRetries?: number;
@@ -432,8 +430,7 @@ export class VaultSDK {
         withdrawMint,
         rawAmount,
         discountBasisPoints,
-        secondsToDeadline,
-        queueSharesAccount
+        secondsToDeadline
       );
 
       // Add recent blockhash

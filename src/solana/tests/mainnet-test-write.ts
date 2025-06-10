@@ -1,10 +1,7 @@
 import { web3 } from '@coral-xyz/anchor';
 import { 
   AccountLayout, 
-  TOKEN_PROGRAM_ID,
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-  createAssociatedTokenAccountIdempotentInstructionWithDerivation,
-  getAssociatedTokenAddressSync
+  TOKEN_PROGRAM_ID
 } from '@solana/spl-token';
 import { Address } from 'gill';
 import * as fs from 'fs';
@@ -24,12 +21,9 @@ import {
   JITO_SOL_MINT_ADDRESS,
   BORING_VAULT_PROGRAM_ID,
   BORING_QUEUE_PROGRAM_ID,
-  TOKEN_2022_PROGRAM_ID,
   DEFAULT_DECIMALS
 } from '../utils/constants';
 
-// Import necessary dependencies at the top of the file
-import queueIdl from '../idls/boring-queue-svm-idl.json';
 
 /**
  * Test deposit functionality with jitoSOL
@@ -106,7 +100,7 @@ export async function testDeposit(): Promise<string | undefined> {
       return;
     }
     
-    // Always use fixed amount of 0.001 jitoSOL
+    // Use the provided amount from the command line argument
     const depositAmount = 0.001;
     const maxDepositAmount = Number(jitoSolBalance) / 1e9;
     
@@ -364,241 +358,6 @@ export async function testQueueWithdraw(): Promise<string | undefined> {
     const connection = createConnection();
     
     try {
-      // Get queue state PDA and other accounts needed
-      const queueStatePDA = await boringVault.getQueueStatePDA(vaultId);
-      const queuePDA = await boringVault.getQueuePDA(vaultId);
-      const shareMintPDA = vaultData.vaultState.shareMint;
-      
-      // Get user withdraw state PDA
-      const userWithdrawStatePDA = await boringVault.getUserWithdrawStatePDA(keypair.publicKey);
-      console.log(`User Withdraw State PDA: ${userWithdrawStatePDA.toString()}`);
-      
-      // Check if user withdraw state exists and get its nonce
-      const userWithdrawStateExists = await boringVault.doesAccountExist(userWithdrawStatePDA);
-      console.log(`User Withdraw State exists: ${userWithdrawStateExists}`);
-      
-      // Define the queue program ID
-      const queueProgramId = new web3.PublicKey(BORING_QUEUE_PROGRAM_ID);
-      
-      // Create user withdraw state if it doesn't exist
-      if (!userWithdrawStateExists) {
-        console.log("User Withdraw State doesn't exist. Creating it first...");
-        
-        // Get the setup_user_withdraw_state instruction discriminator
-        const setupInstructionDiscriminator = queueIdl.instructions.find(
-          (instr: any) => instr.name === 'setup_user_withdraw_state'
-        )?.discriminator;
-        
-        if (!setupInstructionDiscriminator) {
-          throw new Error('setup_user_withdraw_state instruction discriminator not found in IDL');
-        }
-        
-        // Create setup_user_withdraw_state instruction
-        const setupInstruction = new web3.TransactionInstruction({
-          programId: queueProgramId,
-          keys: [
-            { pubkey: keypair.publicKey, isSigner: true, isWritable: true },
-            { pubkey: userWithdrawStatePDA, isSigner: false, isWritable: true },
-            { pubkey: web3.SystemProgram.programId, isSigner: false, isWritable: false },
-          ],
-          data: Buffer.from(setupInstructionDiscriminator)
-        });
-        
-        // Create transaction to set up user withdraw state
-        const setupTx = new web3.Transaction().add(setupInstruction);
-        
-        // Add recent blockhash
-        const { blockhash } = await connection.getLatestBlockhash('confirmed');
-        setupTx.recentBlockhash = blockhash;
-        setupTx.feePayer = keypair.publicKey;
-        
-        // Sign and send transaction
-        setupTx.sign(keypair);
-        const setupSignature = await connection.sendRawTransaction(setupTx.serialize(), {
-          skipPreflight: true
-        });
-        
-        console.log(`Sent transaction to create User Withdraw State. Signature: ${setupSignature}`);
-        console.log(`View on explorer: https://solscan.io/tx/${setupSignature}`);
-        
-        // Poll for transaction confirmation
-        console.log("Polling for User Withdraw State creation transaction status...");
-        const maxSetupAttempts = 30;
-        let setupConfirmed = false;
-        
-        for (let attempt = 0; attempt < maxSetupAttempts; attempt++) {
-          try {
-            // Use getSignatureStatus instead of WebSocket methods
-            const response = await connection.getSignatureStatus(setupSignature);
-            
-            if (response && response.value) {
-              if (response.value.err) {
-                console.error(`User Withdraw State creation failed: ${JSON.stringify(response.value.err)}`);
-                console.error(`❌ Cannot proceed with withdrawal due to User Withdraw State creation failure.`);
-                return undefined;
-              }
-              
-              if (response.value.confirmationStatus === 'finalized' || 
-                  response.value.confirmationStatus === 'confirmed') {
-                console.log(`User Withdraw State creation ${response.value.confirmationStatus}!`);
-                console.log(`✅ User Withdraw State created at: ${userWithdrawStatePDA.toString()}`);
-                setupConfirmed = true;
-                break;
-              }
-            }
-            
-            // Wait before next poll
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            process.stdout.write('.');
-          } catch (error) {
-            console.warn(`Error checking User Withdraw State creation status (attempt ${attempt + 1}/${maxSetupAttempts}): ${error}`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-        }
-        
-        if (!setupConfirmed) {
-          console.error(`❌ Could not confirm User Withdraw State creation transaction. Cannot proceed with withdrawal.`);
-          return undefined;
-        }
-      }
-      
-      // Now the user withdraw state should exist, fetch it to get the correct nonce
-      console.log("Fetching User Withdraw State to get the correct nonce...");
-      
-      // Fetch the user withdraw state account to get the nonce
-      let userNonce = 0;
-      try {
-        const userWithdrawStateAddress = userWithdrawStatePDA.toBase58() as Address;
-        const response = await solanaClient.rpc.getAccountInfo(
-          userWithdrawStateAddress,
-          { encoding: 'base64' }
-        ).send();
-        
-        if (response.value && response.value.data.length) {
-          const data = Buffer.from(response.value.data[0], 'base64');
-          // Skip the 8-byte discriminator
-          userNonce = Number(data.readBigUInt64LE(8));
-          console.log(`User Withdraw State nonce: ${userNonce}`);
-        } else {
-          console.error("Failed to fetch User Withdraw State data. Cannot proceed with withdrawal.");
-          return undefined;
-        }
-      } catch (error) {
-        console.error(`Error fetching User Withdraw State: ${error}`);
-        return undefined;
-      }
-      
-      // Now derive the withdraw request PDA with the correct nonce
-      // Ensure we're using the exact same byte format as the Solana program
-      const requestIdBuffer = Buffer.alloc(8);
-      requestIdBuffer.writeBigUInt64LE(BigInt(userNonce), 0);
-      
-      // Debug the buffer to ensure correctness
-      console.log(`Nonce value: ${userNonce}`);
-      console.log(`RequestId buffer bytes: [${Array.from(requestIdBuffer).join(', ')}]`);
-      
-      const [withdrawRequestPDA] = await web3.PublicKey.findProgramAddress(
-        [Buffer.from("boring-queue-withdraw-request"), keypair.publicKey.toBuffer(), requestIdBuffer], 
-        queueProgramId
-      );
-      
-      console.log(`Calculated Withdraw Request PDA with nonce ${userNonce}: ${withdrawRequestPDA.toString()}`);
-      
-      
-      // Derive queue shares ATA address
-      const queueSharesATA = getAssociatedTokenAddressSync(
-        shareMintPDA,        // mint
-        queuePDA,            // owner
-        true,                // allowOwnerOffCurve
-        new web3.PublicKey(TOKEN_2022_PROGRAM_ID) // programId
-      );
-      console.log(`Queue Shares ATA: ${queueSharesATA.toString()}`);
-      
-      // Check if the queue shares ATA exists
-      const queueSharesExists = await boringVault.doesAccountExist(queueSharesATA);
-      console.log(`Queue Shares ATA exists: ${queueSharesExists}`);
-      
-      // If the queue shares ATA doesn't exist, create it
-      if (!queueSharesExists) {
-        console.log("Queue Shares ATA doesn't exist. Creating it...");
-        
-        // Create instruction to create ATA
-        const createATAInstruction = createAssociatedTokenAccountIdempotentInstructionWithDerivation(
-          keypair.publicKey,  // payer
-          queuePDA,           // owner
-          shareMintPDA,       // mint
-          true,               // allowOwnerOffCurve
-          new web3.PublicKey(TOKEN_2022_PROGRAM_ID), // token program ID
-          ASSOCIATED_TOKEN_PROGRAM_ID // ata program ID
-        );
-        
-        // Create transaction to create ATA
-        const createATATx = new web3.Transaction().add(createATAInstruction);
-        
-        // Add recent blockhash
-        const { blockhash } = await connection.getLatestBlockhash('confirmed');
-        createATATx.recentBlockhash = blockhash;
-        createATATx.feePayer = keypair.publicKey;
-        
-        // Sign and send transaction
-        createATATx.sign(keypair);
-        const ataSignature = await connection.sendRawTransaction(createATATx.serialize(), {
-          skipPreflight: true
-        });
-        
-        console.log(`Sent transaction to create Queue Shares ATA. Signature: ${ataSignature}`);
-        console.log(`View on explorer: https://solscan.io/tx/${ataSignature}`);
-        
-        // Poll for transaction confirmation
-        console.log("Polling for ATA creation transaction status...");
-        const maxAttempts = 30;
-        let confirmed = false;
-        
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-          try {
-            // Use getSignatureStatus instead of WebSocket methods
-            const response = await connection.getSignatureStatus(ataSignature);
-            
-            if (response && response.value) {
-              if (response.value.err) {
-                console.error(`ATA creation transaction failed: ${JSON.stringify(response.value.err)}`);
-                console.error(`❌ Cannot proceed with withdrawal due to ATA creation failure.`);
-                return undefined;
-              }
-              
-              if (response.value.confirmationStatus === 'finalized' || 
-                  response.value.confirmationStatus === 'confirmed') {
-                console.log(`ATA creation transaction ${response.value.confirmationStatus}!`);
-                console.log(`✅ Queue shares ATA created at: ${queueSharesATA.toString()}`);
-                confirmed = true;
-                break;
-              }
-            }
-            
-            // Wait before next poll
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            process.stdout.write('.');
-          } catch (error) {
-            console.warn(`Error checking ATA creation status (attempt ${attempt + 1}/${maxAttempts}): ${error}`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-        }
-        
-        if (!confirmed) {
-          console.error(`❌ Could not confirm ATA creation transaction. Cannot proceed with withdrawal.`);
-          return undefined;
-        }
-        
-        // Double-check that the account exists now
-        const ataExists = await boringVault.doesAccountExist(queueSharesATA);
-        if (!ataExists) {
-          console.error(`❌ Queue shares ATA still doesn't exist after transaction. Cannot proceed with withdrawal.`);
-          return undefined;
-        }
-        
-        console.log(`✅ Confirmed queue shares ATA exists at ${queueSharesATA.toString()}. Proceeding with withdrawal.`);
-      }
-      
       // Now we can proceed with the queue withdraw transaction
       // Use the queueBoringWithdraw function
       const signature = await vaultService.queueBoringWithdraw(
@@ -608,10 +367,10 @@ export async function testQueueWithdraw(): Promise<string | undefined> {
         withdrawHumanReadable,
         discountPercent,
         secondsToDeadline,
-        queueSharesATA, // Pass the queue shares ATA address
         {
           skipPreflight: true, // Skip preflight to avoid rejections for valid transactions
-          maxRetries: 30
+          maxRetries: 30,
+          skipStatusCheck: true
         }
       );
       
@@ -792,8 +551,8 @@ export async function testDepositSol(depositAmountSOL: number = 0.001): Promise<
     const solBalance = Number(solBalanceResponse.value);
     console.log(`> Found SOL balance: ${solBalance} lamports (${solBalance / 1e9} SOL)`);
     
-    // Always use fixed amount of 0.001 SOL (small amount for testing)
-    const depositAmount = 0.001;
+    // Use the provided amount from the command line argument
+    const depositAmount = depositAmountSOL;
     const maxDepositAmount = solBalance / 1e9;
     
     // Validate the amount is within limits (reserve some SOL for transaction fees)

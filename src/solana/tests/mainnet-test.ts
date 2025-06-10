@@ -80,7 +80,20 @@ async function main() {
     } else if (command === 'deposit') {
       executeTest(() => testDeposit());
     } else if (command === 'deposit-sol') {
-      executeTest(() => testDepositSol());
+      // Parse the amount argument
+      const amountArg = args[1];
+      let amount = 0.001; // default
+      
+      if (amountArg) {
+        const parsedAmount = parseFloat(amountArg);
+        if (isNaN(parsedAmount) || parsedAmount <= 0) {
+          console.error(`Invalid amount: ${amountArg}. Must be a positive number.`);
+          process.exit(1);
+        }
+        amount = parsedAmount;
+      }
+      
+      executeTest(() => testDepositSol(amount));
     } else if (command === 'queue-withdraw') {
       executeTest(() => testQueueWithdraw());
     } else if (command === 'check-queue-config') {
