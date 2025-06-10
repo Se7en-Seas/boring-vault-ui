@@ -761,7 +761,6 @@ export class BoringVaultSolana {
    * @param shareAmount Amount of share tokens to queue for withdrawal
    * @param discount Discount rate in basis points (BPS)
    * @param secondsToDeadline Number of seconds until the withdraw request expires
-   * @param queueSharesAccount Optional custom queue shares account
    * @returns An unsigned transaction
    */
   async buildQueueWithdrawTransaction(
@@ -770,8 +769,7 @@ export class BoringVaultSolana {
     tokenOut: web3.PublicKey,
     shareAmount: bigint,
     discount: number = 0.01, // Default to 0 discount
-    secondsToDeadline: number = 86400 * 7, // Default to 7 days
-    queueSharesAccount?: web3.PublicKey // Optional custom queue shares account
+    secondsToDeadline: number = 86400 * 7 // Default to 7 days
   ): Promise<web3.Transaction> {
     // Get the vault state PDA
     const vaultStatePDA = await this.getVaultStatePDA(vaultId);
@@ -785,6 +783,31 @@ export class BoringVaultSolana {
     const withdrawAssetDataPDA = await this.getWithdrawAssetDataPDA(queueStatePDA, tokenOut);
     // Get user withdraw state PDA
     const userWithdrawStatePDA = await this.getUserWithdrawStatePDA(ownerAddress);
+    
+    // Create a new transaction
+    const transaction = new web3.Transaction();
+    
+    // Check if user withdraw state exists, and create it if it doesn't
+    const userWithdrawStateExists = await this.doesAccountExist(userWithdrawStatePDA);
+    if (!userWithdrawStateExists) {
+      console.log(`Creating user withdraw state for ${ownerAddress.toString()}`);
+      
+      // Create setup_user_withdraw_state instruction
+      const setupUserWithdrawStateInstruction = new web3.TransactionInstruction({
+        programId: new web3.PublicKey(BORING_QUEUE_PROGRAM_ID),
+        keys: [
+          { pubkey: ownerAddress, isSigner: true, isWritable: true },
+          { pubkey: userWithdrawStatePDA, isSigner: false, isWritable: true },
+          { pubkey: web3.SystemProgram.programId, isSigner: false, isWritable: false },
+        ],
+        data: this.getInstructionDiscriminator('setup_user_withdraw_state', queueIdl)
+      });
+      
+      transaction.add(setupUserWithdrawStateInstruction);
+    } else {
+      console.log(`User withdraw state already exists for ${ownerAddress.toString()}`);
+    }
+    
     // Get current user withdraw state to determine next request ID
     // Fetch the actual nonce from the user withdraw state account
     let requestId = 0;
@@ -804,6 +827,7 @@ export class BoringVaultSolana {
     }
     // Get withdraw request PDA
     const withdrawRequestPDA = await this.getWithdrawRequestPDA(ownerAddress, requestId);
+    
     // Get the user's token 2022 account for the share token
     const userSharesATA = await web3.PublicKey.findProgramAddress(
       [
@@ -813,21 +837,17 @@ export class BoringVaultSolana {
       ],
       ASSOCIATED_TOKEN_PROGRAM_ID
     );
-    // Get or use the provided queue shares account
-    let queueSharesAccountPubkey;
-    if (queueSharesAccount) {
-      queueSharesAccountPubkey = queueSharesAccount;
-    } else {
-      const queueSharesATA = await web3.PublicKey.findProgramAddress(
-        [
-          queuePDA.toBuffer(),
-          new web3.PublicKey(TOKEN_2022_PROGRAM_ID).toBuffer(),
-          shareMintPDA.toBuffer(),
-        ],
-        ASSOCIATED_TOKEN_PROGRAM_ID
-      );
-      queueSharesAccountPubkey = queueSharesATA[0];
-    }
+    
+    // Always derive the queue shares account automatically
+    const queueSharesATA = await web3.PublicKey.findProgramAddress(
+      [
+        queuePDA.toBuffer(),
+        new web3.PublicKey(TOKEN_2022_PROGRAM_ID).toBuffer(),
+        shareMintPDA.toBuffer(),
+      ],
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    );
+    
     // Get the asset data PDA from the Boring Vault program
     const assetDataPDA = await this.getAssetDataPDA(vaultStatePDA, tokenOut);
     // Fetch the asset data to get the price feed
@@ -859,7 +879,7 @@ export class BoringVaultSolana {
         { pubkey: queuePDA, isSigner: false, isWritable: false },
         { pubkey: shareMintPDA, isSigner: false, isWritable: false },
         { pubkey: userSharesATA[0], isSigner: false, isWritable: true },
-        { pubkey: queueSharesAccountPubkey, isSigner: false, isWritable: true },
+        { pubkey: queueSharesATA[0], isSigner: false, isWritable: true },
         { pubkey: new web3.PublicKey(TOKEN_2022_PROGRAM_ID), isSigner: false, isWritable: false },
         { pubkey: web3.SystemProgram.programId, isSigner: false, isWritable: false },
         { pubkey: new web3.PublicKey(BORING_VAULT_PROGRAM_ID), isSigner: false, isWritable: false },
@@ -872,8 +892,7 @@ export class BoringVaultSolana {
         this.serializeRequestWithdrawArgs(vaultId, shareAmount, discount, secondsToDeadline)
       ])
     });
-    // Create a new transaction
-    const transaction = new web3.Transaction();
+    
     // Add the request_withdraw instruction to the transaction
     transaction.add(requestWithdrawInstruction);
     return transaction;
