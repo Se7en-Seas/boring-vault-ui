@@ -21,18 +21,17 @@ export interface SwitchboardCrankConfig {
  * Creates real Switchboard oracle crank instructions
  * 
  * @param config Configuration for the Switchboard crank operation
- * @returns Promise<{instructions: TransactionInstruction[], lookupTables: any[]}> - Instructions and lookup tables
+ * @returns Promise<{instructions: TransactionInstruction[], lookupTables: web3.AddressLookupTableAccount[]}> - Instructions and lookup tables
  */
 export async function getSwitchboardCrankInstruction(
   config: SwitchboardCrankConfig
-): Promise<{instructions: web3.TransactionInstruction[], lookupTables: any[]}> {
+): Promise<{instructions: web3.TransactionInstruction[], lookupTables: web3.AddressLookupTableAccount[]}> {
 
   const { connection, feedAddress, payer, numResponses = 3 } = config;
   
   try {
     // Get the program ID for mainnet
-    let programId: web3.PublicKey;
-    programId = new web3.PublicKey(ON_DEMAND_MAINNET_PID);
+    const programId = new web3.PublicKey(ON_DEMAND_MAINNET_PID);
     console.log(`✓ Using mainnet program ID: ${programId.toString()}`);
 
     console.log(`Loading Switchboard program for feed: ${feedAddress.toString()}`);
@@ -56,11 +55,12 @@ export async function getSwitchboardCrankInstruction(
     const pullFeed = new PullFeed(program, feedAddress);
     console.log('✓ PullFeed instance created');
     
-    // Build options for the current SDK (does not accept `payer`)
     const fetchOpts: Parameters<typeof pullFeed.fetchUpdateIx>[0] = {
       numSignatures: numResponses,
     } as any;
-    if (config.gateway) (fetchOpts as any).gateway = config.gateway;
+    if (config.gateway) {
+      (fetchOpts as any).gateway = config.gateway;
+    }
 
     const updateResult = await pullFeed.fetchUpdateIx(fetchOpts);
     
@@ -69,7 +69,7 @@ export async function getSwitchboardCrankInstruction(
     // Extract instructions and lookup tables from the result
     // The fetchUpdateIx returns [instructions, responses, numSuccess, luts, errors]
     let instructions: web3.TransactionInstruction[];
-    let lookupTables: any[];
+    let lookupTables: web3.AddressLookupTableAccount[];
     
     if (Array.isArray(updateResult) && updateResult.length >= 1) {
       const [instructionsArray, responses, numSuccess, luts, errors] = updateResult;
@@ -103,12 +103,12 @@ export async function getSwitchboardCrankInstruction(
  * 
  * @param config Switchboard configuration
  * @param otherInstructions Array of other instructions to bundle with
- * @returns Promise<{instructions: TransactionInstruction[], lookupTables: any[]}> - Array of all instructions and lookup tables
+ * @returns Promise<{instructions: TransactionInstruction[], lookupTables: web3.AddressLookupTableAccount[]}> - Array of all instructions and lookup tables
  */
 export async function bundleSwitchboardCrank(
   config: SwitchboardCrankConfig,
   otherInstructions: web3.TransactionInstruction[]
-): Promise<{instructions: web3.TransactionInstruction[], lookupTables: any[]}> {
+): Promise<{instructions: web3.TransactionInstruction[], lookupTables: web3.AddressLookupTableAccount[]}> {
   const { instructions: crankInstructions, lookupTables } = await getSwitchboardCrankInstruction(config);
   
   // Bundle the crank instructions at the beginning to ensure fresh price data
