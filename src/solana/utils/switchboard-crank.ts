@@ -8,7 +8,6 @@ export interface SwitchboardCrankConfig {
   /** Solana RPC connection */
   connection: web3.Connection;
   /** Oracle feed address to crank */
-  
   feedAddress: web3.PublicKey;
   /** Wallet public key that will pay for the transaction */
   payer: web3.PublicKey;
@@ -69,8 +68,8 @@ export async function getSwitchboardCrankInstruction(
     
     // Extract instructions and lookup tables from the result
     // The fetchUpdateIx returns [instructions, responses, numSuccess, luts, errors]
-    let instructions: web3.TransactionInstruction[] = [];
-    let lookupTables: any[] = [];
+    let instructions: web3.TransactionInstruction[];
+    let lookupTables: any[];
     
     if (Array.isArray(updateResult) && updateResult.length >= 1) {
       const [instructionsArray, responses, numSuccess, luts, errors] = updateResult;
