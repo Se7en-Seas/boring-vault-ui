@@ -132,3 +132,7 @@ dist
 
 # bun
 bun.lock
+
+# sui client gen
+**/gen/*
+!**/gen/gen.toml

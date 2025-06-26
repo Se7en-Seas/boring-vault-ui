@@ -1,0 +1,8 @@
+[config]
+# will be set to mainnet by default if omitted
+rpc = "https://fullnode.testnet.sui.io:443"
+
+[packages]
+sui = { id = "0x2" }
+boring_vault = { id = "0xf4da2204d8e556c71aa89c40e6955d3a812f44b410a4994c23113d9fb9512eff" }
+vLBTC = { id = "0x8867f1e0b6f3e668eca795324dcaa202e3c4d8ff5a6070a34b861e7f02d8095e" }

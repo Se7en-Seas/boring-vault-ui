@@ -8,3 +8,6 @@ Full documentation for using this package can be found at https://www.notion.so/
 3. Run `npm run test` to run the tests
 4. Run `npm run dev` to a local development server
 5. TODO: how to compile and publish the package
+
+Note: to use the Sui SDK you will need to install cargo and run `cargo install --locked --git https://github.com/kunalabs-io/sui-client-gen.git`
+Then cd to src/sui/gen and run `sui-client-gen`
