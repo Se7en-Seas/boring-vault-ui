@@ -65,7 +65,7 @@ describe("SuiVaultSDK", () => {
     // Add new depositable asset type (with error handling in case it already exists)
     try {
       const addNewAssetTx = new Transaction();
-      addNewAssetTx.setGasBudget(5_000_000_000); // Set gas budget to 5 SUI
+      addNewAssetTx.setGasBudget(500_000_000); // Set gas budget to 0.5 SUI
       
       addNewDepositableAssetType(addNewAssetTx, [ASSET.$typeName, VLBTC.$typeName], {
         vault: VLBTC_VAULT_ID,

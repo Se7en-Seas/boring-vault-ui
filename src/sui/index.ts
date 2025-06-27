@@ -78,7 +78,6 @@ export class SuiVaultSDK {
     }
 
     const withdrawTx = new Transaction();
-    withdrawTx.setGasBudget(500_000_000); // Set gas budget to .5 SUI
 
     let shares = split(withdrawTx, shareType, {
       coin: shareCoins.data[0].coinObjectId,
