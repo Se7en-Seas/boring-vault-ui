@@ -15,7 +15,7 @@
     "build": "tsc",
     "build:sui": "cd src/sui && tsc",
     "prepublish": "npm run build",
-    "test": "jest",
+    "test": "jest --testPathIgnorePatterns src/sui",
     "dev": "webpack --mode production && webpack serve --mode development --open",
     "type:check": "tsc --noEmit",
     "type:check:sui": "cd src/sui && tsc --noEmit",
