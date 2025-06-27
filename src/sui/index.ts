@@ -127,6 +127,15 @@ export class SuiVaultSDK {
     return shareType;
   }
 
+  async getOneShare(accountantId: string) {
+    const accountant = await this.client.getObject({
+      id: accountantId,
+      options: { showContent: true },
+    });
+    const fields = (accountant.data?.content as any)?.fields;
+    return (fields?.one_share);
+  }
+
   // returns raw share balance as Sui CoinBalance object
   async getShareBalance(ownerAddress: string, shareType: string) {
     const shareBalance = await this.client.getBalance({
@@ -137,9 +146,9 @@ export class SuiVaultSDK {
   }
 
   // returns human readable numeric share balance
-  async fetchUserShares(ownerAddress: string, shareType: string) {
+  async fetchUserShares(ownerAddress: string, shareType: string, oneShare: bigint) {
     const shareBalance = await this.getShareBalance(ownerAddress, shareType);
-    return Number(shareBalance.totalBalance) / 10 ** 9;
+    return Number(shareBalance.totalBalance) / Number(oneShare);
   }
 
   // returns human readable numeric value for 1 share of the vault
@@ -151,7 +160,7 @@ export class SuiVaultSDK {
       },
     });
     const fields = (accountant.data?.content as any)?.fields;
-    return Number(fields?.exchange_rate) / 10 ** 9;
+    return Number(fields?.exchange_rate) / Number(fields?.one_share);
   }
 
   // returns human readable numeric value for TVL in terms of the base asset of the vault
@@ -163,9 +172,11 @@ export class SuiVaultSDK {
       },
     });
     const fields = (accountant.data?.content as any)?.fields;
-    const total_shares = fields?.total_shares;
-    const share_value = fields?.exchange_rate;
-    return Number(total_shares) * Number(share_value) / 10 ** 18;
+    const one_share = Number(fields?.one_share);
+    const total_shares = Number(fields?.total_shares);
+    const share_value = Number(fields?.exchange_rate);
+    // assuming exchage rate is in terms of 1 share
+    return (total_shares * share_value) / (one_share * one_share);
   }
 
   async fetchRequestUnlockTime(requestId: string) {
