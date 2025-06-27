@@ -233,11 +233,10 @@ describe("SuiVaultSDK", () => {
           x.objectType.includes("vLBTC::VLBTC")
       );
 
-      if (!queueKey) {
-        throw new Error("Queue key not found in withdrawal request result");
+      if (!queueKey || !('objectId' in queueKey)) {
+        throw new Error("Queue key not found in withdrawal request result or missing objectId property");
       }
 
-      // @ts-ignore-next-line
       const { timestamp } = await sdk.readQueueKeyFields(queueKey.objectId);
 
       const withdrawRequestCancelledEvent = `${WithdrawRequestCancelledEvent.$typeName}<${ASSET.$typeName}, ${VLBTC.$typeName}>`;
