@@ -16,7 +16,10 @@ export const NATIVE_SOL_MINT = new Uint8Array(32); // Zero address for native SO
 
 // Token addresses
 export const JITO_SOL_MINT_ADDRESS = 'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn';
-export const JITO_SOL_PRICE_FEED_ADDRESS = '4Z1SLH9g4ikNBV8uP2ZctEouqjYmVqB2Tz5SZxKYBN7z'; 
+export const JITO_SOL_PRICE_FEED_ADDRESS = '4Z1SLH9g4ikNBV8uP2ZctEouqjYmVqB2Tz5SZxKYBN7z';
+
+// Pyth Price Feed ID (hex format) - JITOSOL/SOL
+export const JITOSOL_SOL_PYTH_FEED = '0x01d577b07031e12635d2fb86af6ae938bdc2b6dba9602d8e8af34d44587566fc';
 
 // Program ID
 export const BORING_VAULT_PROGRAM_ID = '5ZRnXG4GsUMLaN7w2DtJV1cgLgcXHmuHCmJ2MxoorWCE'; 
