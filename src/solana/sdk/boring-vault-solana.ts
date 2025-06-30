@@ -21,8 +21,8 @@ import {
 import { BalanceInfo, BoringVaultSolanaConfig } from '../types';
 import { parseFullVaultData } from './vault-state';
 import { type SolanaClient, Address, createSolanaClient } from 'gill';
-import vaultIdl from '../idls/boring-vault-svm-idl.json';
-import queueIdl from '../idls/boring-queue-svm-idl.json';
+import vaultIdl from '../idls/boring_vault_svm.json';
+import queueIdl from '../idls/boring_onchain_queue.json';
 
 /**
  * Service for interacting with the BoringVault Solana smart contract

@@ -1,7 +1,7 @@
 import { web3 } from '@coral-xyz/anchor';
 import { BoringVaultSolana } from './boring-vault-solana';
 import { parseFullVaultData, FullVaultData } from './vault-state';
-import vaultIdl from '../idls/boring-vault-svm-idl.json';
+import vaultIdl from '../idls/boring_vault_svm.json';
 import {
   AccountLayout
 } from '@solana/spl-token';

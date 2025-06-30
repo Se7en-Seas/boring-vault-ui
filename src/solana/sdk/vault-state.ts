@@ -1,5 +1,5 @@
 import { web3, Idl, BorshCoder } from '@coral-xyz/anchor';
-import vaultIdl from '../idls/boring-vault-svm-idl.json';
+import vaultIdl from '../idls/boring_vault_svm.json';
 
 // Complete Vault State structure from IDL
 export interface VaultState {
