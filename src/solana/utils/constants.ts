@@ -33,6 +33,23 @@ export const PYTH_COMPUTE_UNIT_PRICE = 50000;
 export const PYTH_SHARD_ID = 1; // Standard shard ID for price feeds
 export const PYTH_MAX_RETRIES = 3;
 
+// Network-specific compute unit prices (micro-lamports)
+export const COMPUTE_UNIT_PRICES = {
+  // Mainnet prices - higher due to congestion
+  MAINNET_LOW: 10000,      // Low priority
+  MAINNET_MEDIUM: 50000,   // Medium priority (current default)
+  MAINNET_HIGH: 100000,    // High priority for urgent transactions
+  MAINNET_CRITICAL: 200000, // Critical priority for time-sensitive operations
+  
+  // Devnet/Testnet prices - generally lower
+  DEVNET_DEFAULT: 5000,
+  TESTNET_DEFAULT: 5000,
+  
+  // Pyth-specific defaults
+  PYTH_DEFAULT: 50000,
+  PYTH_ORACLE_CRANK: 75000, // Slightly higher for oracle operations
+} as const;
+
 // Transaction polling constants
 export const TX_POLL_MAX_ATTEMPTS = 30;
 export const TX_POLL_INTERVAL_MS = 1000;

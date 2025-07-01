@@ -8,7 +8,8 @@ import {
   PYTH_MAX_RETRIES,
   TX_POLL_MAX_ATTEMPTS,
   TX_POLL_INTERVAL_MS,
-  TX_POLL_ERROR_INTERVAL_MS
+  TX_POLL_ERROR_INTERVAL_MS,
+  COMPUTE_UNIT_PRICES
 } from './constants';
 
 /**
@@ -27,6 +28,8 @@ export interface PythOracleConfig {
   closeUpdateAccounts?: boolean;
   /** Shard ID for price feed accounts (default: 0) */
   shardId?: number;
+  /** Compute unit price in micro-lamports (optional, defaults to network-appropriate value) */
+  computeUnitPrice?: number;
 }
 
 /**
@@ -278,13 +281,15 @@ async function pollTransactionStatus(
  * @param wallet - Either a Keypair or wallet adapter interface (e.g., Phantom, Solflare)
  * @param priceFeedIds - Array of Pyth price feed IDs to update
  * @param hermesUrl - Hermes endpoint URL for fetching price updates
+ * @param computeUnitPrice - Compute unit price in micro-lamports (defaults to oracle-optimized price)
  * @returns Transaction signature of the final oracle crank transaction
  */
 export async function crankPythPriceFeeds(
   connection: web3.Connection,
   wallet: { publicKey: web3.PublicKey; signTransaction: (tx: web3.Transaction) => Promise<web3.Transaction> } | web3.Keypair,
   priceFeedIds: string[],
-  hermesUrl: string = PYTH_HERMES_URL
+  hermesUrl: string = PYTH_HERMES_URL,
+  computeUnitPrice: number = COMPUTE_UNIT_PRICES.PYTH_ORACLE_CRANK
 ): Promise<string> {
   // Suppress console errors temporarily to avoid noisy RPC logs
   const originalConsoleError = console.error;
@@ -315,7 +320,7 @@ export async function crankPythPriceFeeds(
 
   try {
     // Get the public key regardless of wallet type
-    const payerPublicKey = 'signTransaction' in wallet ? wallet.publicKey : wallet.publicKey;
+    const payerPublicKey = wallet.publicKey;
 
     // Create wallet interface for PythSolanaReceiver
     const payerWallet = {
@@ -381,7 +386,7 @@ export async function crankPythPriceFeeds(
 
     // Build legacy transactions for better compatibility
     const legacyTxs = await transactionBuilder.buildLegacyTransactions({
-      computeUnitPriceMicroLamports: PYTH_COMPUTE_UNIT_PRICE,
+      computeUnitPriceMicroLamports: computeUnitPrice,
     });
 
     // Send transactions
