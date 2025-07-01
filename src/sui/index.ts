@@ -14,10 +14,16 @@ import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
 export class SuiVaultSDK {
   private client: SuiClient;
   private network: Network;
+  private vaultId: string;
+  private accountantId: string;
+  private shareType: string | null = null;
+  private shareTypePromise: Promise<string | null> | null = null;
 
-  constructor(network: Network = "localnet") {
+  constructor(network: Network = "localnet", vaultId: string, accountantId: string) {
     this.client = getClient(network);
     this.network = network;
+    this.vaultId = vaultId;
+    this.accountantId = accountantId;
   }
 
   //== Vault write functions ==
@@ -25,9 +31,6 @@ export class SuiVaultSDK {
   async deposit(
     payerAddress: string,
     assetType: string,
-    shareType: string,
-    vaultId: string,
-    accountantId: string,
     depositAmount: bigint,
     minMintAmount: bigint,
   ) {
@@ -47,9 +50,14 @@ export class SuiVaultSDK {
       u64: depositAmount,
     });
 
+    const shareType = await this.getShareType();
+    if (!shareType) {
+      throw new Error("Share type not found for vault");
+    }
+
     depositAndTransfer(depTx, [assetType, shareType], {
-      vault: vaultId,
-      accountant: accountantId,
+      vault: this.vaultId,
+      accountant: this.accountantId,
       coin: coin,
       u64: minMintAmount,
       denyList: DENY_LIST_ID,
@@ -61,13 +69,15 @@ export class SuiVaultSDK {
   async requestWithdraw(
     payerAddress: string,
     assetType: string,
-    shareType: string,
-    vaultId: string,
-    accountantId: string,
     shareAmount: bigint,
     discount: bigint,
     msToDeadline: bigint,
   ) {
+    const shareType = await this.getShareType();
+    if (!shareType) {
+      throw new Error("Share type not found for vault");
+    }
+
     const shareCoins = await this.client.getCoins({
       owner: payerAddress,
       coinType: shareType,
@@ -85,8 +95,8 @@ export class SuiVaultSDK {
     });
 
     requestWithdraw(withdrawTx, [assetType, shareType], {
-      vault: vaultId,
-      accountant: accountantId,
+      vault: this.vaultId,
+      accountant: this.accountantId,
       coin: shares,
       u641: discount,
       u642: msToDeadline,
@@ -100,10 +110,13 @@ export class SuiVaultSDK {
   async cancelWithdraw(
     payerAddress: string,
     assetType: string,
-    shareType: string,
-    vaultId: string,
     timestamp: bigint,
   ) {
+    const shareType = await this.getShareType();
+    if (!shareType) {
+      throw new Error("Share type not found for vault");
+    }
+
     const cancelTx = new Transaction();
 
     const queueKey = createQueueKey(cancelTx, assetType, {
@@ -112,7 +125,7 @@ export class SuiVaultSDK {
     });
 
     cancelWithdrawByReqIdAndTransfer(cancelTx, [assetType, shareType], {
-      vault: vaultId,
+      vault: this.vaultId,
       queueKey: queueKey,
       denyList: DENY_LIST_ID,
     });
@@ -122,14 +135,22 @@ export class SuiVaultSDK {
 
   //== Vault read functions ==
 
-  async getShareType(vaultId: string) {
-    const shareType = await this.#getGenericTypeFromObject(vaultId);
-    return shareType;
+  async getShareType() {
+    if (this.shareType !== null) {
+      return this.shareType;
+    }
+    
+    if (this.shareTypePromise === null) {
+      this.shareTypePromise = this.#getGenericTypeFromObject(this.vaultId);
+    }
+    
+    this.shareType = await this.shareTypePromise;
+    return this.shareType;
   }
 
-  async getOneShare(accountantId: string) {
+  async getOneShare() {
     const accountant = await this.client.getObject({
-      id: accountantId,
+      id: this.accountantId,
       options: { showContent: true },
     });
     const fields = (accountant.data?.content as any)?.fields;
@@ -152,9 +173,9 @@ export class SuiVaultSDK {
   }
 
   // returns human readable numeric value for 1 share of the vault
-  async fetchShareValue(accountantId: string) {
+  async fetchShareValue() {
     const accountant = await this.client.getObject({
-      id: accountantId,
+      id: this.accountantId,
       options: {
         showContent: true,
       },
@@ -164,9 +185,9 @@ export class SuiVaultSDK {
   }
 
   // returns human readable numeric value for TVL in terms of the base asset of the vault
-  async fetchTotalAssets(accountantId: string) {
+  async fetchTotalAssets() {
     const accountant = await this.client.getObject({
-      id: accountantId,
+      id: this.accountantId,
       options: {
         showContent: true,
       },
@@ -190,9 +211,9 @@ export class SuiVaultSDK {
     return fields?.creation_time_ms + fields?.ms_to_maturity;
   }
 
-  async isVaultPaused(vaultId: string) {
+  async isVaultPaused() {
     const vault = await this.client.getObject({
-      id: vaultId,
+      id: this.vaultId,
       options: {
         showContent: true,
       },
@@ -230,51 +251,20 @@ export class SuiVaultSDK {
     }
   
     const typeString = objectData.data.type;
-    console.log('Full type string:', typeString);
   
     // Example: 0x2::coin::Coin<0x2::sui::SUI>
     const genericMatch = typeString.match(/<(.+)>/);
     if (genericMatch) {
       const genericType = genericMatch[1];
-      console.log('Generic type parameter:', genericType);
       return genericType;
     }
   
     console.log('No generic parameter found.');
     return null;
   }
-
-  /*async addNewDepositableAsset(
-    payerAddress: string,
-    assetType: string,
-    assetSharePremium: number,
-    msToMaturity: bigint,
-    minMsToDeadline: bigint,
-    minDiscount: bigint,
-    maxDiscount: bigint,
-    minimumShares: bigint,
-    withdrawCapacity: bigint,
-    network: Network = "localnet"
-  ) {
-    const addTx = new Transaction();
-
-    addNewDepositableAssetType(addTx, [assetType, VLBTC.$typeName], {
-      vault: VLBTC_VAULT_ID,
-      auth: AUTH_ID,
-      u16: assetSharePremium,
-      u641: msToMaturity,
-      u642: minMsToDeadline,
-      u643: minDiscount,
-      u644: maxDiscount,
-      u645: minimumShares,
-      u646: withdrawCapacity,
-    });
-
-    return await signAndExecute(addTx, network, payerAddress);
-  }*/
 }
 
 // Export the SDK instance
-export const createSuiVaultSDK = (network: Network = "localnet") => {
-  return new SuiVaultSDK(network);
+export const createSuiVaultSDK = (network: Network = "localnet", vaultId: string, accountantId: string) => {
+  return new SuiVaultSDK(network, vaultId, accountantId);
 };

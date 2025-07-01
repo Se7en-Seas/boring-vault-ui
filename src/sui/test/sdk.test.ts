@@ -1,12 +1,5 @@
 import { Transaction } from "@mysten/sui/transactions";
-import {
-  ADMIN_ADDRESS,
-  ACTIVE_NETWORK,
-  TEST_ASSET_TREASURY_CAP,
-  VLBTC_VAULT_ID,
-  ACCOUNTANT_ID,
-  AUTH_ID,
-} from "../config";
+import { ADMIN_ADDRESS } from "../config";
 import { getClient, signAndExecute } from "../utils/execute";
 import { testMint } from "../gen/v-lbtc/asset/functions";
 import { ASSET } from "../gen/v-lbtc/asset/structs";
@@ -15,6 +8,11 @@ import { VLBTC } from "../gen/v-lbtc/vlbtc/structs";
 import { DepositEvent, WithdrawRequestedEvent, WithdrawRequestCancelledEvent } from "../gen/boring_vault/boring-vault/structs";
 import { SuiVaultSDK, createSuiVaultSDK } from "../index";
 import { SuiClient } from "@mysten/sui/client";
+
+const TEST_ASSET_TREASURY_CAP = "0x4bfb993b596b36c910443e9491f1488efe0922d6585cffd8e176b09ce16ad526";
+const AUTH_ID = "0xbff900ce0a4b6779f6be9db0829f1ad1b3d02a37017d1a945cd56835a704bfb1";
+const VLBTC_VAULT_ID = "0x9744470b89f1c94330c629b260619a8aaedd3ce122400426d8a0e46bf4a7f2f1";
+const ACCOUNTANT_ID = "0x316e2901ce31cd7e16f26aabb1361301fdbdc10fa48bdbaff6455b6a5b3fe8c5";
 
 // Helper function to count events by type
 async function countEvents(client: SuiClient, eventType: string): Promise<number> {
@@ -49,8 +47,8 @@ describe("SuiVaultSDK", () => {
 
   beforeAll(async () => {
     // Setup SDK and client
-    sdk = createSuiVaultSDK(ACTIVE_NETWORK);
-    client = getClient(ACTIVE_NETWORK);
+    sdk = createSuiVaultSDK("testnet", VLBTC_VAULT_ID, ACCOUNTANT_ID);
+    client = getClient("testnet");
 
     // Mint test assets
     const mintTx = new Transaction();
@@ -59,7 +57,7 @@ describe("SuiVaultSDK", () => {
       u64: 1_000_000_000_00000000n, // 1B
     });
 
-    let result = await signAndExecute(mintTx, ACTIVE_NETWORK, ADMIN_ADDRESS);
+    let result = await signAndExecute(mintTx, "testnet", ADMIN_ADDRESS);
     expect(result.effects?.status.status).toBe("success");
 
     // Add new depositable asset type (with error handling in case it already exists)
@@ -79,7 +77,7 @@ describe("SuiVaultSDK", () => {
         u646: 18_446_744_073_709_551_615n,    // withdraw_capacity (u64::MAX)
       });
 
-      await signAndExecute(addNewAssetTx, ACTIVE_NETWORK, ADMIN_ADDRESS);
+      await signAndExecute(addNewAssetTx, "testnet", ADMIN_ADDRESS);
     } catch (error) {
       // Asset type might already be added, which is fine
       console.log("Asset type might already be added:", error);
@@ -97,9 +95,6 @@ describe("SuiVaultSDK", () => {
       const result = await sdk.deposit(
         ADMIN_ADDRESS,
         ASSET.$typeName,
-        VLBTC.$typeName,
-        VLBTC_VAULT_ID,
-        ACCOUNTANT_ID,
         depositAmount,
         minMintAmount,
       );
@@ -123,9 +118,6 @@ describe("SuiVaultSDK", () => {
         sdk.deposit(
           "0x0000000000000000000000000000000000000000000000000000000000000000", // Non-existent address
           ASSET.$typeName,
-          VLBTC.$typeName,
-          VLBTC_VAULT_ID,
-          ACCOUNTANT_ID,
           depositAmount,
           minMintAmount,
         )
@@ -141,9 +133,6 @@ describe("SuiVaultSDK", () => {
       await sdk.deposit(
         ADMIN_ADDRESS,
         ASSET.$typeName,
-        VLBTC.$typeName,
-        VLBTC_VAULT_ID,
-        ACCOUNTANT_ID,
         depositAmount,
         minMintAmount,
       );
@@ -158,9 +147,6 @@ describe("SuiVaultSDK", () => {
       const result = await sdk.requestWithdraw(
         ADMIN_ADDRESS,
         ASSET.$typeName,
-        VLBTC.$typeName,
-        VLBTC_VAULT_ID,
-        ACCOUNTANT_ID,
         shareAmount,
         discount,
         msToDeadline,
@@ -182,9 +168,6 @@ describe("SuiVaultSDK", () => {
         sdk.requestWithdraw(
           "0x0000000000000000000000000000000000000000000000000000000000000000", // Non-existent address
           ASSET.$typeName,
-          VLBTC.$typeName,
-          VLBTC_VAULT_ID,
-          ACCOUNTANT_ID,
           shareAmount,
           discount,
           msToDeadline,
@@ -201,9 +184,6 @@ describe("SuiVaultSDK", () => {
       await sdk.deposit(
         ADMIN_ADDRESS,
         ASSET.$typeName,
-        VLBTC.$typeName,
-        VLBTC_VAULT_ID,
-        ACCOUNTANT_ID,
         depositAmount,
         minMintAmount,
       );
@@ -217,9 +197,6 @@ describe("SuiVaultSDK", () => {
       const withdrawResult = await sdk.requestWithdraw(
         ADMIN_ADDRESS,
         ASSET.$typeName,
-        VLBTC.$typeName,
-        VLBTC_VAULT_ID,
-        ACCOUNTANT_ID,
         shareAmount,
         discount,
         msToDeadline,
@@ -246,8 +223,6 @@ describe("SuiVaultSDK", () => {
       const result = await sdk.cancelWithdraw(
         ADMIN_ADDRESS,
         ASSET.$typeName,
-        VLBTC.$typeName,
-        VLBTC_VAULT_ID,
         timestamp,
       );
 
@@ -268,19 +243,19 @@ describe("SuiVaultSDK", () => {
 
   describe("SDK factory function", () => {
     it("should create SDK instance with default network", () => {
-      const defaultSdk = createSuiVaultSDK();
+      const defaultSdk = createSuiVaultSDK("localnet", VLBTC_VAULT_ID, ACCOUNTANT_ID);
       expect(defaultSdk).toBeInstanceOf(SuiVaultSDK);
     });
 
     it("should create SDK instance with specified network", () => {
-      const testnetSdk = createSuiVaultSDK("testnet");
+      const testnetSdk = createSuiVaultSDK("testnet", VLBTC_VAULT_ID, ACCOUNTANT_ID);
       expect(testnetSdk).toBeInstanceOf(SuiVaultSDK);
     });
   });
 
   describe("getShareType", () => {
     it("should successfully extract share type from vault object", async () => {
-      const shareType = await sdk.getShareType(VLBTC_VAULT_ID);
+      const shareType = await sdk.getShareType();
       
       // The share type should be extracted from the vault object
       expect(shareType).toBeTruthy();
@@ -292,8 +267,9 @@ describe("SuiVaultSDK", () => {
     });
 
     it("should extract generic type from TreasuryCap object", async () => {
-      // Test with a TreasuryCap object that has generic type parameters
-      const genericType = await sdk.getShareType(TEST_ASSET_TREASURY_CAP);
+      // Test with a different SDK instance for TreasuryCap
+      const testSdk = createSuiVaultSDK("testnet", TEST_ASSET_TREASURY_CAP, ACCOUNTANT_ID);
+      const genericType = await testSdk.getShareType();
       
       // Should return the generic type parameter
       expect(genericType).toBeTruthy();
@@ -303,16 +279,17 @@ describe("SuiVaultSDK", () => {
 
     it("should throw error for non-existent object", async () => {
       const nonExistentObjectId = "0x0000000000000000000000000000000000000000000000000000000000000000";
+      const testSdk = createSuiVaultSDK("testnet", nonExistentObjectId, ACCOUNTANT_ID);
       
       await expect(
-        sdk.getShareType(nonExistentObjectId)
+        testSdk.getShareType()
       ).rejects.toThrow("Type information not found.");
     });
   });
 
   describe("isVaultPaused", () => {
     it("should return vault pause status", async () => {
-      const isPaused = await sdk.isVaultPaused(VLBTC_VAULT_ID);
+      const isPaused = await sdk.isVaultPaused();
       
       // Should return a boolean value
       expect(typeof isPaused).toBe("boolean");
@@ -320,21 +297,12 @@ describe("SuiVaultSDK", () => {
       // The vault should not be paused by default
       expect(isPaused).toBe(false);
     });
-
-    it("should handle non-existent vault gracefully", async () => {
-      const nonExistentVaultId = "0x0000000000000000000000000000000000000000000000000000000000000000";
-      
-      const isPaused = await sdk.isVaultPaused(nonExistentVaultId);
-      
-      // Should return undefined for non-existent vault
-      expect(isPaused).toBeUndefined();
-    });
   });
 
   describe("fetchUserShares", () => {
     it("should return correct user share balance in human readable format", async () => {
       // Get one_share value from accountant
-      const oneShare = await sdk.getOneShare(ACCOUNTANT_ID);
+      const oneShare = await sdk.getOneShare();
       expect(oneShare).toBeTruthy();
       expect(typeof oneShare).toBe("string");
 
@@ -347,9 +315,6 @@ describe("SuiVaultSDK", () => {
       await sdk.deposit(
         ADMIN_ADDRESS,
         ASSET.$typeName,
-        VLBTC.$typeName,
-        VLBTC_VAULT_ID,
-        ACCOUNTANT_ID,
         depositAmount,
         minMintAmount,
       );
@@ -372,7 +337,7 @@ describe("SuiVaultSDK", () => {
     });
 
     it("should return 0 for user with no shares", async () => {
-      const oneShare = await sdk.getOneShare(ACCOUNTANT_ID);
+      const oneShare = await sdk.getOneShare();
       const nonExistentAddress = "0x0000000000000000000000000000000000000000000000000000000000000000";
       
       const userShares = await sdk.fetchUserShares(nonExistentAddress, VLBTC.$typeName, BigInt(oneShare));
@@ -381,7 +346,7 @@ describe("SuiVaultSDK", () => {
     });
 
     it("should handle different share types correctly", async () => {
-      const oneShare = await sdk.getOneShare(ACCOUNTANT_ID);
+      const oneShare = await sdk.getOneShare();
       
       // Test with the actual share type
       const userShares = await sdk.fetchUserShares(ADMIN_ADDRESS, VLBTC.$typeName, BigInt(oneShare));
@@ -390,7 +355,7 @@ describe("SuiVaultSDK", () => {
     });
 
     it("should accurately reflect share balance changes after multiple operations", async () => {
-      const oneShare = await sdk.getOneShare(ACCOUNTANT_ID);
+      const oneShare = await sdk.getOneShare();
       
       // Get initial balance
       const initialShares = await sdk.fetchUserShares(ADMIN_ADDRESS, VLBTC.$typeName, BigInt(oneShare));
@@ -401,9 +366,6 @@ describe("SuiVaultSDK", () => {
       await sdk.deposit(
         ADMIN_ADDRESS,
         ASSET.$typeName,
-        VLBTC.$typeName,
-        VLBTC_VAULT_ID,
-        ACCOUNTANT_ID,
         depositAmount,
         minMintAmount,
       );
@@ -425,7 +387,7 @@ describe("SuiVaultSDK", () => {
 
   describe("fetchShareValue", () => {
     it("should return correct share value in human readable format", async () => {
-      const shareValue = await sdk.fetchShareValue(ACCOUNTANT_ID);
+      const shareValue = await sdk.fetchShareValue();
       
       // Should return a number
       expect(typeof shareValue).toBe("number");
@@ -451,23 +413,16 @@ describe("SuiVaultSDK", () => {
       const expectedShareValue = exchangeRate / oneShare;
       
       // Get actual share value from SDK
-      const actualShareValue = await sdk.fetchShareValue(ACCOUNTANT_ID);
+      const actualShareValue = await sdk.fetchShareValue();
       
       // Should match the expected calculation
       expect(actualShareValue).toBeCloseTo(expectedShareValue, 6);
-    });
-
-    it("should return NaN for non-existent accountant", async () => {
-      const nonExistentAccountantId = "0x0000000000000000000000000000000000000000000000000000000000000000";
-      
-      const shareValue = await sdk.fetchShareValue(nonExistentAccountantId);
-      expect(shareValue).toBeNaN();
     });
   });
 
   describe("fetchTotalAssets", () => {
     it("should return correct total assets value in human readable format", async () => {
-      const totalAssets = await sdk.fetchTotalAssets(ACCOUNTANT_ID);
+      const totalAssets = await sdk.fetchTotalAssets();
       
       // Should return a number
       expect(typeof totalAssets).toBe("number");
@@ -494,7 +449,7 @@ describe("SuiVaultSDK", () => {
       const expectedTotalAssets = (totalShares * exchangeRate) / (oneShare * oneShare);
       
       // Get actual total assets from SDK
-      const actualTotalAssets = await sdk.fetchTotalAssets(ACCOUNTANT_ID);
+      const actualTotalAssets = await sdk.fetchTotalAssets();
       
       // Should match the expected calculation
       expect(actualTotalAssets).toBeCloseTo(expectedTotalAssets, 6);
@@ -503,7 +458,7 @@ describe("SuiVaultSDK", () => {
     it("should return 0 for vault with no total shares", async () => {
       // This test assumes there might be a scenario where total_shares is 0
       // In practice, this might not happen, but we test the calculation logic
-      const totalAssets = await sdk.fetchTotalAssets(ACCOUNTANT_ID);
+      const totalAssets = await sdk.fetchTotalAssets();
       
       // If total shares is 0, total assets should be 0
       const accountant = await client.getObject({
@@ -519,18 +474,11 @@ describe("SuiVaultSDK", () => {
         expect(totalAssets).toBeGreaterThan(0);
       }
     });
-
-    it("should return NaN for non-existent accountant", async () => {
-      const nonExistentAccountantId = "0x0000000000000000000000000000000000000000000000000000000000000000";
-      
-      const totalAssets = await sdk.fetchTotalAssets(nonExistentAccountantId);
-      expect(totalAssets).toBeNaN();
-    });
   });
 
   describe("getOneShare", () => {
     it("should return correct one_share value from accountant", async () => {
-      const oneShare = await sdk.getOneShare(ACCOUNTANT_ID);
+      const oneShare = await sdk.getOneShare();
       
       // Should return a string (as returned by Sui object fields)
       expect(typeof oneShare).toBe("string");
@@ -552,17 +500,10 @@ describe("SuiVaultSDK", () => {
       const expectedOneShare = fields?.one_share;
       
       // Get one_share from SDK
-      const actualOneShare = await sdk.getOneShare(ACCOUNTANT_ID);
+      const actualOneShare = await sdk.getOneShare();
       
       // Should match
       expect(actualOneShare).toBe(expectedOneShare);
-    });
-
-    it("should return undefined for non-existent accountant", async () => {
-      const nonExistentAccountantId = "0x0000000000000000000000000000000000000000000000000000000000000000";
-      
-      const oneShare = await sdk.getOneShare(nonExistentAccountantId);
-      expect(oneShare).toBeUndefined();
     });
   });
 
@@ -574,9 +515,6 @@ describe("SuiVaultSDK", () => {
       await sdk.deposit(
         ADMIN_ADDRESS,
         ASSET.$typeName,
-        VLBTC.$typeName,
-        VLBTC_VAULT_ID,
-        ACCOUNTANT_ID,
         depositAmount,
         minMintAmount,
       );
@@ -618,17 +556,14 @@ describe("SuiVaultSDK", () => {
       await sdk.deposit(
         ADMIN_ADDRESS,
         ASSET.$typeName,
-        VLBTC.$typeName,
-        VLBTC_VAULT_ID,
-        ACCOUNTANT_ID,
         depositAmount,
         minMintAmount,
       );
 
       // Get all vault metrics
-      const oneShare = await sdk.getOneShare(ACCOUNTANT_ID);
-      const shareValue = await sdk.fetchShareValue(ACCOUNTANT_ID);
-      const totalAssets = await sdk.fetchTotalAssets(ACCOUNTANT_ID);
+      const oneShare = await sdk.getOneShare();
+      const shareValue = await sdk.fetchShareValue();
+      const totalAssets = await sdk.fetchTotalAssets();
       const userShares = await sdk.fetchUserShares(ADMIN_ADDRESS, VLBTC.$typeName, BigInt(oneShare));
       const shareBalance = await sdk.getShareBalance(ADMIN_ADDRESS, VLBTC.$typeName);
 
