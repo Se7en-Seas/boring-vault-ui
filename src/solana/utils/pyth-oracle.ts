@@ -1,6 +1,15 @@
 import { web3 } from '@coral-xyz/anchor';
 import { HermesClient } from '@pythnetwork/hermes-client';
 import { PythSolanaReceiver } from '@pythnetwork/pyth-solana-receiver';
+import {
+  PYTH_HERMES_URL,
+  PYTH_COMPUTE_UNIT_PRICE,
+  PYTH_SHARD_ID,
+  PYTH_MAX_RETRIES,
+  TX_POLL_MAX_ATTEMPTS,
+  TX_POLL_INTERVAL_MS,
+  TX_POLL_ERROR_INTERVAL_MS
+} from './constants';
 
 /**
  * Configuration for Pyth oracle integration
@@ -222,9 +231,7 @@ async function pollTransactionStatus(
   signature: string,
   silent: boolean = true
 ): Promise<void> {
-  const maxAttempts = 30;
-  
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+  for (let attempt = 0; attempt < TX_POLL_MAX_ATTEMPTS; attempt++) {
     try {
       const response = await connection.getSignatureStatuses([signature]);
       const status = response.value[0];
@@ -240,7 +247,7 @@ async function pollTransactionStatus(
       }
       
       // Wait before next poll
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, TX_POLL_INTERVAL_MS));
       if (!silent) {
         process.stdout.write('.');
       }
@@ -251,16 +258,16 @@ async function pollTransactionStatus(
       }
       
       // This is a network/API error, continue polling but warn
-      if (!silent && attempt >= maxAttempts - 3) {
+      if (!silent && attempt >= TX_POLL_MAX_ATTEMPTS - 3) {
         throw new Error(`Polling failed after ${attempt + 1} attempts: ${error}`);
       }
       
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, TX_POLL_ERROR_INTERVAL_MS));
     }
   }
   
   // If we reach here, polling finished without confirmation
-  throw new Error(`Transaction polling timed out after ${maxAttempts} attempts. Signature: ${signature}`);
+  throw new Error(`Transaction polling timed out after ${TX_POLL_MAX_ATTEMPTS} attempts. Signature: ${signature}`);
 }
 
 /**
@@ -277,7 +284,7 @@ export async function crankPythPriceFeeds(
   connection: web3.Connection,
   wallet: { publicKey: web3.PublicKey; signTransaction: (tx: web3.Transaction) => Promise<web3.Transaction> } | web3.Keypair,
   priceFeedIds: string[],
-  hermesUrl: string = 'https://hermes.pyth.network/'
+  hermesUrl: string = PYTH_HERMES_URL
 ): Promise<string> {
   // Suppress console errors temporarily to avoid noisy RPC logs
   const originalConsoleError = console.error;
@@ -360,7 +367,7 @@ export async function crankPythPriceFeeds(
     const transactionBuilder = pythSolanaReceiver.newTransactionBuilder({});
     
     // Update the price feed accounts for the feed ids in priceUpdateData and shard id 1
-    await transactionBuilder.addUpdatePriceFeed(priceUpdateData, 1);
+    await transactionBuilder.addUpdatePriceFeed(priceUpdateData, PYTH_SHARD_ID);
 
     await transactionBuilder.addPriceConsumerInstructions(
       async (
@@ -374,7 +381,7 @@ export async function crankPythPriceFeeds(
 
     // Build legacy transactions for better compatibility
     const legacyTxs = await transactionBuilder.buildLegacyTransactions({
-      computeUnitPriceMicroLamports: 50000,
+      computeUnitPriceMicroLamports: PYTH_COMPUTE_UNIT_PRICE,
     });
 
     // Send transactions
@@ -401,7 +408,7 @@ export async function crankPythPriceFeeds(
         const signature = await connection.sendRawTransaction(signedTx.serialize(), {
           skipPreflight: false,
           preflightCommitment: 'confirmed',
-          maxRetries: 3
+          maxRetries: PYTH_MAX_RETRIES
         });
         
         // Use the same polling pattern as the rest of the codebase
@@ -421,7 +428,7 @@ export async function crankPythPriceFeeds(
         const signature = await connection.sendRawTransaction(tx.serialize(), {
           skipPreflight: false,
           preflightCommitment: 'confirmed',
-          maxRetries: 3
+          maxRetries: PYTH_MAX_RETRIES
         });
         
         // Use the same polling pattern as the rest of the codebase

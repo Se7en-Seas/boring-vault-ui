@@ -26,6 +26,27 @@ export const JITOSOL_SOL_PYTH_FEED = '0x01d577b07031e12635d2fb86af6ae938bdc2b6db
 // Pyth Price Feed Account Address (computed from above ID)
 export const JITOSOL_SOL_PYTH_ACCOUNT = 'CmGnCwUEYC7Kp9Sca4ULJRckSR8eJKLFTk1ed3wwGc78';
 
+// Pyth Oracle Constants
+export const PYTH_PROGRAM_ID = 'rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ';
+export const PYTH_HERMES_URL = 'https://hermes.pyth.network/';
+export const PYTH_COMPUTE_UNIT_PRICE = 50000;
+export const PYTH_SHARD_ID = 1; // Standard shard ID for price feeds
+export const PYTH_MAX_RETRIES = 3;
+
+// Transaction polling constants
+export const TX_POLL_MAX_ATTEMPTS = 30;
+export const TX_POLL_INTERVAL_MS = 1000;
+export const TX_POLL_ERROR_INTERVAL_MS = 2000;
+
+// Solana system constants
+export const SYSTEM_PROGRAM_ID = '11111111111111111111111111111111';
+export const DEFAULT_RPC_URL = 'https://api.mainnet-beta.solana.com';
+
+// Oracle test constants
+export const PRICE_UPDATE_MIN_SIZE = 100; // Minimum size for a valid price update
+export const LARGE_TX_THRESHOLD = 50000; // Size threshold for requiring legacy transaction
+export const INSTRUCTION_SIZE_THRESHOLD_KB = 1.2; // KB threshold for versioned transactions
+
 // Program ID
 export const BORING_VAULT_PROGRAM_ID = '5ZRnXG4GsUMLaN7w2DtJV1cgLgcXHmuHCmJ2MxoorWCE'; 
 export const BORING_QUEUE_PROGRAM_ID = '4yfE2VJQmxmcnUhrb8vdz7H8w313EZ3eJh5DbANBgtmd';
