@@ -17,5 +17,5 @@
     "jsx": "react-jsx" // Support JSX in .tsx files
   },
   "include": ["src/**/*"], // Include all files for compilation in the src directory
-  "exclude": ["node_modules"] // Exclude the node_modules directory
+  "exclude": ["node_modules", "src/sui/**/*"] // Exclude the node_modules directory and sui directory
 }
