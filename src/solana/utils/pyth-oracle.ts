@@ -212,4 +212,232 @@ export async function getPythPriceFeedAccount(
 ): Promise<web3.PublicKey> {
   const addresses = await getPythPriceFeedAddresses(connection, [priceFeedId], shardId);
   return addresses[priceFeedId];
+}
+
+/**
+ * Polls for transaction confirmation using the same pattern as the rest of the codebase
+ */
+async function pollTransactionStatus(
+  connection: web3.Connection, 
+  signature: string,
+  silent: boolean = true
+): Promise<void> {
+  const maxAttempts = 30;
+  
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const response = await connection.getSignatureStatuses([signature]);
+      const status = response.value[0];
+      
+      if (status) {
+        if (status.err) {
+          throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+        }
+        
+        if (status.confirmationStatus === 'finalized' || status.confirmationStatus === 'confirmed') {
+          return; // Success!
+        }
+      }
+      
+      // Wait before next poll
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (!silent) {
+        process.stdout.write('.');
+      }
+    } catch (error) {
+      // Check if this is a transaction failure error that should stop polling
+      if (error instanceof Error && error.message.includes('Transaction failed:')) {
+        throw error;
+      }
+      
+      // This is a network/API error, continue polling but warn
+      if (!silent && attempt >= maxAttempts - 3) {
+        throw new Error(`Polling failed after ${attempt + 1} attempts: ${error}`);
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  }
+  
+  // If we reach here, polling finished without confirmation
+  throw new Error(`Transaction polling timed out after ${maxAttempts} attempts. Signature: ${signature}`);
+}
+
+/**
+ * Cranks Pyth price feeds using addUpdatePriceFeed with shard ID 1
+ * This creates the fixed price feed accounts that the smart contract expects
+ * 
+ * @param connection - Solana RPC connection
+ * @param wallet - Either a Keypair or wallet adapter interface (e.g., Phantom, Solflare)
+ * @param priceFeedIds - Array of Pyth price feed IDs to update
+ * @param hermesUrl - Hermes endpoint URL for fetching price updates
+ * @returns Transaction signature of the final oracle crank transaction
+ */
+export async function crankPythPriceFeeds(
+  connection: web3.Connection,
+  wallet: { publicKey: web3.PublicKey; signTransaction: (tx: web3.Transaction) => Promise<web3.Transaction> } | web3.Keypair,
+  priceFeedIds: string[],
+  hermesUrl: string = 'https://hermes.pyth.network/'
+): Promise<string> {
+  // Suppress console errors temporarily to avoid noisy RPC logs
+  const originalConsoleError = console.error;
+  const originalConsoleWarn = console.warn;
+  
+  // Only suppress specific RPC/websocket errors
+  console.error = (...args) => {
+    const message = args.join(' ');
+    if (message.includes('JSON-RPC error') || 
+        message.includes('signatureSubscribe') || 
+        message.includes('WebSocket') ||
+        message.includes('rpc-websockets')) {
+      return; // Suppress these errors
+    }
+    originalConsoleError(...args);
+  };
+  
+  console.warn = (...args) => {
+    const message = args.join(' ');
+    if (message.includes('JSON-RPC error') || 
+        message.includes('signatureSubscribe') || 
+        message.includes('WebSocket') ||
+        message.includes('rpc-websockets')) {
+      return; // Suppress these warnings
+    }
+    originalConsoleWarn(...args);
+  };
+
+  try {
+    // Get the public key regardless of wallet type
+    const payerPublicKey = 'signTransaction' in wallet ? wallet.publicKey : wallet.publicKey;
+
+    // Create wallet interface for PythSolanaReceiver
+    const payerWallet = {
+      publicKey: payerPublicKey,
+      signTransaction: async (tx: any) => {
+        if ('signTransaction' in wallet) {
+          // Using wallet adapter
+          return await wallet.signTransaction(tx);
+        } else {
+          // Using keypair
+          tx.sign(wallet);
+          return tx;
+        }
+      },
+      signAllTransactions: async (txs: any[]) => {
+        if ('signTransaction' in wallet) {
+          // For wallet adapters, we need to sign each transaction individually
+          // since most wallet adapters don't support signAllTransactions
+          const signedTxs = [];
+          for (const tx of txs) {
+            const signedTx = await wallet.signTransaction(tx);
+            signedTxs.push(signedTx);
+          }
+          return signedTxs;
+        } else {
+          // Using keypair
+          txs.forEach(tx => tx.sign(wallet));
+          return txs;
+        }
+      },
+    };
+
+    // Initialize PythSolanaReceiver
+    const pythSolanaReceiver = new PythSolanaReceiver({ 
+      connection, 
+      wallet: payerWallet as any 
+    });
+
+    // Fetch price updates from Hermes
+    const hermesClient = new HermesClient(hermesUrl, {});
+    const priceUpdateResponse = await hermesClient.getLatestPriceUpdates(
+      priceFeedIds,
+      { encoding: 'base64' }
+    );
+
+    const priceUpdateData = priceUpdateResponse.binary.data;
+
+    // Create transaction builder
+    const transactionBuilder = pythSolanaReceiver.newTransactionBuilder({});
+    
+    // Update the price feed accounts for the feed ids in priceUpdateData and shard id 1
+    await transactionBuilder.addUpdatePriceFeed(priceUpdateData, 1);
+
+    await transactionBuilder.addPriceConsumerInstructions(
+      async (
+        getPriceUpdateAccount: (priceFeedId: string) => web3.PublicKey
+      ): Promise<any[]> => {
+        // Generate instructions here that use the price updates posted above.
+        // getPriceUpdateAccount(<price feed id>) will give you the account for each price update.
+        return [];
+      }
+    );
+
+    // Build legacy transactions for better compatibility
+    const legacyTxs = await transactionBuilder.buildLegacyTransactions({
+      computeUnitPriceMicroLamports: 50000,
+    });
+
+    // Send transactions
+    let finalSignature = '';
+    for (let i = 0; i < legacyTxs.length; i++) {
+      const { tx, signers } = legacyTxs[i];
+      
+      // Get latest blockhash
+      const { blockhash } = await connection.getLatestBlockhash('confirmed');
+      tx.recentBlockhash = blockhash;
+      tx.feePayer = payerPublicKey;
+      
+      // Sign transaction
+      if ('signTransaction' in wallet) {
+        // Using wallet adapter - sign the main transaction
+        const signedTx = await wallet.signTransaction(tx);
+        
+        // If there are additional signers (ephemeral keypairs), we need to add their signatures
+        if (signers && signers.length > 0) {
+          signedTx.partialSign(...signers);
+        }
+        
+        // Send the signed transaction
+        const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: 'confirmed',
+          maxRetries: 3
+        });
+        
+        // Use the same polling pattern as the rest of the codebase
+        await pollTransactionStatus(connection, signature, true);
+        
+        finalSignature = signature;
+      } else {
+        // Using keypair - sign with all required signers
+        const allSigners = [wallet, ...(signers || [])];
+        if (allSigners.length === 1) {
+          tx.sign(allSigners[0]);
+        } else {
+          tx.partialSign(...allSigners);
+        }
+        
+        // Send transaction
+        const signature = await connection.sendRawTransaction(tx.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: 'confirmed',
+          maxRetries: 3
+        });
+        
+        // Use the same polling pattern as the rest of the codebase
+        await pollTransactionStatus(connection, signature, true);
+        
+        finalSignature = signature;
+      }
+    }
+
+    return finalSignature;
+
+  } catch (error) {
+    throw error;
+  } finally {
+    // Restore original console methods
+    console.error = originalConsoleError;
+    console.warn = originalConsoleWarn;
+  }
 } 

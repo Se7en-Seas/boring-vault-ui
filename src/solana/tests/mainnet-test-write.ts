@@ -21,9 +21,9 @@ import {
   JITO_SOL_MINT_ADDRESS,
   BORING_VAULT_PROGRAM_ID,
   BORING_QUEUE_PROGRAM_ID,
-  DEFAULT_DECIMALS
+  DEFAULT_DECIMALS,
+  JITOSOL_SOL_PYTH_FEED
 } from '../utils/constants';
-
 
 /**
  * Test deposit functionality with jitoSOL
@@ -504,105 +504,80 @@ export async function testQueueWithdraw(): Promise<string | undefined> {
 }
 
 export async function testDepositSol(depositAmountSOL: number = 0.001): Promise<string | undefined> {
-  console.log('\n=== TESTING SOL DEPOSIT ===');
+  console.log('\n🔥 SOL Deposit Test');
+  
+  // Suppress noisy RPC/websocket errors
+  const originalConsoleError = console.error;
+  const originalConsoleWarn = console.warn;
+  
+  console.error = (...args) => {
+    const message = args.join(' ');
+    if (message.includes('JSON-RPC error') || 
+        message.includes('signatureSubscribe') || 
+        message.includes('WebSocket') ||
+        message.includes('rpc-websockets') ||
+        message.includes('Could not get discriminator')) {
+      return; // Suppress these errors
+    }
+    originalConsoleError(...args);
+  };
+  
+  console.warn = (...args) => {
+    const message = args.join(' ');
+    if (message.includes('JSON-RPC error') || 
+        message.includes('signatureSubscribe') || 
+        message.includes('WebSocket') ||
+        message.includes('rpc-websockets')) {
+      return; // Suppress these warnings
+    }
+    originalConsoleWarn(...args);
+  };
+
+  // Also suppress the noisy "Loaded keypair" message
+  const originalConsoleLog = console.log;
+  console.log = (...args) => {
+    const message = args.join(' ');
+    if (message.includes('Loaded keypair with address:')) {
+      return; // Suppress this message
+    }
+    originalConsoleLog(...args);
+  };
   
   try {
-    // Print constants for debugging
-    console.log('Constants used in test:');
-    console.log(`BORING_VAULT_PROGRAM_ID: ${BORING_VAULT_PROGRAM_ID}`);
-    
     // Create service instance
     const vaultService = new VaultSDK(MAINNET_CONFIG.rpcUrl);
     const vaultPubkey = MAINNET_CONFIG.vaultPubkey;
     
-    // Print key configuration
-    console.log('\nTest Configuration:');
-    console.log(`Vault Pubkey (from .env): ${vaultPubkey.toString()}`);
-    
     // Load signer for transaction signing
     const signer = await loadKeypair();
-    console.log(`Using signer: ${signer.address}`);
+    console.log(`📝 Signer: ${signer.address.slice(0, 8)}...${signer.address.slice(-8)}`);
     
     // Get vault data to extract vault ID
-    console.log(`\nFetching data for vault: ${vaultPubkey.toString()}`);
     const vaultData = await vaultService.getVaultData(vaultPubkey);
     const vaultId = Number(vaultData.vaultState.vaultId);
-    console.log(`Vault ID: ${vaultId}`);
-    console.log(`Vault Authority: ${vaultData.vaultState.authority.toString()}`);
-    console.log(`Paused: ${vaultData.vaultState.paused}`);
-    console.log(`Deposit Sub-Account: ${vaultData.vaultState.depositSubAccount}`);
-    console.log(`Withdraw Sub-Account: ${vaultData.vaultState.withdrawSubAccount}`);
-    
-    // Check asset data if available
-    if (vaultData.tellerState) {
-      console.log('\nTeller State:');
-      console.log(`Base Asset: ${vaultData.tellerState.baseAsset.toString()}`);
-      console.log(`Exchange Rate: ${vaultData.tellerState.exchangeRate.toString()}`);
-      console.log(`Exchange Rate Provider: ${vaultData.tellerState.exchangeRateProvider.toString()}`);
-    }
-    
-    // Create a direct web3.js connection for transaction sending
-    const connection = createConnection();
+    console.log(`🏦 Vault ID: ${vaultId} | Paused: ${vaultData.vaultState.paused ? '❌' : '✅'}`);
     
     // Check user's SOL balance
     const signerAddress = signer.address;
     const solBalanceResponse = await solanaClient.rpc.getBalance(signerAddress).send();
     const solBalance = Number(solBalanceResponse.value);
-    console.log(`> Found SOL balance: ${solBalance} lamports (${solBalance / 1e9} SOL)`);
-    
-    // Use the provided amount from the command line argument
-    const depositAmount = depositAmountSOL;
-    const maxDepositAmount = solBalance / 1e9;
+    console.log(`💰 SOL Balance: ${(solBalance / 1e9).toFixed(4)} SOL`);
     
     // Validate the amount is within limits (reserve some SOL for transaction fees)
-    const reserveForFees = 0.01; // Reserve 0.01 SOL for fees
+    const depositAmount = depositAmountSOL;
+    const maxDepositAmount = solBalance / 1e9;
+    const reserveForFees = 0.01;
+    
     if (depositAmount > (maxDepositAmount - reserveForFees)) {
-      console.log(`❌ Insufficient SOL balance. Need ${depositAmount} SOL but only have ${maxDepositAmount - reserveForFees} available (reserving ${reserveForFees} for fees)`);
+      console.log(`❌ Insufficient SOL. Need ${depositAmount} SOL but only have ${(maxDepositAmount - reserveForFees).toFixed(4)} available`);
       return;
     }
     
-    console.log(`Using amount: ${depositAmount} SOL`);
-    
     // Convert to lamports
     const depositLamports = BigInt(Math.floor(depositAmount * 1e9));
-    console.log(`Deposit amount: ${depositAmount} SOL (${depositLamports} lamports)`);
+    const minMintAmount = depositLamports * BigInt(80) / BigInt(100);
     
-    // Get the current exchange rate and calculate expected shares properly
-    console.log(`\nExchange Rate Analysis:`);
-    console.log(`Base Asset: ${vaultData.tellerState?.baseAsset || 'N/A'} (This looks like jitoSOL!)`);
-    console.log(`Vault Exchange Rate: ${vaultData.tellerState?.exchangeRate || 'N/A'}`);
-    
-    // Calculate expected shares based on exchange rate
-    // Exchange rate represents: shares per base asset unit
-    const exchangeRate = vaultData.tellerState?.exchangeRate || BigInt(1000000000);
-    console.log(`Using exchange rate: ${exchangeRate}`);
-    
-    // IMPORTANT: We're depositing SOL but the base asset is jitoSOL
-    // jitoSOL is typically worth more than SOL due to staking rewards
-    // This means 1 SOL < 1 jitoSOL, so we'll get fewer shares
-    // Let's use a very conservative estimate: assume 1 SOL ≈ 0.9 jitoSOL
-    console.log(`\nSOL → jitoSOL Conversion Analysis:`);
-    console.log(`Depositing SOL into a jitoSOL-based vault`);
-    console.log(`jitoSOL is typically worth ~1.05-1.1x SOL due to staking rewards`);
-    console.log(`This means 1 SOL ≈ 0.9-0.95 jitoSOL equivalent`);
-    
-    // Very conservative estimate: assume 1 SOL = 0.85 jitoSOL equivalent
-    const estimatedJitoSolEquivalent = depositLamports * BigInt(85) / BigInt(100);
-    console.log(`Conservative jitoSOL equivalent: ${estimatedJitoSolEquivalent} lamports`);
-    
-    // Then apply the vault's exchange rate to calculate expected shares
-    // Exchange rate is in 9 decimal format, so we need to handle the scaling properly
-    const expectedShares = estimatedJitoSolEquivalent * exchangeRate / BigInt(1000000000);
-    console.log(`Expected shares (using exchange rate): ${expectedShares}`);
-    
-    // Apply slippage tolerance to the expected shares  
-    const slippageTolerancePercent = 20; // Use 20% slippage tolerance for safety
-    const minMintAmount = expectedShares * BigInt(100 - slippageTolerancePercent) / BigInt(100);
-    console.log(`Minimum shares to receive: ${minMintAmount} (${slippageTolerancePercent}% slippage tolerance)`);
-    
-    // Let's also try an even more conservative estimate
-    const ultraConservativeMinShares = depositLamports * BigInt(60) / BigInt(100); // 60% of deposit
-    console.log(`Ultra-conservative minimum (60% of deposit): ${ultraConservativeMinShares}`);
+    console.log(`📊 Deposit: ${depositAmount} SOL | Min Shares: ${(Number(minMintAmount) / 1e9).toFixed(4)}`);
     
     // Load keypair from file for signing
     const keypairPath = process.env.KEYPAIR_PATH || '';
@@ -613,131 +588,37 @@ export async function testDepositSol(depositAmountSOL: number = 0.001): Promise<
     const keyData = JSON.parse(fs.readFileSync(keypairPath, 'utf-8'));
     const keypair = web3.Keypair.fromSecretKey(new Uint8Array(keyData));
     
-    console.log('\nExecuting SOL deposit transaction...');
+    console.log('🚀 Executing deposit...');
     
-    // Use the enhanced depositSol function from VaultSDK
     try {
       const signature = await vaultService.depositSol(
-        keypair, // Pass the keypair directly
+        keypair,
         vaultId,
         depositLamports,
         minMintAmount,
         {
-          skipPreflight: true, // Skip preflight to avoid rejections for valid transactions
-          maxRetries: 30
+          skipPreflight: true,
+          maxRetries: 30,
+          enableOracleCrank: true
         }
       );
       
-      // Poll for transaction status
-      console.log('Polling for transaction status...');
-      const maxAttempts = 30;
+      console.log(`✅ Success! Signature: ${signature}`);
+      console.log(`🔍 Explorer: https://solscan.io/tx/${signature}`);
       
-      // Poll transaction status
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        try {
-          const response = await connection.getSignatureStatuses([signature]);
-          const status = response.value[0];
-          
-          if (status) {
-            if (status.err) {
-              console.error(`\n❌ Transaction failed: ${JSON.stringify(status.err)}`);
-              console.log('Transaction polling stopped due to failure.');
-              throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
-            }
-            
-            if (status.confirmationStatus === 'finalized' || status.confirmationStatus === 'confirmed') {
-              console.log(`\nTransaction ${status.confirmationStatus}!`);
-              
-              // Get transaction details for debugging
-              try {
-                const txDetails = await connection.getTransaction(signature, {
-                  maxSupportedTransactionVersion: 0,
-                });
-                
-                if (txDetails && txDetails.meta) {
-                  if (txDetails.meta.err) {
-                    console.error(`Transaction error: ${JSON.stringify(txDetails.meta.err)}`);
-                  } else {
-                    console.log('SOL deposit transaction successful!');
-                    
-                    // Log token balance changes if available
-                    if (txDetails.meta.postTokenBalances && txDetails.meta.preTokenBalances) {
-                      console.log('Token balance changes:');
-                      txDetails.meta.postTokenBalances.forEach((postBalance) => {
-                        const preBalance = txDetails.meta?.preTokenBalances?.find(
-                          (pre) => pre.accountIndex === postBalance.accountIndex
-                        );
-                        
-                        if (preBalance) {
-                          const change = (postBalance.uiTokenAmount.uiAmount || 0) - 
-                                        (preBalance.uiTokenAmount.uiAmount || 0);
-                          console.log(`  Mint: ${postBalance.mint}, Change: ${change}`);
-                        }
-                      });
-                    }
-                    
-                    // Log SOL balance changes
-                    if (txDetails.meta.postBalances && txDetails.meta.preBalances) {
-                      console.log('SOL balance changes:');
-                      txDetails.meta.postBalances.forEach((postBalance, index) => {
-                        const preBalance = txDetails.meta?.preBalances?.[index] || 0;
-                        const change = postBalance - preBalance;
-                        if (change !== 0) {
-                          console.log(`  Account ${index}: ${change / 1e9} SOL change`);
-                        }
-                      });
-                    }
-                  }
-                }
-              } catch (detailsError) {
-                console.warn(`Could not fetch transaction details: ${detailsError}`);
-              }
-              
-              return signature;
-            }
-          }
-          
-          // Wait before next poll
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          process.stdout.write('.');
-        } catch (error) {
-          // Check if this is a transaction failure error that should stop polling
-          if (error instanceof Error && error.message.includes('Transaction failed:')) {
-            // This is a transaction failure, stop polling immediately
-            throw error;
-          }
-          
-          // This is a network/API error, continue polling but warn
-          console.warn(`\nError checking transaction status (attempt ${attempt + 1}/${maxAttempts}): ${error}`);
-          
-          // If we're near the end of attempts, stop polling
-          if (attempt >= maxAttempts - 3) {
-            console.log('Too many polling errors, stopping...');
-            throw new Error(`Polling failed after ${attempt + 1} attempts: ${error}`);
-          }
-          
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-      }
-      
-      // If we reach here, polling finished without confirmation
-      console.log('\n❌ Transaction polling timed out - transaction may have failed or not been processed');
-      throw new Error(`Transaction polling timed out after ${maxAttempts} attempts. Signature: ${signature}`);
+      return signature;
       
     } catch (error: any) {
-      console.error('\nError executing SOL deposit:', error);
-      
-      if (error.logs) {
-        console.log('\nTransaction logs:');
-        error.logs.forEach((log: string, i: number) => {
-          console.log(`[${i}] ${log}`);
-        });
-      }
-      
+      console.error('❌ Deposit failed:', error.message || error);
       throw error;
     }
   } catch (error) {
-    console.error('Error testing SOL deposit:', error);
+    console.error('❌ Test failed:', error instanceof Error ? error.message : error);
     return undefined;
+  } finally {
+    // Restore original console methods
+    console.error = originalConsoleError;
+    console.warn = originalConsoleWarn;
+    console.log = originalConsoleLog;
   }
 }

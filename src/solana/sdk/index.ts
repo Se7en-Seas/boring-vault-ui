@@ -10,16 +10,14 @@ import {
   JITO_SOL_MINT_ADDRESS,
   DEFAULT_DECIMALS,
   JITOSOL_SOL_SWITCHBOARD_FEED,
-  JITOSOL_SOL_PYTH_FEED,
-  JITOSOL_SOL_PYTH_ACCOUNT
+  JITOSOL_SOL_PYTH_FEED
 } from '../utils/constants';
 import {
   bundleSwitchboardCrank,
   type SwitchboardCrankConfig
 } from '../utils/switchboard-crank';
 import {
-  getPythPriceUpdateInstructions,
-  type PythOracleConfig
+  crankPythPriceFeeds
 } from '../utils/pyth-oracle';
 
 /**
@@ -227,11 +225,12 @@ export class VaultSDK {
   /**
    * Deposits native SOL into a vault with automatic oracle cranking
    * 
-   * @param wallet The wallet that will sign the transaction
+   * @param wallet The wallet that will sign the transaction (supports both keypairs and wallet adapters)
    * @param vaultId The ID of the vault to deposit into
    * @param depositAmount The amount of SOL to deposit (in lamports)
    * @param minMintAmount The minimum amount of shares to mint
    * @param options Additional options for the deposit transaction
+   * @param options.enableOracleCrank Enable/disable automatic Pyth oracle cranking (default: true, works with wallet adapters)
    * @returns The transaction signature
    */
   async depositSol(
@@ -243,7 +242,7 @@ export class VaultSDK {
       skipPreflight?: boolean;
       maxRetries?: number;
       skipStatusCheck?: boolean;
-      enableOracleCrank?: boolean; // New option to enable/disable oracle cranking
+      enableOracleCrank?: boolean; // Enable/disable oracle cranking (default: true)
     } = {}
   ): Promise<string> {
     // Convert string inputs to proper types
@@ -264,106 +263,53 @@ export class VaultSDK {
     }
 
     try {
-      // Get the wallet's public key
-      const payerPublicKey = 'signTransaction' in wallet
-        ? wallet.publicKey
-        : wallet.publicKey;
+      // Step 1: Crank Pyth oracle if enabled (default: true)
+      if (options.enableOracleCrank !== false) {
+        console.log('⚡ Cranking oracle...');
+        try {
+          const crankSignature = await crankPythPriceFeeds(
+            this.connection,
+            wallet, // Pass wallet directly - function now handles both keypairs and wallet adapters
+            [JITOSOL_SOL_PYTH_FEED],
+            'https://hermes.pyth.network/'
+          );
+          console.log(`✅ Oracle cranked: ${crankSignature.slice(0, 8)}...`);
+        } catch (crankError) {
+          console.warn('⚠️ Oracle crank failed, continuing...');
+        }
+      }
 
-      // Build the base deposit transaction
-      const baseTransaction = await this.boringVault.buildDepositSolTransaction(
-        payerPublicKey,
+      // Step 2: Build and execute the deposit transaction
+      const transaction = await this.boringVault.buildDepositSolTransaction(
+        wallet.publicKey,
         vaultId,
         amount,
         minAmount
       );
 
-      let finalTransaction: web3.Transaction;
-      let lookupTables: any[] = [];
-
-      // Send Pyth oracle price updates first (enabled by default)
-      if (options.enableOracleCrank !== false) {
-        console.log('🔄 Sending Pyth price updates in separate transaction...');
-
-        try {
-          // Configure Pyth oracle for JitoSOL/SOL price feed
-          const pythConfig: PythOracleConfig = {
-            connection: this.connection,
-            payer: payerPublicKey,
-            priceFeedIds: [JITOSOL_SOL_PYTH_FEED],
-            hermesUrl: 'https://hermes.pyth.network/',
-            closeUpdateAccounts: false // Keep accounts open for usage
-          };
-
-          // Get Pyth price update instructions
-          const pythResult = await getPythPriceUpdateInstructions(pythConfig);
-
-          console.log(`✓ Generated ${pythResult.instructions.length} Pyth price update instructions`);
-
-          // Create and send Pyth price update transaction first
-          const pythTransaction = new web3.Transaction();
-          pythTransaction.add(...pythResult.instructions);
-          
-          const { blockhash: pythBlockhash } = await this.connection.getLatestBlockhash('confirmed');
-          pythTransaction.recentBlockhash = pythBlockhash;
-          pythTransaction.feePayer = payerPublicKey;
-
-          // Sign and send Pyth transaction
-          let signedPythTx: web3.Transaction;
-          if ('signTransaction' in wallet) {
-            signedPythTx = await wallet.signTransaction(pythTransaction);
-          } else {
-            pythTransaction.sign(wallet);
-            signedPythTx = pythTransaction;
-          }
-
-          const pythSignature = await this.connection.sendRawTransaction(signedPythTx.serialize(), {
-            skipPreflight: false,
-            preflightCommitment: 'confirmed'
-          });
-
-          console.log(`✅ Pyth price update sent! Signature: ${pythSignature}`);
-
-          // Wait for confirmation before proceeding
-          console.log('⏳ Waiting for Pyth price update confirmation...');
-          await this.connection.confirmTransaction(pythSignature, 'confirmed');
-          console.log('✅ Pyth price update confirmed!');
-
-        } catch (oracleError) {
-          console.warn('Pyth price updates failed, proceeding with deposit only:', oracleError);
-        }
-      } else {
-        console.log('Pyth oracle updates disabled');
-      }
-
-      // Use base deposit transaction
-      finalTransaction = baseTransaction;
-
       // Add recent blockhash
       const { blockhash } = await this.connection.getLatestBlockhash('confirmed');
-      finalTransaction.recentBlockhash = blockhash;
-      finalTransaction.feePayer = payerPublicKey;
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = wallet.publicKey;
 
-      console.log('🔄 Using Legacy Transaction format (better for large transactions)...');
+      console.log('📤 Sending transaction...');
 
       // Sign the transaction
       let signedTransaction: web3.Transaction;
       if ('signTransaction' in wallet) {
         // Using wallet adapter (browser extension)
-        signedTransaction = await wallet.signTransaction(finalTransaction);
+        signedTransaction = await wallet.signTransaction(transaction);
       } else {
         // Using keypair directly
-        finalTransaction.sign(wallet);
-        signedTransaction = finalTransaction;
+        transaction.sign(wallet);
+        signedTransaction = transaction;
       }
 
-      // Send legacy transaction
+      // Send transaction
       const signature = await this.connection.sendRawTransaction(signedTransaction.serialize(), {
         skipPreflight: options.skipPreflight || false,
         preflightCommitment: 'confirmed'
       });
-
-      console.log(`SOL deposit transaction sent! Signature: ${signature}`);
-      console.log(`View on explorer: https://solscan.io/tx/${signature}`);
 
       return signature;
     } catch (error) {
