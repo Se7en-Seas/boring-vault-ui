@@ -1,7 +1,7 @@
 import { web3 } from '@coral-xyz/anchor';
 import { BoringVaultSolana } from './boring-vault-solana';
 import { parseFullVaultData, FullVaultData } from './vault-state';
-import vaultIdl from '../idls/boring-vault-svm-idl.json';
+import vaultIdl from '../idls/boring_vault_svm.json';
 import {
   AccountLayout
 } from '@solana/spl-token';
@@ -9,7 +9,8 @@ import { createSolanaClient, type SolanaClient, Address } from 'gill';
 import {
   JITO_SOL_MINT_ADDRESS,
   DEFAULT_DECIMALS,
-  JITO_SOL_PRICE_FEED_ADDRESS
+  JITOSOL_SOL_SWITCHBOARD_FEED,
+  JITOSOL_SOL_PYTH_FEED
 } from '../utils/constants';
 import {
   bundleSwitchboardCrank,
@@ -219,9 +220,9 @@ export class VaultSDK {
   }
 
   /**
-   * Deposits native SOL into a vault with automatic oracle cranking
+   * Deposits native SOL into a vault
    * 
-   * @param wallet The wallet that will sign the transaction
+   * @param wallet The wallet that will sign the transaction (supports both keypairs and wallet adapters)
    * @param vaultId The ID of the vault to deposit into
    * @param depositAmount The amount of SOL to deposit (in lamports)
    * @param minMintAmount The minimum amount of shares to mint
@@ -237,7 +238,6 @@ export class VaultSDK {
       skipPreflight?: boolean;
       maxRetries?: number;
       skipStatusCheck?: boolean;
-      enableOracleCrank?: boolean; // New option to enable/disable oracle cranking
     } = {}
   ): Promise<string> {
     // Convert string inputs to proper types
@@ -258,95 +258,37 @@ export class VaultSDK {
     }
 
     try {
-      // Get the wallet's public key
-      const payerPublicKey = 'signTransaction' in wallet
-        ? wallet.publicKey
-        : wallet.publicKey;
-
-      // Build the base deposit transaction
-      const baseTransaction = await this.boringVault.buildDepositSolTransaction(
-        payerPublicKey,
+      // Build the deposit transaction
+      const transaction = await this.boringVault.buildDepositSolTransaction(
+        wallet.publicKey,
         vaultId,
         amount,
         minAmount
       );
 
-      let finalTransaction: web3.Transaction;
-      let lookupTables: any[] = [];
-
-      // Add oracle cranking (enabled by default)
-      if (options.enableOracleCrank !== false) {
-        console.log('Adding automatic oracle cranking to SOL deposit with 3 responses...');
-
-        try {
-          // Configure Switchboard cranking for jitoSOL price feed with 3 responses
-          const switchboardConfig: SwitchboardCrankConfig = {
-            connection: this.connection,
-            feedAddress: new web3.PublicKey(JITO_SOL_PRICE_FEED_ADDRESS),
-            payer: payerPublicKey,
-            numResponses: 3 // Always use 3 oracle responses
-          };
-
-          // Bundle the oracle crank with the deposit transaction
-          const bundledResult = await bundleSwitchboardCrank(
-            switchboardConfig,
-            baseTransaction.instructions
-          );
-
-          console.log(`✓ Added ${bundledResult.instructions.length - baseTransaction.instructions.length} oracle crank instructions`);
-
-          // Create a new transaction with bundled instructions
-          finalTransaction = new web3.Transaction();
-          finalTransaction.add(...bundledResult.instructions);
-          lookupTables = bundledResult.lookupTables;
-
-        } catch (oracleError) {
-          console.warn('Oracle cranking failed, proceeding with deposit only:', oracleError);
-          // Fallback to base transaction if oracle cranking fails
-          finalTransaction = baseTransaction;
-        }
-      } else {
-        console.log('Oracle cranking disabled, using deposit-only transaction');
-        finalTransaction = baseTransaction;
-      }
-
       // Add recent blockhash
       const { blockhash } = await this.connection.getLatestBlockhash('confirmed');
-      finalTransaction.recentBlockhash = blockhash;
-      finalTransaction.feePayer = payerPublicKey;
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = wallet.publicKey;
 
-      console.log('🔄 Using Versioned Transaction with lookup tables...');
+      console.log('📤 Sending transaction...');
 
-      // Create versioned transaction message
-      const message = new web3.TransactionMessage({
-        payerKey: payerPublicKey,
-        recentBlockhash: blockhash,
-        instructions: finalTransaction.instructions,
-      }).compileToV0Message(lookupTables);
-
-      // Create versioned transaction
-      const versionedTx = new web3.VersionedTransaction(message);
-
-      // Sign the versioned transaction
-      let signedTransaction: any;
+      // Sign the transaction
+      let signedTransaction: web3.Transaction;
       if ('signTransaction' in wallet) {
         // Using wallet adapter (browser extension)
-        // Cast to any to handle the type compatibility between Transaction and VersionedTransaction
-        signedTransaction = await wallet.signTransaction(versionedTx as any);
+        signedTransaction = await wallet.signTransaction(transaction);
       } else {
         // Using keypair directly
-        versionedTx.sign([wallet]);
-        signedTransaction = versionedTx;
+        transaction.sign(wallet);
+        signedTransaction = transaction;
       }
 
-      // Send versioned transaction
+      // Send transaction
       const signature = await this.connection.sendRawTransaction(signedTransaction.serialize(), {
         skipPreflight: options.skipPreflight || false,
         preflightCommitment: 'confirmed'
       });
-
-      console.log(`SOL deposit transaction sent! Signature: ${signature}`);
-      console.log(`View on explorer: https://solscan.io/tx/${signature}`);
 
       return signature;
     } catch (error) {

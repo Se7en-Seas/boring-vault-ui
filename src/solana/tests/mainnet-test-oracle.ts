@@ -1,186 +1,317 @@
-import { web3 } from '@coral-xyz/anchor';
 import * as fs from 'fs';
+import * as dotenv from 'dotenv';
+import { HermesClient } from '@pythnetwork/hermes-client';
+import { web3 } from '@coral-xyz/anchor';
 
-// Import shared utilities
-import { 
-  MAINNET_CONFIG, 
-  createConnection,
-} from './mainnet-test-utils';
+// Import PythSolanaReceiver
+let PythSolanaReceiverWithOverrides: any = null;
 
-// Import Switchboard utilities
-import {
-  getSwitchboardCrankInstruction,
-  type SwitchboardCrankConfig
-} from '../utils/switchboard-crank';
+try {
+  const { PythSolanaReceiver } = require('@pythnetwork/pyth-solana-receiver');
+  PythSolanaReceiverWithOverrides = PythSolanaReceiver;
+  console.log('✓ Loaded PythSolanaReceiver');
+} catch (error) {
+  console.warn('⚠️ PythSolanaReceiver not available:', error instanceof Error ? error.message : 'Unknown error');
+}
 
 // Import constants
 import { 
-  JITO_SOL_PRICE_FEED_ADDRESS,
+  JITOSOL_SOL_PYTH_FEED,
+  PYTH_PROGRAM_ID,
+  PYTH_HERMES_URL,
+  PYTH_SHARD_ID,
+  DEFAULT_RPC_URL,
+  SYSTEM_PROGRAM_ID,
+  PRICE_UPDATE_MIN_SIZE,
+  INSTRUCTION_SIZE_THRESHOLD_KB
 } from '../utils/constants';
 
+// Import transaction utilities
+import { pollTransactionStatus } from '../utils/transaction-utils';
+
+// Import oracle building functions
+import { buildPythOracleCrankTransactions } from '../utils/pyth-oracle';
+
+// Load environment variables
+dotenv.config();
+
 /**
- * Test Switchboard oracle cranking independently with 3 responses
+ * Simple test to verify Pyth oracle data fetching
  */
-export async function testOracleCrank(): Promise<string | undefined> {
-  console.log('\n=== TESTING SWITCHBOARD ORACLE CRANKING ===');
+export async function testPythOracle(): Promise<string | undefined> {
+  console.log('\n=== TESTING PYTH ORACLE DATA FETCHING ===');
   
   try {
-    // Print constants for debugging
-    console.log('Oracle Configuration:');
-    console.log(`JITO_SOL_PRICE_FEED_ADDRESS: ${JITO_SOL_PRICE_FEED_ADDRESS}`);
+    console.log(`Testing price feed: ${JITOSOL_SOL_PYTH_FEED}`);
     
-    // Load keypair from file for signing
+    // Test 1: Fetch price updates from Hermes
+    console.log('\nFetching price updates from Hermes...');
+    const hermesClient = new HermesClient(PYTH_HERMES_URL, {});
+    
+    const priceUpdateResponse = await hermesClient.getLatestPriceUpdates(
+      [JITOSOL_SOL_PYTH_FEED],
+      { encoding: 'base64' }
+    );
+    
+    const priceUpdateData = priceUpdateResponse.binary.data;
+    
+    console.log(`✓ Fetched ${priceUpdateData.length} price update(s)`);
+    console.log(`✓ First update length: ${priceUpdateData[0]?.length} characters`);
+    
+    // Validate the updates
+    const allValidBase64 = priceUpdateData.every(update => {
+      try {
+        const decoded = Buffer.from(update, 'base64');
+        return decoded.length >= PRICE_UPDATE_MIN_SIZE;
+      } catch {
+        return false;
+      }
+    });
+    
+    console.log(`✓ All price updates valid: ${allValidBase64}`);
+    
+    // Test 2: Check transaction size estimation
+    const totalDataSize = priceUpdateData.reduce((sum, update) => sum + update.length, 0);
+    const estimatedSizeKB = totalDataSize / 1000;
+    
+    console.log(`✓ Estimated data size: ${estimatedSizeKB.toFixed(2)} KB`);
+    
+    if (estimatedSizeKB > INSTRUCTION_SIZE_THRESHOLD_KB) {
+      console.log('💡 Large transaction - will use versioned transaction');
+    } else {
+      console.log('💡 Small transaction - legacy transaction suitable');
+    }
+    
+    console.log('\n✅ Oracle data fetching test completed successfully!');
+    return 'pyth-ready';
+    
+  } catch (error) {
+    console.error('❌ Oracle test failed:', error);
+    return undefined;
+  }
+}
+
+/**
+ * Test the integrated oracle cranking functionality
+ */
+export async function testOracleCranking(): Promise<boolean> {
+  console.log('\n=== TESTING ORACLE CRANKING ===');
+  
+  try {
+    // Load keypair
     const keypairPath = process.env.KEYPAIR_PATH || '';
     if (!keypairPath) {
-      throw new Error('Keypair path not provided. Set KEYPAIR_PATH in .env file');
+      throw new Error('KEYPAIR_PATH not set in environment');
     }
     
     const keyData = JSON.parse(fs.readFileSync(keypairPath, 'utf-8'));
-    const keypair = web3.Keypair.fromSecretKey(new Uint8Array(keyData));
-    console.log(`Using signer: ${keypair.publicKey.toString()}`);
+    const payerKeypair = web3.Keypair.fromSecretKey(new Uint8Array(keyData));
+    console.log(`✓ Loaded keypair: ${payerKeypair.publicKey.toString()}`);
     
-    // Create a direct web3.js connection for transaction sending
-    const connection = createConnection();
+    // Setup connection
+    const rpcUrl = process.env.ALCHEMY_RPC_URL || DEFAULT_RPC_URL;
+    const connection = new web3.Connection(rpcUrl, 'confirmed');
+    console.log(`✓ Connected to RPC`);
     
-    console.log('\nGenerating Switchboard crank instructions for 3 oracle responses...');
+    // Test oracle cranking
+    console.log('\nCranking oracle...');
     
-    // Configure Switchboard cranking for jitoSOL price feed with 3 responses
-    const switchboardConfig: SwitchboardCrankConfig = {
-      connection: connection,
-      feedAddress: new web3.PublicKey(JITO_SOL_PRICE_FEED_ADDRESS),
-      payer: keypair.publicKey,
-      numResponses: 3 // Require 3 oracle responses for proper price aggregation
-    };
+    // Verify price data is available
+    console.log('🔍 Testing price data fetch...');
+    const hermesClient = new HermesClient(PYTH_HERMES_URL, {});
+    const testResponse = await hermesClient.getLatestPriceUpdates(
+      [JITOSOL_SOL_PYTH_FEED],
+      { encoding: 'base64' }
+    );
+    console.log(`✓ Price data fetch successful: ${testResponse.binary.data.length} updates`);
     
-    try {
-      // Get Switchboard crank instructions (returns object with instructions and lookup tables)
-      const crankResult = await getSwitchboardCrankInstruction(switchboardConfig);
+    // Step 1: Build oracle crank transactions
+    console.log('⚡ Building oracle crank transactions...');
+    const { transactions, signers } = await buildPythOracleCrankTransactions(
+      connection,
+      payerKeypair.publicKey,
+      [JITOSOL_SOL_PYTH_FEED]
+    );
+    
+    console.log(`📋 Built ${transactions.length} oracle transactions`);
+    
+    // Step 2: Handle each transaction separately with enhanced error handling
+    const signatures: string[] = [];
+    
+    for (let i = 0; i < transactions.length; i++) {
+      console.log(`\n🔄 Step ${i + 1}/${transactions.length}: Processing oracle transaction ${i + 1}...`);
       
-      console.log(`✓ Generated ${crankResult.instructions.length} Switchboard crank instructions for 3 oracle responses`);
-      console.log(`✓ Got ${crankResult.lookupTables.length} lookup tables`);
+      const tx = transactions[i];
+      const txSigners = signers[i];
       
-      // Create transaction with just the crank instructions
-      const transaction = new web3.Transaction();
-      transaction.add(...crankResult.instructions);
+      // Log transaction details
+      console.log(`📋 Transaction ${i + 1}: ${tx.instructions.length} instructions, ${txSigners.length} signers, ${tx.serializeMessage().length} bytes`);
       
-      // Add recent blockhash
-      const { blockhash } = await connection.getLatestBlockhash('confirmed');
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = keypair.publicKey;
+      // Add all signers (keypair + ephemeral signers)
+      const allSigners = [payerKeypair, ...txSigners];
       
-      // Check if we need versioned transaction for size optimization
-      const serializedSize = transaction.serialize({ requireAllSignatures: false }).length;
-      console.log(`Transaction size: ${serializedSize} bytes`);
+      console.log(`📝 Signing transaction ${i + 1} with ${allSigners.length} signers...`);
       
-      let signature: string;
-      
-      if (serializedSize > 1232 && crankResult.lookupTables.length > 0) {
-        console.log('🔄 Using Versioned Transaction with lookup tables...');
-        
-        // Create versioned transaction message
-        const message = new web3.TransactionMessage({
-          payerKey: keypair.publicKey,
-          recentBlockhash: blockhash,
-          instructions: crankResult.instructions,
-        }).compileToV0Message(crankResult.lookupTables);
-        
-        // Create versioned transaction
-        const versionedTx = new web3.VersionedTransaction(message);
-        versionedTx.sign([keypair]);
-        
-        // Send versioned transaction
-        signature = await connection.sendRawTransaction(versionedTx.serialize(), {
-          skipPreflight: true, // Skip preflight to avoid rejections for valid transactions
-          preflightCommitment: 'confirmed'
-        });
-        
+      if (allSigners.length === 1) {
+        tx.sign(allSigners[0]);
       } else {
-        console.log('🔄 Using Legacy Transaction...');
-        
-        // Sign the legacy transaction
-        transaction.sign(keypair);
-        
-        // Send legacy transaction
-        signature = await connection.sendRawTransaction(transaction.serialize(), {
-          skipPreflight: true, // Skip preflight to avoid rejections for valid transactions
-          preflightCommitment: 'confirmed'
+        tx.partialSign(...allSigners);
+      }
+      
+      try {
+        // Send transaction
+        console.log(`📤 Sending oracle transaction ${i + 1}...`);
+        const signature = await connection.sendRawTransaction(tx.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: 'confirmed',
+          maxRetries: 1
         });
+        
+        console.log(`📤 Oracle tx ${i + 1} sent: ${signature.slice(0, 8)}...`);
+        
+        // Poll for confirmation
+        const confirmedSignature = await pollTransactionStatus(connection, signature);
+        signatures.push(confirmedSignature);
+        
+        console.log(`✅ Transaction ${i + 1} confirmed!`);
+        console.log(`🔍 Explorer: https://solscan.io/tx/${signature}`);
+        
+      } catch (error) {
+        console.error(`❌ Oracle transaction ${i + 1} failed:`, error instanceof Error ? error.message : error);
+        throw error;
       }
       
-      console.log(`Transaction sent! Signature: ${signature}`);
-      console.log(`View on explorer: https://solscan.io/tx/${signature}`);
-      
-      // Poll for transaction status
-      console.log('Polling for transaction status...');
-      const maxAttempts = 30;
-      
-      // Poll transaction status
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        try {
-          const response = await connection.getSignatureStatuses([signature]);
-          const status = response.value[0];
-          
-          if (status) {
-            if (status.err) {
-              console.error(`Transaction failed: ${JSON.stringify(status.err)}`);
-              console.log('❌ Oracle crank transaction failed - stopping polling');
-              return signature;
-            }
-            
-            if (status.confirmationStatus === 'finalized' || status.confirmationStatus === 'confirmed') {
-              console.log(`Oracle crank transaction ${status.confirmationStatus}!`);
-              
-              // Get transaction details for debugging
-              try {
-                const txDetails = await connection.getTransaction(signature, {
-                  maxSupportedTransactionVersion: 0,
-                });
-                
-                if (txDetails && txDetails.meta) {
-                  if (txDetails.meta.err) {
-                    console.error(`Transaction error: ${JSON.stringify(txDetails.meta.err)}`);
-                  } else {
-                    console.log('✅ Oracle crank transaction successful!');
-                    
-                    // Log compute units used
-                    if (txDetails.meta.computeUnitsConsumed) {
-                      console.log(`Compute units consumed: ${txDetails.meta.computeUnitsConsumed}`);
-                    }
-                    
-                    // Log fee
-                    if (txDetails.meta.fee) {
-                      console.log(`Transaction fee: ${txDetails.meta.fee} lamports`);
-                    }
-                  }
-                }
-              } catch (detailsError) {
-                console.warn(`Could not fetch transaction details: ${detailsError}`);
-              }
-              
-              return signature;
-            }
-          }
-          
-          // Wait before next poll
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          process.stdout.write('.');
-        } catch (error) {
-          console.warn(`Error checking transaction status (attempt ${attempt + 1}/${maxAttempts}): ${error}`);
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
+      // Add a small delay between transactions to ensure proper sequencing
+      if (i < transactions.length - 1) {
+        console.log(`⏸️ Waiting 1 second before next transaction...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
-      
-      // If we reach here, polling finished without confirmation
-      console.error('\n❌ Oracle crank transaction polling timed out - transaction may have failed or not been processed');
-      throw new Error(`Oracle crank transaction polling timed out after ${maxAttempts} attempts. Signature: ${signature}`);
-      
-    } catch (switchboardError) {
-      console.error('❌ Switchboard cranking failed:', switchboardError);
-      throw switchboardError;
+    }
+    
+    console.log(`\n🎉 All ${signatures.length} oracle transactions completed successfully!`);
+    signatures.forEach((sig, i) => {
+      console.log(`✓ Transaction ${i + 1}: ${sig}`);
+    });
+    
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Oracle cranking test failed:', error);
+    return false;
+  }
+}
+
+/**
+ * Check if the Pyth price feed account exists
+ */
+export async function checkPythAccount(): Promise<boolean> {
+  console.log('\n=== CHECKING PYTH PRICE FEED ACCOUNT ===');
+  
+  try {
+    if (!PythSolanaReceiverWithOverrides) {
+      throw new Error('PythSolanaReceiver not available');
+    }
+    
+    const rpcUrl = process.env.ALCHEMY_RPC_URL || DEFAULT_RPC_URL;
+    const connection = new web3.Connection(rpcUrl, 'confirmed');
+    
+    // Create minimal wallet interface
+    const dummyWallet = {
+      publicKey: web3.Keypair.generate().publicKey,
+      signTransaction: async (tx: any) => tx,
+      signAllTransactions: async (txs: any[]) => txs,
+    };
+
+    const pythSolanaReceiver = new PythSolanaReceiverWithOverrides({ 
+      connection, 
+      wallet: dummyWallet as any 
+    });
+
+    // Get price feed account address
+    const priceFeedAccount = pythSolanaReceiver.getPriceFeedAccountAddress(
+      PYTH_SHARD_ID,
+      JITOSOL_SOL_PYTH_FEED.replace('0x', '')
+    );
+    
+    console.log(`✓ Price feed address: ${priceFeedAccount.toString()}`);
+    
+    // Check if account exists
+    const accountInfo = await connection.getAccountInfo(priceFeedAccount);
+    
+    if (accountInfo) {
+      console.log(`✅ Price feed account EXISTS!`);
+      console.log(`  - Owner: ${accountInfo.owner.toString()}`);
+      console.log(`  - Data length: ${accountInfo.data.length} bytes`);
+      console.log(`  - Owned by Pyth: ${accountInfo.owner.toString() === PYTH_PROGRAM_ID ? 'Yes' : 'No'}`);
+      return true;
+    } else {
+      console.log(`❌ Price feed account does NOT exist`);
+      return false;
     }
     
   } catch (error) {
-    console.error('Error testing oracle crank:', error);
-    return undefined;
+    console.error('❌ Error checking price feed account:', error);
+    return false;
   }
-} 
+}
+
+/**
+ * Main function to handle command line arguments
+ */
+export async function main(): Promise<void> {
+  const args = process.argv.slice(2);
+  const command = args[0];
+  
+  console.log('🔮 Boring Vault Oracle Tests');
+  console.log(`Command: ${command || 'default'}`);
+  
+  try {
+    switch (command) {
+      case 'fetch':
+        console.log('\n=== TESTING ORACLE DATA FETCHING ===');
+        const fetchResult = await testPythOracle();
+        console.log(`Result: ${fetchResult || 'failed'}`);
+        break;
+
+      case 'crank':
+        console.log('\n=== TESTING ORACLE CRANKING ===');
+        const crankResult = await testOracleCranking();
+        console.log(`Result: ${crankResult ? 'success' : 'failed'}`);
+        break;
+
+      case 'check':
+        console.log('\n=== CHECKING PRICE FEED ACCOUNT ===');
+        const checkResult = await checkPythAccount();
+        console.log(`Account exists: ${checkResult ? 'Yes' : 'No'}`);
+        break;
+
+      default:
+        console.log('\n=== RUNNING ALL ORACLE TESTS ===');
+        
+        // Test data fetching
+        const oracleResult = await testPythOracle();
+        console.log(`✓ Data fetching: ${oracleResult ? 'success' : 'failed'}`);
+        
+        // Check account existence
+        const accountExists = await checkPythAccount();
+        console.log(`✓ Account check: ${accountExists ? 'exists' : 'missing'}`);
+        
+        // Test cranking
+        const crankingResult = await testOracleCranking();
+        console.log(`✓ Oracle cranking: ${crankingResult ? 'success' : 'failed'}`);
+        
+        console.log('\n=== SUMMARY ===');
+        console.log(`Oracle ready: ${oracleResult && crankingResult ? '✅' : '❌'}`);
+        break;
+    }
+    
+  } catch (error) {
+    console.error('❌ Test execution failed:', error);
+    process.exit(1);
+  }
+}
+
+// Run main function if this file is executed directly
+if (require.main === module) {
+  main().catch(console.error);
+}

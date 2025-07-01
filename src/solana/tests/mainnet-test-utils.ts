@@ -3,22 +3,14 @@ import * as fs from 'fs';
 import * as dotenv from 'dotenv';
 import * as readline from 'readline';
 import { 
-  TOKEN_PROGRAM_ID, 
-  ASSOCIATED_TOKEN_PROGRAM_ID
-} from '@solana/spl-token';
-import { 
   createSolanaClient, 
   Address,
   createKeyPairSignerFromPrivateKeyBytes,
   type KeyPairSigner
 } from 'gill';
 
-// Import services from SDK location
-import { VaultSDK } from '../sdk';
 import { 
-  JITO_SOL_MINT_ADDRESS, 
-  BORING_VAULT_PROGRAM_ID, 
-  CONFIG_SEED 
+  JITO_SOL_MINT_ADDRESS
 } from '../utils/constants';
 
 // Load environment variables
@@ -26,7 +18,7 @@ dotenv.config();
 
 // Add token mint IDs
 export const TOKEN_MINTS = {
-  JITO_SOL: new web3.PublicKey('J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn')
+  JITO_SOL: new web3.PublicKey(JITO_SOL_MINT_ADDRESS)
 };
 
 // Create readline interface for user interaction

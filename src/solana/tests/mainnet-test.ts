@@ -22,7 +22,8 @@ import {
 
 // Import oracle operations
 import {
-  testOracleCrank
+  testPythOracle,
+  testOracleCranking
 } from './mainnet-test-oracle';
 
 // Load environment variables
@@ -45,7 +46,8 @@ function displayHelpText(errorMessage?: string): void {
   console.log('  5. deposit-sol - Test SOL deposit functionality');
   console.log('  6. queue-withdraw - Test queue withdraw functionality');
   console.log('  7. check-queue-config [vault-id] - Check the queue program configuration for a specific vault (default: vault from .env)');
-  console.log('  8. oracle - Test Switchboard oracle cranking');
+  console.log('  8. pyth-oracle - Test Pyth oracle integration (price feeds and updates)');
+  console.log('  9. pyth-crank - Test Pyth oracle cranking specifically');
   console.log('\nRun with a command to execute that test. Example: node dist/src/solana/tests/mainnet-test.js queue-withdraw');
   console.log('For check-queue-config, optionally specify vault ID: node dist/src/solana/tests/mainnet-test.js check-queue-config 9');
 }
@@ -111,8 +113,10 @@ async function main() {
       }
       
       executeTest(() => checkQueueConfig(vaultId));
-    } else if (command === 'oracle') {
-      executeTest(() => testOracleCrank());
+    } else if (command === 'pyth-oracle' || command === 'pyth') {
+      executeTest(() => testPythOracle());
+    } else if (command === 'pyth-crank') {
+      executeTest(() => testOracleCranking());
     } else if (!command) {
       // Show help instead of entering interactive mode
       displayHelpText();
