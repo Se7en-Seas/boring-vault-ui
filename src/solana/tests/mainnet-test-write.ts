@@ -506,43 +506,6 @@ export async function testQueueWithdraw(): Promise<string | undefined> {
 export async function testDepositSol(depositAmountSOL: number = 0.001): Promise<string | undefined> {
   console.log('\n🔥 SOL Deposit Test');
   
-  // Suppress noisy RPC/websocket errors
-  const originalConsoleError = console.error;
-  const originalConsoleWarn = console.warn;
-  
-  console.error = (...args) => {
-    const message = args.join(' ');
-    if (message.includes('JSON-RPC error') || 
-        message.includes('signatureSubscribe') || 
-        message.includes('WebSocket') ||
-        message.includes('rpc-websockets') ||
-        message.includes('Could not get discriminator')) {
-      return; // Suppress these errors
-    }
-    originalConsoleError(...args);
-  };
-  
-  console.warn = (...args) => {
-    const message = args.join(' ');
-    if (message.includes('JSON-RPC error') || 
-        message.includes('signatureSubscribe') || 
-        message.includes('WebSocket') ||
-        message.includes('rpc-websockets')) {
-      return; // Suppress these warnings
-    }
-    originalConsoleWarn(...args);
-  };
-
-  // Also suppress the noisy "Loaded keypair" message
-  const originalConsoleLog = console.log;
-  console.log = (...args) => {
-    const message = args.join(' ');
-    if (message.includes('Loaded keypair with address:')) {
-      return; // Suppress this message
-    }
-    originalConsoleLog(...args);
-  };
-  
   try {
     // Create service instance
     const vaultService = new VaultSDK(MAINNET_CONFIG.rpcUrl);
@@ -590,35 +553,150 @@ export async function testDepositSol(depositAmountSOL: number = 0.001): Promise<
     
     console.log('🚀 Executing deposit...');
     
+    // Create a direct web3.js connection for transaction sending
+    const connection = createConnection();
+    
     try {
-      const signature = await vaultService.depositSol(
-        keypair,
+      // Step 1: Crank Pyth oracle first
+      console.log('⚡ Cranking oracle...');
+      try {
+        const crankSignature = await import('../utils/pyth-oracle').then(({ crankPythPriceFeeds }) => 
+          crankPythPriceFeeds(
+            connection,
+            keypair,
+            [JITOSOL_SOL_PYTH_FEED]
+          )
+        );
+        console.log(`✅ Oracle cranked: ${crankSignature.slice(0, 8)}...`);
+      } catch (crankError) {
+        console.warn('⚠️ Oracle crank failed, continuing...');
+      }
+      
+      // Step 2: Build the deposit transaction
+      const transaction = await vaultService.getBoringVault().buildDepositSolTransaction(
+        keypair.publicKey,
         vaultId,
         depositLamports,
-        minMintAmount,
-        {
-          skipPreflight: true,
-          maxRetries: 30,
-          enableOracleCrank: true
-        }
+        minMintAmount
       );
       
-      console.log(`✅ Success! Signature: ${signature}`);
-      console.log(`🔍 Explorer: https://solscan.io/tx/${signature}`);
+      // Add recent blockhash
+      const { blockhash } = await connection.getLatestBlockhash('confirmed');
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = keypair.publicKey;
       
-      return signature;
+      // Sign the transaction
+      transaction.sign(keypair);
+      
+      console.log('📤 Sending transaction...');
+      
+      // Send transaction
+      const signature = await connection.sendRawTransaction(transaction.serialize(), {
+        skipPreflight: true,
+        preflightCommitment: 'confirmed',
+        maxRetries: 30
+      });
+      
+      // Poll for transaction status using the same pattern as other tests
+      console.log('Polling for transaction status...');
+      const maxAttempts = 30;
+      
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+          const response = await connection.getSignatureStatuses([signature]);
+          const status = response.value[0];
+          
+          if (status) {
+            if (status.err) {
+              console.error(`\n❌ Transaction failed: ${JSON.stringify(status.err)}`);
+              console.log('Transaction polling stopped due to failure.');
+              throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+            }
+            
+            if (status.confirmationStatus === 'finalized' || status.confirmationStatus === 'confirmed') {
+              console.log(`\nTransaction ${status.confirmationStatus}!`);
+              
+              // Get transaction details for debugging
+              try {
+                const txDetails = await connection.getTransaction(signature, {
+                  maxSupportedTransactionVersion: 0,
+                });
+                
+                if (txDetails && txDetails.meta) {
+                  if (txDetails.meta.err) {
+                    console.error(`Transaction error: ${JSON.stringify(txDetails.meta.err)}`);
+                  } else {
+                    console.log('Transaction successful!');
+                    
+                    // Log token balance changes if available
+                    if (txDetails.meta.postTokenBalances && txDetails.meta.preTokenBalances) {
+                      console.log('Token balance changes:');
+                      txDetails.meta.postTokenBalances.forEach((postBalance) => {
+                        const preBalance = txDetails.meta?.preTokenBalances?.find(
+                          (pre) => pre.accountIndex === postBalance.accountIndex
+                        );
+                        
+                        if (preBalance) {
+                          const change = (postBalance.uiTokenAmount.uiAmount || 0) - 
+                                        (preBalance.uiTokenAmount.uiAmount || 0);
+                          console.log(`  Mint: ${postBalance.mint}, Change: ${change}`);
+                        }
+                      });
+                    }
+                  }
+                }
+              } catch (detailsError) {
+                console.warn(`Could not fetch transaction details: ${detailsError}`);
+              }
+              
+              console.log(`✅ Success! Signature: ${signature}`);
+              console.log(`🔍 Explorer: https://solscan.io/tx/${signature}`);
+              
+              return signature;
+            }
+          }
+          
+          // Wait before next poll
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          process.stdout.write('.');
+        } catch (error) {
+          // Check if this is a transaction failure error that should stop polling
+          if (error instanceof Error && error.message.includes('Transaction failed:')) {
+            // This is a transaction failure, stop polling immediately
+            throw error;
+          }
+          
+          // This is a network/API error, continue polling but warn
+          console.warn(`\nError checking transaction status (attempt ${attempt + 1}/${maxAttempts}): ${error}`);
+          
+          // If we're near the end of attempts, stop polling
+          if (attempt >= maxAttempts - 3) {
+            console.log('Too many polling errors, stopping...');
+            throw new Error(`Polling failed after ${attempt + 1} attempts: ${error}`);
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+      
+      // If we reach here, polling finished without confirmation
+      console.log('\n❌ Transaction polling timed out - transaction may have failed or not been processed');
+      throw new Error(`Transaction polling timed out after ${maxAttempts} attempts. Signature: ${signature}`);
       
     } catch (error: any) {
       console.error('❌ Deposit failed:', error.message || error);
+      
+      if (error.logs) {
+        console.log('\nTransaction logs:');
+        error.logs.forEach((log: string, i: number) => {
+          console.log(`[${i}] ${log}`);
+        });
+      }
+      
       throw error;
     }
   } catch (error) {
     console.error('❌ Test failed:', error instanceof Error ? error.message : error);
     return undefined;
-  } finally {
-    // Restore original console methods
-    console.error = originalConsoleError;
-    console.warn = originalConsoleWarn;
-    console.log = originalConsoleLog;
   }
 }
