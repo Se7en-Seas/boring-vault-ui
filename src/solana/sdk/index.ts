@@ -16,9 +16,6 @@ import {
   bundleSwitchboardCrank,
   type SwitchboardCrankConfig
 } from '../utils/switchboard-crank';
-import {
-  crankPythPriceFeeds
-} from '../utils/pyth-oracle';
 
 /**
  * Vault SDK adapter for mainnet testing
@@ -223,14 +220,13 @@ export class VaultSDK {
   }
 
   /**
-   * Deposits native SOL into a vault with automatic oracle cranking
+   * Deposits native SOL into a vault
    * 
    * @param wallet The wallet that will sign the transaction (supports both keypairs and wallet adapters)
    * @param vaultId The ID of the vault to deposit into
    * @param depositAmount The amount of SOL to deposit (in lamports)
    * @param minMintAmount The minimum amount of shares to mint
    * @param options Additional options for the deposit transaction
-   * @param options.enableOracleCrank Enable/disable automatic Pyth oracle cranking (default: true, works with wallet adapters)
    * @returns The transaction signature
    */
   async depositSol(
@@ -242,7 +238,6 @@ export class VaultSDK {
       skipPreflight?: boolean;
       maxRetries?: number;
       skipStatusCheck?: boolean;
-      enableOracleCrank?: boolean; // Enable/disable oracle cranking (default: true)
     } = {}
   ): Promise<string> {
     // Convert string inputs to proper types
@@ -263,23 +258,7 @@ export class VaultSDK {
     }
 
     try {
-      // Step 1: Crank Pyth oracle if enabled (default: true)
-      if (options.enableOracleCrank !== false) {
-        console.log('⚡ Cranking oracle...');
-        try {
-          const crankSignature = await crankPythPriceFeeds(
-            this.connection,
-            wallet, // Pass wallet directly - function now handles both keypairs and wallet adapters
-            [JITOSOL_SOL_PYTH_FEED],
-            'https://hermes.pyth.network/'
-          );
-          console.log(`✅ Oracle cranked: ${crankSignature.slice(0, 8)}...`);
-        } catch (crankError) {
-          console.warn('⚠️ Oracle crank failed, continuing...');
-        }
-      }
-
-      // Step 2: Build and execute the deposit transaction
+      // Build the deposit transaction
       const transaction = await this.boringVault.buildDepositSolTransaction(
         wallet.publicKey,
         vaultId,

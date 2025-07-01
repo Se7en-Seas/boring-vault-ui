@@ -26,8 +26,11 @@ import {
   INSTRUCTION_SIZE_THRESHOLD_KB
 } from '../utils/constants';
 
-// Import the main oracle cranking function
-import { crankPythPriceFeeds } from '../utils/pyth-oracle';
+// Import transaction utilities
+import { pollTransactionStatus } from '../utils/transaction-utils';
+
+// Import oracle building functions
+import { buildPythOracleCrankTransactions } from '../utils/pyth-oracle';
 
 // Load environment variables
 dotenv.config();
@@ -112,15 +115,83 @@ export async function testOracleCranking(): Promise<boolean> {
     
     // Test oracle cranking
     console.log('\nCranking oracle...');
-    const signature = await crankPythPriceFeeds(
+    
+    // Verify price data is available
+    console.log('🔍 Testing price data fetch...');
+    const hermesClient = new HermesClient(PYTH_HERMES_URL, {});
+    const testResponse = await hermesClient.getLatestPriceUpdates(
+      [JITOSOL_SOL_PYTH_FEED],
+      { encoding: 'base64' }
+    );
+    console.log(`✓ Price data fetch successful: ${testResponse.binary.data.length} updates`);
+    
+    // Step 1: Build oracle crank transactions
+    console.log('⚡ Building oracle crank transactions...');
+    const { transactions, signers } = await buildPythOracleCrankTransactions(
       connection,
-      payerKeypair,
+      payerKeypair.publicKey,
       [JITOSOL_SOL_PYTH_FEED]
     );
     
-    console.log(`✅ Oracle cranking successful!`);
-    console.log(`✓ Transaction: ${signature}`);
-    console.log(`✓ Explorer: https://solscan.io/tx/${signature}`);
+    console.log(`📋 Built ${transactions.length} oracle transactions`);
+    
+    // Step 2: Handle each transaction separately with enhanced error handling
+    const signatures: string[] = [];
+    
+    for (let i = 0; i < transactions.length; i++) {
+      console.log(`\n🔄 Step ${i + 1}/${transactions.length}: Processing oracle transaction ${i + 1}...`);
+      
+      const tx = transactions[i];
+      const txSigners = signers[i];
+      
+      // Log transaction details
+      console.log(`📋 Transaction ${i + 1}: ${tx.instructions.length} instructions, ${txSigners.length} signers, ${tx.serializeMessage().length} bytes`);
+      
+      // Add all signers (keypair + ephemeral signers)
+      const allSigners = [payerKeypair, ...txSigners];
+      
+      console.log(`📝 Signing transaction ${i + 1} with ${allSigners.length} signers...`);
+      
+      if (allSigners.length === 1) {
+        tx.sign(allSigners[0]);
+      } else {
+        tx.partialSign(...allSigners);
+      }
+      
+      try {
+        // Send transaction
+        console.log(`📤 Sending oracle transaction ${i + 1}...`);
+        const signature = await connection.sendRawTransaction(tx.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: 'confirmed',
+          maxRetries: 1
+        });
+        
+        console.log(`📤 Oracle tx ${i + 1} sent: ${signature.slice(0, 8)}...`);
+        
+        // Poll for confirmation
+        const confirmedSignature = await pollTransactionStatus(connection, signature);
+        signatures.push(confirmedSignature);
+        
+        console.log(`✅ Transaction ${i + 1} confirmed!`);
+        console.log(`🔍 Explorer: https://solscan.io/tx/${signature}`);
+        
+      } catch (error) {
+        console.error(`❌ Oracle transaction ${i + 1} failed:`, error instanceof Error ? error.message : error);
+        throw error;
+      }
+      
+      // Add a small delay between transactions to ensure proper sequencing
+      if (i < transactions.length - 1) {
+        console.log(`⏸️ Waiting 1 second before next transaction...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    console.log(`\n🎉 All ${signatures.length} oracle transactions completed successfully!`);
+    signatures.forEach((sig, i) => {
+      console.log(`✓ Transaction ${i + 1}: ${sig}`);
+    });
     
     return true;
     

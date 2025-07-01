@@ -557,19 +557,61 @@ export async function testDepositSol(depositAmountSOL: number = 0.001): Promise<
     const connection = createConnection();
     
     try {
-      // Step 1: Crank Pyth oracle first
+      // Step 1: Crank Pyth oracle first with individual transaction management
       console.log('⚡ Cranking oracle...');
       try {
-        const crankSignature = await import('../utils/pyth-oracle').then(({ crankPythPriceFeeds }) => 
-          crankPythPriceFeeds(
-            connection,
-            keypair,
-            [JITOSOL_SOL_PYTH_FEED]
-          )
+        const { buildPythOracleCrankTransactions } = await import('../utils/pyth-oracle');
+        const { pollTransactionStatus } = await import('../utils/transaction-utils');
+        
+        // Build oracle transactions
+        const { transactions, signers } = await buildPythOracleCrankTransactions(
+          connection,
+          keypair.publicKey,
+          [JITOSOL_SOL_PYTH_FEED]
         );
-        console.log(`✅ Oracle cranked: ${crankSignature.slice(0, 8)}...`);
+        
+        console.log(`📋 Built ${transactions.length} oracle transactions`);
+        
+        // Execute each oracle transaction individually
+        const oracleSignatures: string[] = [];
+        
+        for (let i = 0; i < transactions.length; i++) {
+          const tx = transactions[i];
+          const txSigners = signers[i];
+          
+          console.log(`🔄 Oracle tx ${i + 1}/${transactions.length}: Processing...`);
+          
+          // Sign transaction
+          const allSigners = [keypair, ...txSigners];
+          if (allSigners.length === 1) {
+            tx.sign(allSigners[0]);
+          } else {
+            tx.partialSign(...allSigners);
+          }
+          
+          // Send and confirm transaction
+          const oracleSignature = await connection.sendRawTransaction(tx.serialize(), {
+            skipPreflight: false,
+            preflightCommitment: 'confirmed',
+            maxRetries: 1
+          });
+          
+          console.log(`📤 Oracle tx ${i + 1} sent: ${oracleSignature.slice(0, 8)}...`);
+          
+          const confirmedSignature = await pollTransactionStatus(connection, oracleSignature);
+          oracleSignatures.push(confirmedSignature);
+          
+          console.log(`✅ Oracle tx ${i + 1} confirmed!`);
+          
+          // Brief delay between transactions
+          if (i < transactions.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+        
+        console.log(`✅ All ${oracleSignatures.length} oracle transactions confirmed!`);
       } catch (crankError) {
-        console.warn('⚠️ Oracle crank failed, continuing...');
+        console.warn('⚠️ Oracle crank failed, continuing with deposit...');
       }
       
       // Step 2: Build the deposit transaction
