@@ -35,7 +35,6 @@ export async function testDeposit(): Promise<string | undefined> {
     // Print constants for debugging
     console.log('Constants used in test:');
     console.log(`JITO_SOL_MINT_ADDRESS: ${JITO_SOL_MINT_ADDRESS}`);
-    console.log(`JITO_SOL_PRICE_FEED_ADDRESS: ${require('../utils/constants').JITO_SOL_PRICE_FEED_ADDRESS}`);
     console.log(`BORING_VAULT_PROGRAM_ID: ${BORING_VAULT_PROGRAM_ID}`);
     
     // Create service instance

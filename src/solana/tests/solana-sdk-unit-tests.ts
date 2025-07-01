@@ -6,7 +6,7 @@ import {
   BASE_SEED_BORING_VAULT, 
   BASE_SEED_SHARE_TOKEN,
   JITO_SOL_MINT_ADDRESS,
-  JITO_SOL_PRICE_FEED_ADDRESS,
+  JITOSOL_SOL_SWITCHBOARD_FEED,
   JITOSOL_SOL_PYTH_FEED,
   BORING_VAULT_PROGRAM_ID,
 } from '../utils/constants';
@@ -303,7 +303,7 @@ async function testSwitchboardFunctionality() {
   const mockPayer = new web3.PublicKey('11111111111111111111111111111111');
   
   // Use the JITO SOL price feed address from constants
-  const feedAddress = new web3.PublicKey(JITO_SOL_PRICE_FEED_ADDRESS);
+  const feedAddress = new web3.PublicKey(JITOSOL_SOL_SWITCHBOARD_FEED);
   
   // Test 1: Test mock getSwitchboardCrankInstruction
   try {

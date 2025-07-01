@@ -131,8 +131,8 @@ export async function getPythPriceUpdateInstructions(
       closeUpdateAccounts
     });
 
-    // Add price update posting instructions
-    await transactionBuilder.addPostPriceUpdates(priceUpdateData);
+    // Add partially verified price update posting instructions (requires fewer transactions)
+    await transactionBuilder.addPostPartiallyVerifiedPriceUpdates(priceUpdateData);
 
     // Store references to important functions
     let priceUpdateAccountGetter: ((priceFeedId: string) => web3.PublicKey) | null = null;

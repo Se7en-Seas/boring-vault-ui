@@ -9,12 +9,18 @@ import { createSolanaClient, type SolanaClient, Address } from 'gill';
 import {
   JITO_SOL_MINT_ADDRESS,
   DEFAULT_DECIMALS,
-  JITO_SOL_PRICE_FEED_ADDRESS
+  JITOSOL_SOL_SWITCHBOARD_FEED,
+  JITOSOL_SOL_PYTH_FEED,
+  JITOSOL_SOL_PYTH_ACCOUNT
 } from '../utils/constants';
 import {
   bundleSwitchboardCrank,
   type SwitchboardCrankConfig
 } from '../utils/switchboard-crank';
+import {
+  getPythPriceUpdateInstructions,
+  type PythOracleConfig
+} from '../utils/pyth-oracle';
 
 /**
  * Vault SDK adapter for mainnet testing
@@ -274,72 +280,83 @@ export class VaultSDK {
       let finalTransaction: web3.Transaction;
       let lookupTables: any[] = [];
 
-      // Add oracle cranking (enabled by default)
+      // Send Pyth oracle price updates first (enabled by default)
       if (options.enableOracleCrank !== false) {
-        console.log('Adding automatic oracle cranking to SOL deposit with 3 responses...');
+        console.log('🔄 Sending Pyth price updates in separate transaction...');
 
         try {
-          // Configure Switchboard cranking for jitoSOL price feed with 3 responses
-          const switchboardConfig: SwitchboardCrankConfig = {
+          // Configure Pyth oracle for JitoSOL/SOL price feed
+          const pythConfig: PythOracleConfig = {
             connection: this.connection,
-            feedAddress: new web3.PublicKey(JITO_SOL_PRICE_FEED_ADDRESS),
             payer: payerPublicKey,
-            numResponses: 3 // Always use 3 oracle responses
+            priceFeedIds: [JITOSOL_SOL_PYTH_FEED],
+            hermesUrl: 'https://hermes.pyth.network/',
+            closeUpdateAccounts: false // Keep accounts open for usage
           };
 
-          // Bundle the oracle crank with the deposit transaction
-          const bundledResult = await bundleSwitchboardCrank(
-            switchboardConfig,
-            baseTransaction.instructions
-          );
+          // Get Pyth price update instructions
+          const pythResult = await getPythPriceUpdateInstructions(pythConfig);
 
-          console.log(`✓ Added ${bundledResult.instructions.length - baseTransaction.instructions.length} oracle crank instructions`);
+          console.log(`✓ Generated ${pythResult.instructions.length} Pyth price update instructions`);
 
-          // Create a new transaction with bundled instructions
-          finalTransaction = new web3.Transaction();
-          finalTransaction.add(...bundledResult.instructions);
-          lookupTables = bundledResult.lookupTables;
+          // Create and send Pyth price update transaction first
+          const pythTransaction = new web3.Transaction();
+          pythTransaction.add(...pythResult.instructions);
+          
+          const { blockhash: pythBlockhash } = await this.connection.getLatestBlockhash('confirmed');
+          pythTransaction.recentBlockhash = pythBlockhash;
+          pythTransaction.feePayer = payerPublicKey;
+
+          // Sign and send Pyth transaction
+          let signedPythTx: web3.Transaction;
+          if ('signTransaction' in wallet) {
+            signedPythTx = await wallet.signTransaction(pythTransaction);
+          } else {
+            pythTransaction.sign(wallet);
+            signedPythTx = pythTransaction;
+          }
+
+          const pythSignature = await this.connection.sendRawTransaction(signedPythTx.serialize(), {
+            skipPreflight: false,
+            preflightCommitment: 'confirmed'
+          });
+
+          console.log(`✅ Pyth price update sent! Signature: ${pythSignature}`);
+
+          // Wait for confirmation before proceeding
+          console.log('⏳ Waiting for Pyth price update confirmation...');
+          await this.connection.confirmTransaction(pythSignature, 'confirmed');
+          console.log('✅ Pyth price update confirmed!');
 
         } catch (oracleError) {
-          console.warn('Oracle cranking failed, proceeding with deposit only:', oracleError);
-          // Fallback to base transaction if oracle cranking fails
-          finalTransaction = baseTransaction;
+          console.warn('Pyth price updates failed, proceeding with deposit only:', oracleError);
         }
       } else {
-        console.log('Oracle cranking disabled, using deposit-only transaction');
-        finalTransaction = baseTransaction;
+        console.log('Pyth oracle updates disabled');
       }
+
+      // Use base deposit transaction
+      finalTransaction = baseTransaction;
 
       // Add recent blockhash
       const { blockhash } = await this.connection.getLatestBlockhash('confirmed');
       finalTransaction.recentBlockhash = blockhash;
       finalTransaction.feePayer = payerPublicKey;
 
-      console.log('🔄 Using Versioned Transaction with lookup tables...');
+      console.log('🔄 Using Legacy Transaction format (better for large transactions)...');
 
-      // Create versioned transaction message
-      const message = new web3.TransactionMessage({
-        payerKey: payerPublicKey,
-        recentBlockhash: blockhash,
-        instructions: finalTransaction.instructions,
-      }).compileToV0Message(lookupTables);
-
-      // Create versioned transaction
-      const versionedTx = new web3.VersionedTransaction(message);
-
-      // Sign the versioned transaction
-      let signedTransaction: any;
+      // Sign the transaction
+      let signedTransaction: web3.Transaction;
       if ('signTransaction' in wallet) {
         // Using wallet adapter (browser extension)
-        // Cast to any to handle the type compatibility between Transaction and VersionedTransaction
-        signedTransaction = await wallet.signTransaction(versionedTx as any);
+        signedTransaction = await wallet.signTransaction(finalTransaction);
       } else {
         // Using keypair directly
-        versionedTx.sign([wallet]);
-        signedTransaction = versionedTx;
+        finalTransaction.sign(wallet);
+        signedTransaction = finalTransaction;
       }
 
-      // Send versioned transaction
+      // Send legacy transaction
       const signature = await this.connection.sendRawTransaction(signedTransaction.serialize(), {
         skipPreflight: options.skipPreflight || false,
         preflightCommitment: 'confirmed'
