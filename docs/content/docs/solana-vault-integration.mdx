@@ -187,7 +187,6 @@ async function queueWithdrawal() {
       shareAmount,
       discountPercent,
       secondsToDeadline,
-      undefined, // Optional queue shares account
       {
         skipPreflight: false,
         maxRetries: 30
@@ -465,7 +464,7 @@ import {
   JITO_SOL_MINT_ADDRESS,
   TOKEN_2022_PROGRAM_ID,
   DEFAULT_DECIMALS
-} from 'boring-vault-ui/solana/utils/constants';
+} from 'boring-vault-ui';
 
 console.log('Boring Vault Program:', BORING_VAULT_PROGRAM_ID);
 console.log('Boring Queue Program:', BORING_QUEUE_PROGRAM_ID);
@@ -494,3 +493,25 @@ interface TransactionOptions {
 5. **Test on devnet first** - Always test new integrations on devnet
 6. **Reserve SOL for fees** - Keep ~0.01 SOL for transaction fees when depositing SOL
 7. **Check vault status** - Ensure vaults aren't paused before attempting operations 
+
+### Updating price feeds 
+
+To guarantee the freshest JitoSOL/SOL price — crank the Pyth oracle just before sending your state-changing transaction:
+
+```tsx
+import { buildPythOracleCrankTransactions } from 'boring-vault-ui/solana/';
+import { JITOSOL_SOL_PYTH_FEED } from 'boring-vault-ui';
+
+const { transactions, signers } = await buildPythOracleCrankTransactions(
+  connection,
+  payer.publicKey,
+  [JITOSOL_SOL_PYTH_FEED]
+);
+
+for (let i = 0; i < transactions.length; i++) {
+  transactions[i].sign(...signers[i], keypair);
+  await connection.sendRawTransaction(transactions[i].serialize());
+}
+```
+
+On mainnet the feeds are updated automatically, so this step is optional; on local testing it is **required**. 
