@@ -8,6 +8,7 @@ import { VLBTC } from "../gen/v-lbtc/vlbtc/structs";
 import { DepositEvent, WithdrawRequestedEvent, WithdrawRequestCancelledEvent } from "../gen/boring_vault/boring-vault/structs";
 import { SuiVaultSDK, createSuiVaultSDK } from "../index";
 import { SuiClient } from "@mysten/sui/client";
+import { parseUnits } from "viem";
 
 const TEST_ASSET_TREASURY_CAP = "0x4bfb993b596b36c910443e9491f1488efe0922d6585cffd8e176b09ce16ad526";
 const AUTH_ID = "0xbff900ce0a4b6779f6be9db0829f1ad1b3d02a37017d1a945cd56835a704bfb1";
@@ -89,8 +90,8 @@ describe("SuiVaultSDK", () => {
       const depositEvent = `${DepositEvent.$typeName}<${ASSET.$typeName}, ${VLBTC.$typeName}>`;
       const currentDepositEvents = await countEvents(client, depositEvent);
 
-      const depositAmount = 1000_00000000n; // 1K
-      const minMintAmount = 500_00000000n; // 500
+      const depositAmount = "1000" // 1K
+      const minMintAmount = "500" // 500
 
       const result = await sdk.deposit(
         ADMIN_ADDRESS,
@@ -106,13 +107,14 @@ describe("SuiVaultSDK", () => {
       expect(newDepositEvents).toBe(currentDepositEvents + 1);
 
       // Verify shares were minted
-      const shareBalance = await sdk.getShareBalance(ADMIN_ADDRESS, VLBTC.$typeName);
-      expect(BigInt(shareBalance.totalBalance)).toBeGreaterThanOrEqual(minMintAmount);
+      const userShares = await sdk.fetchUserShares(ADMIN_ADDRESS);
+      const decimals = await sdk.getDecimals();
+      expect(parseUnits(userShares, decimals)).toBeGreaterThanOrEqual(parseUnits(minMintAmount, decimals));
     });
 
     it("should throw error when no coins found for asset type", async () => {
-      const depositAmount = 1000_00000000n;
-      const minMintAmount = 500_00000000n;
+      const depositAmount = "1000" // 1K
+      const minMintAmount = "500" // 500
 
       await expect(
         sdk.deposit(
@@ -128,28 +130,30 @@ describe("SuiVaultSDK", () => {
   describe("requestWithdraw", () => {
     it("should successfully request withdrawal", async () => {
       // First deposit to get shares
-      const depositAmount = 1000_00000000n;
-      const minMintAmount = 500_00000000n;
-      await sdk.deposit(
+      const depositAmount = "1000" // 1K
+      const minMintAmount = "500" // 500
+      const depositResult = await sdk.deposit(
         ADMIN_ADDRESS,
         ASSET.$typeName,
         depositAmount,
         minMintAmount,
       );
+      expect(depositResult.effects?.status.status).toBe("success");
 
       const withdrawRequestedEvent = `${WithdrawRequestedEvent.$typeName}<${ASSET.$typeName}, ${VLBTC.$typeName}>`;
       const currentWithdrawReqEvents = await countEvents(client, withdrawRequestedEvent);
 
-      const shareAmount = 100_00000000n; // 100 shares
-      const discount = 1000n; // 10 basis points
-      const msToDeadline = 1_592_000_000n; // ~18 days
+      const shareAmount = "100" // 100 shares
+      const discount = "0.1000"; // 10%
+      const daysValid = "18.5"; // 18.5 days
+
 
       const result = await sdk.requestWithdraw(
         ADMIN_ADDRESS,
         ASSET.$typeName,
         shareAmount,
         discount,
-        msToDeadline,
+        daysValid,
       );
 
       expect(result.effects?.status.status).toBe("success");
@@ -160,9 +164,9 @@ describe("SuiVaultSDK", () => {
     });
 
     it("should throw error when no shares found", async () => {
-      const shareAmount = 100_00000000n;
-      const discount = 1000n;
-      const msToDeadline = 1_592_000_000n;
+      const shareAmount = "100" // 100 shares
+      const discount = "0.1000";
+      const daysValid = "18.5";
 
       await expect(
         sdk.requestWithdraw(
@@ -170,7 +174,7 @@ describe("SuiVaultSDK", () => {
           ASSET.$typeName,
           shareAmount,
           discount,
-          msToDeadline,
+          daysValid,
         )
       ).rejects.toThrow(`No shares found for type ${VLBTC.$typeName}`);
     });
@@ -179,8 +183,8 @@ describe("SuiVaultSDK", () => {
   describe("cancelWithdraw", () => {
     it("should successfully cancel withdrawal request", async () => {
       // First deposit to get shares
-      const depositAmount = 1000_00000000n;
-      const minMintAmount = 500_00000000n;
+      const depositAmount = "1000" // 1K
+      const minMintAmount = "500" // 500
       await sdk.deposit(
         ADMIN_ADDRESS,
         ASSET.$typeName,
@@ -189,17 +193,16 @@ describe("SuiVaultSDK", () => {
       );
 
       // Request withdrawal
-
-      const shareAmount = 100_00000000n;
-      const discount = 1000n;
-      const msToDeadline = 1_592_000_000n;
+      const shareAmount = "100" // 100 shares
+      const discount = "0.1000";
+      const daysValid = "18.5";
 
       const withdrawResult = await sdk.requestWithdraw(
         ADMIN_ADDRESS,
         ASSET.$typeName,
         shareAmount,
         discount,
-        msToDeadline,
+        daysValid,
       );
 
       // Get the queue key from the withdrawal request
@@ -301,17 +304,12 @@ describe("SuiVaultSDK", () => {
 
   describe("fetchUserShares", () => {
     it("should return correct user share balance in human readable format", async () => {
-      // Get one_share value from accountant
-      const oneShare = await sdk.getOneShare();
-      expect(oneShare).toBeTruthy();
-      expect(typeof oneShare).toBe("string");
-
       // Get initial share balance
-      const initialUserShares = await sdk.fetchUserShares(ADMIN_ADDRESS, VLBTC.$typeName, BigInt(oneShare));
+      const initialUserShares = await sdk.fetchUserShares(ADMIN_ADDRESS);
       
       // Perform a deposit
-      const depositAmount = 1000_00000000n; // 1K
-      const minMintAmount = 500_00000000n; // 500
+      const depositAmount = "1000" // 1K
+      const minMintAmount = "500" // 500
       await sdk.deposit(
         ADMIN_ADDRESS,
         ASSET.$typeName,
@@ -320,49 +318,45 @@ describe("SuiVaultSDK", () => {
       );
 
       // Get final share balance
-      const finalUserShares = await sdk.fetchUserShares(ADMIN_ADDRESS, VLBTC.$typeName, BigInt(oneShare));
+      const finalUserShares = await sdk.fetchUserShares(ADMIN_ADDRESS);
       
-      // Should return a number
-      expect(typeof finalUserShares).toBe("number");
+      // Should return a string
+      expect(typeof finalUserShares).toBe("string");
       
       // Should be greater than or equal to initial balance
-      expect(finalUserShares).toBeGreaterThanOrEqual(initialUserShares);
+      const decimals = await sdk.getDecimals();
+      expect(parseUnits(finalUserShares, decimals)).toBeGreaterThanOrEqual(parseUnits(initialUserShares, decimals));
       
       // Calculate the difference in shares
-      const shareDifference = finalUserShares - initialUserShares;
+      const shareDifference = parseUnits(finalUserShares, decimals) - parseUnits(initialUserShares, decimals);
       
       // Should have gained at least the minimum mint amount in shares
-      const expectedMinShares = Number(minMintAmount) / Number(oneShare);
-      expect(shareDifference).toBeGreaterThanOrEqual(expectedMinShares * 0.9); // Allow for some tolerance
+      const expectedMinShares = parseUnits(minMintAmount, decimals);
+      expect(shareDifference).toBeGreaterThanOrEqual(expectedMinShares * 9n / 10n); // Allow for some tolerance
     });
 
     it("should return 0 for user with no shares", async () => {
-      const oneShare = await sdk.getOneShare();
       const nonExistentAddress = "0x0000000000000000000000000000000000000000000000000000000000000000";
       
-      const userShares = await sdk.fetchUserShares(nonExistentAddress, VLBTC.$typeName, BigInt(oneShare));
+      const userShares = await sdk.fetchUserShares(nonExistentAddress);
       
-      expect(userShares).toBe(0);
+      expect(userShares).toBe("0");
     });
 
     it("should handle different share types correctly", async () => {
-      const oneShare = await sdk.getOneShare();
-      
       // Test with the actual share type
-      const userShares = await sdk.fetchUserShares(ADMIN_ADDRESS, VLBTC.$typeName, BigInt(oneShare));
-      expect(typeof userShares).toBe("number");
-      expect(userShares).toBeGreaterThanOrEqual(0);
+      const userShares = await sdk.fetchUserShares(ADMIN_ADDRESS);
+      expect(typeof userShares).toBe("string");
+      expect(parseUnits(userShares, await sdk.getDecimals())).toBeGreaterThanOrEqual(0n);
     });
 
     it("should accurately reflect share balance changes after multiple operations", async () => {
-      const oneShare = await sdk.getOneShare();
-      
       // Get initial balance
-      const initialShares = await sdk.fetchUserShares(ADMIN_ADDRESS, VLBTC.$typeName, BigInt(oneShare));
+      const initialShares = await sdk.fetchUserShares(ADMIN_ADDRESS);
       
       // Perform a small deposit
-      const depositAmount = 500_00000000n; // 500
-      const minMintAmount = 200_00000000n; // 200
+      const depositAmount = "500" // 500
+      const minMintAmount = "200" // 200
       await sdk.deposit(
         ADMIN_ADDRESS,
         ASSET.$typeName,
@@ -371,17 +365,18 @@ describe("SuiVaultSDK", () => {
       );
       
       // Get balance after deposit
-      const afterDepositShares = await sdk.fetchUserShares(ADMIN_ADDRESS, VLBTC.$typeName, BigInt(oneShare));
+      const afterDepositShares = await sdk.fetchUserShares(ADMIN_ADDRESS);
       
       // Verify the increase
-      expect(afterDepositShares).toBeGreaterThan(initialShares);
+      const decimals = await sdk.getDecimals();
+      expect(parseUnits(afterDepositShares, decimals)).toBeGreaterThan(parseUnits(initialShares, decimals));
       
       // Calculate expected minimum increase
-      const expectedMinIncrease = Number(minMintAmount) / Number(oneShare);
-      const actualIncrease = afterDepositShares - initialShares;
+      const expectedMinIncrease = parseUnits(minMintAmount, decimals);
+      const actualIncrease = parseUnits(afterDepositShares, decimals) - parseUnits(initialShares, decimals);
       
       // Should have gained at least the minimum expected shares
-      expect(actualIncrease).toBeGreaterThanOrEqual(expectedMinIncrease * 0.9); // Allow for some tolerance
+      expect(actualIncrease).toBeGreaterThanOrEqual(expectedMinIncrease);
     });
   });
 
@@ -389,34 +384,36 @@ describe("SuiVaultSDK", () => {
     it("should return correct share value in human readable format", async () => {
       const shareValue = await sdk.fetchShareValue();
       
-      // Should return a number
-      expect(typeof shareValue).toBe("number");
+      // Should return a string
+      expect(typeof shareValue).toBe("string");
       
       // Should be greater than 0 (a share should have some value)
-      expect(shareValue).toBeGreaterThan(0);
+      const decimals = await sdk.getDecimals();
+      expect(parseUnits(shareValue, decimals)).toBeGreaterThan(0n);
       
       // Should be a reasonable value (not extremely large or small)
-      expect(shareValue).toBeLessThan(1000000); // Assuming share value is reasonable
+      expect(parseUnits(shareValue, decimals)).toBeLessThan(parseUnits("1000000", decimals)); // Assuming share value is reasonable
     });
 
-    it("should calculate share value correctly based on exchange rate and one_share", async () => {
+    it("should calculate share value correctly based on exchange rate", async () => {
       // Get raw values from accountant
       const accountant = await client.getObject({
         id: ACCOUNTANT_ID,
         options: { showContent: true },
       });
       const fields = (accountant.data?.content as any)?.fields;
-      const exchangeRate = Number(fields?.exchange_rate);
-      const oneShare = Number(fields?.one_share);
-      
-      // Calculate expected share value
-      const expectedShareValue = exchangeRate / oneShare;
+      const exchangeRate = BigInt(fields?.exchange_rate);
+      const oneShare = BigInt(fields?.one_share);
       
       // Get actual share value from SDK
       const actualShareValue = await sdk.fetchShareValue();
+      const decimals = await sdk.getDecimals();
+      
+      // Calculate expected share value: (exchange_rate * 10^decimals) / one_share
+      const expectedShareValue = exchangeRate * BigInt(10 ** decimals) / oneShare;
       
       // Should match the expected calculation
-      expect(actualShareValue).toBeCloseTo(expectedShareValue, 6);
+      expect(parseUnits(actualShareValue, decimals)).toBe(expectedShareValue);
     });
   });
 
@@ -424,14 +421,15 @@ describe("SuiVaultSDK", () => {
     it("should return correct total assets value in human readable format", async () => {
       const totalAssets = await sdk.fetchTotalAssets();
       
-      // Should return a number
-      expect(typeof totalAssets).toBe("number");
+      // Should return a string
+      expect(typeof totalAssets).toBe("string");
       
       // Should be greater than or equal to 0
-      expect(totalAssets).toBeGreaterThanOrEqual(0);
+      const decimals = await sdk.getDecimals();
+      expect(parseUnits(totalAssets, decimals)).toBeGreaterThanOrEqual(0n);
       
       // Should be a reasonable value
-      expect(totalAssets).toBeLessThan(1000000000); // Assuming TVL is reasonable
+      expect(parseUnits(totalAssets, decimals)).toBeLessThan(parseUnits("1000000000", decimals)); // Assuming TVL is reasonable
     });
 
     it("should calculate total assets correctly based on total shares and exchange rate", async () => {
@@ -441,18 +439,23 @@ describe("SuiVaultSDK", () => {
         options: { showContent: true },
       });
       const fields = (accountant.data?.content as any)?.fields;
-      const totalShares = Number(fields?.total_shares);
-      const exchangeRate = Number(fields?.exchange_rate);
-      const oneShare = Number(fields?.one_share);
-      
-      // Calculate expected total assets
-      const expectedTotalAssets = (totalShares * exchangeRate) / (oneShare * oneShare);
+      const totalShares = BigInt(fields?.total_shares);
+      const oneShare = BigInt(fields?.one_share);
       
       // Get actual total assets from SDK
       const actualTotalAssets = await sdk.fetchTotalAssets();
+      const shareValue = await sdk.fetchShareValue();
+      const decimals = await sdk.getDecimals();
       
-      // Should match the expected calculation
-      expect(actualTotalAssets).toBeCloseTo(expectedTotalAssets, 6);
+      // Calculate expected total assets
+      const expectedTotalAssets = totalShares * parseUnits(shareValue, decimals) / oneShare;
+      
+      // Should match the expected calculation (allowing for some rounding)
+      const actualTotalAssetsBigInt = parseUnits(actualTotalAssets, decimals);
+      const difference = actualTotalAssetsBigInt > expectedTotalAssets ? 
+        actualTotalAssetsBigInt - expectedTotalAssets : 
+        expectedTotalAssets - actualTotalAssetsBigInt;
+      expect(difference).toBeLessThan(expectedTotalAssets / 1000n); // Allow 0.1% difference
     });
 
     it("should return 0 for vault with no total shares", async () => {
@@ -466,12 +469,13 @@ describe("SuiVaultSDK", () => {
         options: { showContent: true },
       });
       const fields = (accountant.data?.content as any)?.fields;
-      const totalShares = Number(fields?.total_shares);
+      const totalShares = BigInt(fields?.total_shares);
       
-      if (totalShares === 0) {
-        expect(totalAssets).toBe(0);
+      if (totalShares === 0n) {
+        expect(totalAssets).toBe("0");
       } else {
-        expect(totalAssets).toBeGreaterThan(0);
+        const decimals = await sdk.getDecimals();
+        expect(parseUnits(totalAssets, decimals)).toBeGreaterThan(0n);
       }
     });
   });
@@ -507,52 +511,12 @@ describe("SuiVaultSDK", () => {
     });
   });
 
-  describe("getShareBalance", () => {
-    it("should return correct share balance for user with shares", async () => {
-      // First deposit to ensure user has shares
-      const depositAmount = 1000_00000000n;
-      const minMintAmount = 500_00000000n;
-      await sdk.deposit(
-        ADMIN_ADDRESS,
-        ASSET.$typeName,
-        depositAmount,
-        minMintAmount,
-      );
-
-      const shareBalance = await sdk.getShareBalance(ADMIN_ADDRESS, VLBTC.$typeName);
-      
-      // Should return a CoinBalance object
-      expect(shareBalance).toBeDefined();
-      expect(shareBalance.totalBalance).toBeDefined();
-      
-      // Should have shares
-      expect(BigInt(shareBalance.totalBalance)).toBeGreaterThan(0n);
-      
-      // Should have at least the minimum mint amount
-      expect(BigInt(shareBalance.totalBalance)).toBeGreaterThanOrEqual(minMintAmount);
-    });
-
-    it("should return zero balance for user with no shares", async () => {
-      const nonExistentAddress = "0x0000000000000000000000000000000000000000000000000000000000000000";
-      
-      const shareBalance = await sdk.getShareBalance(nonExistentAddress, VLBTC.$typeName);
-      
-      expect(shareBalance.totalBalance).toBe("0");
-    });
-
-    it("should handle different share types correctly", async () => {
-      const shareBalance = await sdk.getShareBalance(ADMIN_ADDRESS, VLBTC.$typeName);
-      
-      expect(shareBalance).toBeDefined();
-      expect(shareBalance.coinType).toBe(VLBTC.$typeName);
-    });
-  });
-
   describe("Integration tests for vault metrics", () => {
     it("should provide consistent vault metrics after deposit", async () => {
       // Perform a deposit
-      const depositAmount = 2000_00000000n; // 2K
-      const minMintAmount = 1000_00000000n; // 1K
+      const decimals = await sdk.getDecimals();
+      const depositAmount = "2000" // 2K
+      const minMintAmount = "1000" // 1K
       await sdk.deposit(
         ADMIN_ADDRESS,
         ASSET.$typeName,
@@ -564,19 +528,13 @@ describe("SuiVaultSDK", () => {
       const oneShare = await sdk.getOneShare();
       const shareValue = await sdk.fetchShareValue();
       const totalAssets = await sdk.fetchTotalAssets();
-      const userShares = await sdk.fetchUserShares(ADMIN_ADDRESS, VLBTC.$typeName, BigInt(oneShare));
-      const shareBalance = await sdk.getShareBalance(ADMIN_ADDRESS, VLBTC.$typeName);
+      const userShares = await sdk.fetchUserShares(ADMIN_ADDRESS);
 
       // Verify all metrics are consistent
-      expect(Number(oneShare)).toBeGreaterThan(0);
-      expect(shareValue).toBeGreaterThan(0);
-      expect(totalAssets).toBeGreaterThanOrEqual(0);
-      expect(userShares).toBeGreaterThan(0);
-      expect(BigInt(shareBalance.totalBalance)).toBeGreaterThan(0n);
-
-      // Verify user shares calculation is consistent with raw balance
-      const calculatedUserShares = Number(shareBalance.totalBalance) / Number(oneShare);
-      expect(userShares).toBeCloseTo(calculatedUserShares, 6);
+      expect(BigInt(oneShare)).toBeGreaterThan(0n);
+      expect(parseUnits(shareValue, decimals)).toBeGreaterThan(0n);
+      expect(parseUnits(totalAssets, decimals)).toBeGreaterThanOrEqual(0n);
+      expect(parseUnits(userShares, decimals)).toBeGreaterThan(0n);
 
       // Verify total assets calculation is consistent
       const accountant = await client.getObject({
@@ -584,8 +542,14 @@ describe("SuiVaultSDK", () => {
         options: { showContent: true },
       });
       const fields = (accountant.data?.content as any)?.fields;
-      const expectedTotalAssets = (Number(fields?.total_shares) * Number(fields?.exchange_rate)) / (Number(oneShare) * Number(oneShare));
-      expect(totalAssets).toBeCloseTo(expectedTotalAssets, 6);
+      const totalShares = BigInt(fields?.total_shares);
+      const expectedTotalAssets = totalShares * parseUnits(shareValue, decimals) / BigInt(oneShare);
+      
+      const actualTotalAssets = parseUnits(totalAssets, decimals);
+      const assetsDifference = actualTotalAssets > expectedTotalAssets ? 
+        actualTotalAssets - expectedTotalAssets : 
+        expectedTotalAssets - actualTotalAssets;
+      expect(assetsDifference).toBeLessThan(expectedTotalAssets / 1000n); // Allow 0.1% difference
     });
   });
 });

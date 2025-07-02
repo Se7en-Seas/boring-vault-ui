@@ -10,15 +10,29 @@ import { DENY_LIST_ID } from "./config";
 import { split } from "./gen/sui/coin/functions";
 import { SuiClient } from "@mysten/sui/client";
 import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
+import { formatUnits, parseUnits } from "viem";
 
+/**
+ * SDK for interacting with Boring Vault on the Sui blockchain
+ * Provides methods for depositing, withdrawing, and querying vault state
+ */
 export class SuiVaultSDK {
   private client: SuiClient;
   private network: Network;
   private vaultId: string;
   private accountantId: string;
+
+  private decimals: number | null = null;
+  private oneShare: string | null = null;
   private shareType: string | null = null;
   private shareTypePromise: Promise<string | null> | null = null;
 
+  /**
+   * Creates a new SuiVaultSDK instance
+   * @param network - The Sui network to connect to ("localnet", "devnet", "testnet", or "mainnet")
+   * @param vaultId - The object ID of the vault contract on Sui
+   * @param accountantId - The object ID of the accountant contract on Sui
+   */
   constructor(network: Network = "localnet", vaultId: string, accountantId: string) {
     this.client = getClient(network);
     this.network = network;
@@ -28,11 +42,21 @@ export class SuiVaultSDK {
 
   //== Vault write functions ==
 
+  /**
+   * Deposits assets into the vault and receives shares in return
+   * @param payerAddress - The address of the user making the deposit
+   * @param assetType - The type identifier of the asset being deposited (e.g., "0x2::sui::SUI")
+   * @param depositAmount - The amount to deposit as a string (in human-readable format)
+   * @param minMintAmount - The minimum amount of shares to mint as a string (slippage protection)
+   * @returns Promise that resolves to the transaction result
+   * @throws Error if no coins are found for the specified asset type
+   * @throws Error if share type cannot be determined
+   */
   async deposit(
     payerAddress: string,
     assetType: string,
-    depositAmount: bigint,
-    minMintAmount: bigint,
+    depositAmount: string,
+    minMintAmount: string,
   ) {
     let depositAssetCoins = await this.client.getCoins({
       owner: payerAddress,
@@ -47,7 +71,7 @@ export class SuiVaultSDK {
 
     let coin = split(depTx, assetType, {
       coin: depositAssetCoins.data[0].coinObjectId,
-      u64: depositAmount,
+      u64: parseUnits(depositAmount, await this.getDecimals()),
     });
 
     const shareType = await this.getShareType();
@@ -59,19 +83,31 @@ export class SuiVaultSDK {
       vault: this.vaultId,
       accountant: this.accountantId,
       coin: coin,
-      u64: minMintAmount,
+      u64: parseUnits(minMintAmount, await this.getDecimals()),
       denyList: DENY_LIST_ID,
     });
 
     return await signAndExecute(depTx, this.network, payerAddress);
   }
 
+  /**
+   * Requests a withdrawal from the vault by burning shares
+   * Creates a withdraw request that will be fulfilled after a delay
+   * @param payerAddress - The address of the user requesting withdrawal
+   * @param assetType - The type identifier of the asset to withdraw
+   * @param shareAmount - The amount of shares to burn as a string (in human-readable format)
+   * @param discountPercent - The discount percentage for early withdrawal (4 decimal places, e.g., "0.0100" for 1%)
+   * @param daysValid - The number of days the withdrawal request remains valid
+   * @returns Promise that resolves to the transaction result
+   * @throws Error if share type cannot be determined
+   * @throws Error if no shares are found for the user
+   */
   async requestWithdraw(
     payerAddress: string,
     assetType: string,
-    shareAmount: bigint,
-    discount: bigint,
-    msToDeadline: bigint,
+    shareAmount: string,
+    discountPercent: string,
+    daysValid: string,
   ) {
     const shareType = await this.getShareType();
     if (!shareType) {
@@ -91,15 +127,15 @@ export class SuiVaultSDK {
 
     let shares = split(withdrawTx, shareType, {
       coin: shareCoins.data[0].coinObjectId,
-      u64: shareAmount,
+      u64: parseUnits(shareAmount, await this.getDecimals()),
     });
 
     requestWithdraw(withdrawTx, [assetType, shareType], {
       vault: this.vaultId,
       accountant: this.accountantId,
       coin: shares,
-      u641: discount,
-      u642: msToDeadline,
+      u641: parseUnits(discountPercent, 4), // 0.01 = 1%
+      u642: BigInt(Number(daysValid) * 86400) * 1000n,
       clock: SUI_CLOCK_OBJECT_ID,
       denyList: DENY_LIST_ID,
     });
@@ -107,10 +143,18 @@ export class SuiVaultSDK {
     return await signAndExecute(withdrawTx, this.network, payerAddress);
   }
 
+  /**
+   * Cancels a pending withdrawal request and returns the shares to the user
+   * @param payerAddress - The address of the user who made the withdrawal request
+   * @param assetType - The type identifier of the asset that was requested for withdrawal
+   * @param timestamp - The timestamp when the withdrawal request was created (as string)
+   * @returns Promise that resolves to the transaction result
+   * @throws Error if share type cannot be determined
+   */
   async cancelWithdraw(
     payerAddress: string,
     assetType: string,
-    timestamp: bigint,
+    timestamp: string,
   ) {
     const shareType = await this.getShareType();
     if (!shareType) {
@@ -121,7 +165,7 @@ export class SuiVaultSDK {
 
     const queueKey = createQueueKey(cancelTx, assetType, {
       address: payerAddress,
-      u64: timestamp,
+      u64: BigInt(timestamp),
     });
 
     cancelWithdrawByReqIdAndTransfer(cancelTx, [assetType, shareType], {
@@ -135,6 +179,11 @@ export class SuiVaultSDK {
 
   //== Vault read functions ==
 
+  /**
+   * Gets the share token type for this vault
+   * Results are cached to avoid repeated network calls
+   * @returns Promise that resolves to the share type string, or null if not found
+   */
   async getShareType() {
     if (this.shareType !== null) {
       return this.shareType;
@@ -148,32 +197,54 @@ export class SuiVaultSDK {
     return this.shareType;
   }
 
-  async getOneShare() {
+  /**
+   * Gets the number of decimal places used by the vault's base asset
+   * Results are cached to avoid repeated network calls
+   * @returns Promise that resolves to the number of decimal places
+   */
+  async getDecimals(): Promise<number> {
+    if (this.decimals !== null) {
+      return this.decimals;
+    }
+    
+    const oneShare = await this.getOneShare();
+    this.decimals = oneShare.length - 1;
+    return this.decimals;
+  }
+
+  /**
+   * Gets the "one share" value from the accountant contract
+   * @returns Promise that resolves to the one share value as a string
+   */
+  async getOneShare(): Promise<string> {
+    if (this.oneShare !== null) {
+      return this.oneShare;
+    }
+
     const accountant = await this.client.getObject({
       id: this.accountantId,
       options: { showContent: true },
     });
     const fields = (accountant.data?.content as any)?.fields;
-    return (fields?.one_share);
+    this.oneShare = fields.one_share as string;
+    return this.oneShare;
   }
 
-  // returns raw share balance as Sui CoinBalance object
-  async getShareBalance(ownerAddress: string, shareType: string) {
-    const shareBalance = await this.client.getBalance({
-      owner: ownerAddress,
-      coinType: shareType,
-    });
-    return shareBalance;
+  /**
+   * Fetches the user's share balance in human-readable format
+   * @param ownerAddress - The address to check the share balance for
+   * @returns Promise that resolves to the share balance as a string (formatted with decimals)
+   */
+  async fetchUserShares(ownerAddress: string): Promise<string> {
+    const shareBalance = await this.#getShareBalance(ownerAddress);
+    return formatUnits(BigInt(shareBalance.totalBalance), await this.getDecimals());
   }
 
-  // returns human readable numeric share balance
-  async fetchUserShares(ownerAddress: string, shareType: string, oneShare: bigint) {
-    const shareBalance = await this.getShareBalance(ownerAddress, shareType);
-    return Number(shareBalance.totalBalance) / Number(oneShare);
-  }
-
-  // returns human readable numeric value for 1 share of the vault
-  async fetchShareValue() {
+  /**
+   * Fetches the current value of one share in terms of the base asset
+   * @returns Promise that resolves to the share value as a string (formatted with decimals)
+   */
+  async fetchShareValue(): Promise<string> {
     const accountant = await this.client.getObject({
       id: this.accountantId,
       options: {
@@ -181,11 +252,14 @@ export class SuiVaultSDK {
       },
     });
     const fields = (accountant.data?.content as any)?.fields;
-    return Number(fields?.exchange_rate) / Number(fields?.one_share);
+    return formatUnits(BigInt(fields?.exchange_rate), await this.getDecimals());
   }
 
-  // returns human readable numeric value for TVL in terms of the base asset of the vault
-  async fetchTotalAssets() {
+  /**
+   * Fetches the total value locked (TVL) in the vault in terms of the base asset
+   * @returns Promise that resolves to the TVL as a string (formatted with decimals)
+   */
+  async fetchTotalAssets(): Promise<string> {
     const accountant = await this.client.getObject({
       id: this.accountantId,
       options: {
@@ -193,13 +267,18 @@ export class SuiVaultSDK {
       },
     });
     const fields = (accountant.data?.content as any)?.fields;
-    const one_share = Number(fields?.one_share);
-    const total_shares = Number(fields?.total_shares);
-    const share_value = Number(fields?.exchange_rate);
-    // assuming exchage rate is in terms of 1 share
-    return (total_shares * share_value) / (one_share * one_share);
+    const one_share = BigInt(fields?.one_share);
+    const total_shares = BigInt(fields?.total_shares);
+    const share_value = parseUnits(await this.fetchShareValue(), await this.getDecimals());
+    // Calculate total assets: (total_shares * share_value) / one_share
+    return formatUnits(total_shares * share_value / one_share, await this.getDecimals());
   }
 
+  /**
+   * Fetches the unlock time for a withdrawal request
+   * @param requestId - The object ID of the withdrawal request
+   * @returns Promise that resolves to the Unix timestamp when the request can be fulfilled
+   */
   async fetchRequestUnlockTime(requestId: string) {
     const request = await this.client.getObject({
       id: requestId,
@@ -208,10 +287,14 @@ export class SuiVaultSDK {
       },
     });
     const fields = (request.data?.content as any)?.fields;
-    return fields?.creation_time_ms + fields?.ms_to_maturity;
+    return fields?.creation_time_ms + fields?.ms_to_maturity / 1000;
   }
 
-  async isVaultPaused() {
+  /**
+   * Checks if the vault is currently paused
+   * @returns Promise that resolves to true if the vault is paused, false otherwise
+   */
+  async isVaultPaused(): Promise<boolean> {
     const vault = await this.client.getObject({
       id: this.vaultId,
       options: {
@@ -221,8 +304,15 @@ export class SuiVaultSDK {
     return (vault.data?.content as any)?.fields?.is_vault_paused;
   }
 
-  // Helper function to read queue key fields
-  async readQueueKeyFields(queueKeyId: string) {
+  /**
+   * Reads the fields of a queue key object to extract account and timestamp information
+   * @param queueKeyId - The object ID of the queue key
+   * @returns Promise that resolves to an object containing the account address and timestamp
+   */
+  async readQueueKeyFields(queueKeyId: string): Promise<{
+    account: string;
+    timestamp: string;
+  }> {
     const { data } = await this.client.getObject({
       id: queueKeyId,
       options: { showContent: true },
@@ -232,7 +322,7 @@ export class SuiVaultSDK {
     const nameFields = (data as any).content.fields.name.fields;
     return {
       account: nameFields.account as string,
-      timestamp: BigInt(nameFields.timestamp as string),
+      timestamp: nameFields.timestamp as string,
     };
   }
 
@@ -262,9 +352,24 @@ export class SuiVaultSDK {
     console.log('No generic parameter found.');
     return null;
   }
+
+  // returns raw share balance as Sui CoinBalance object
+  async #getShareBalance(ownerAddress: string) {
+    const shareBalance = await this.client.getBalance({
+      owner: ownerAddress,
+      coinType: await this.getShareType(),
+    });
+    return shareBalance;
+  }
 }
 
-// Export the SDK instance
+/**
+ * Factory function to create a new SuiVaultSDK instance
+ * @param network - The Sui network to connect to (defaults to "localnet")
+ * @param vaultId - The object ID of the vault contract on Sui
+ * @param accountantId - The object ID of the accountant contract on Sui
+ * @returns A new SuiVaultSDK instance
+ */
 export const createSuiVaultSDK = (network: Network = "localnet", vaultId: string, accountantId: string) => {
   return new SuiVaultSDK(network, vaultId, accountantId);
 };
