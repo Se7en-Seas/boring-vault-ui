@@ -11,6 +11,7 @@ import { split } from "./gen/sui/coin/functions";
 import { SuiClient } from "@mysten/sui/client";
 import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
 import { formatUnits, parseUnits } from "viem";
+import { AddressTypeKey } from "./gen/boring_vault/boring-vault/structs";
 
 /**
  * SDK for interacting with Boring Vault on the Sui blockchain
@@ -325,6 +326,37 @@ export class SuiVaultSDK {
       timestamp: nameFields.timestamp as string,
     };
   }
+
+  /**
+   * Gets the user's pending withdrawal requests for a specific asset
+   * @param ownerAddress - The address to check the requests for
+   * @param assetType - The type identifier of the asset to check requests for
+   * @returns Promise that resolves to the user's requests as a an array of QueueKey objects
+   */
+  async getUserRequestsForAsset(ownerAddress: string, assetType: string) {
+    const vault = await this.client.getObject({
+      id: this.vaultId,
+      options: {
+        showContent: true,
+      },
+    });
+    const fields = (vault.data?.content as any)?.fields;
+    const requestsId = fields?.requests_per_address.fields.id.id;
+
+    assetType = assetType.replace("0x", "");
+
+    const object = await this.client.getDynamicFieldObject({
+      parentId: requestsId,
+      name: {
+        type: AddressTypeKey.$typeName,
+        value: {
+          account: ownerAddress,
+          asset_type: assetType,
+        }
+      }
+    });
+    return (object.data?.content as any)?.fields?.value;
+}
 
   //== Private helper functions ==
 
