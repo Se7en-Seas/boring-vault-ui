@@ -341,9 +341,9 @@ export class SuiVaultSDK {
    * Gets the user's pending withdrawal requests for a specific asset
    * @param ownerAddress - The address to check the requests for
    * @param assetType - The type identifier of the asset to check requests for
-   * @returns Promise that resolves to the user's requests as a an array of QueueKey objects
+   * @returns Promise that resolves to the user's requests as a an array of timestamps
    */
-  async getUserRequestsForAsset(ownerAddress: string, assetType: string): Promise<QueueKey[]> {
+  async getUserRequestsForAsset(ownerAddress: string, assetType: string): Promise<string[]> {
     const vault = await this.client.getObject({
       id: this.vaultId,
       options: { showContent: true },
@@ -367,7 +367,7 @@ export class SuiVaultSDK {
     });
     const arr = (object.data?.content as any)?.fields?.value as FieldsWithTypes[];
     const queueKeys = arr.map((item) => {
-      return QueueKey.fromFieldsWithTypes(item);
+      return QueueKey.fromFieldsWithTypes(item).timestamp.toString();
     })
     return queueKeys;
 }
