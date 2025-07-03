@@ -117,13 +117,19 @@ export class SuiVaultSDK {
     payerAddress: string,
     assetType: string,
     shareAmount: string,
-    discountPercent: string,
-    daysValid: string,
+    discountPercent?: string,
+    daysValid?: string,
   ): Promise<SuiTransactionBlockResponse> {
     const shareType = await this.getShareType();
     if (!shareType) {
       throw new Error("Share type not found for vault");
     }
+
+    const discount = discountPercent ? BigInt(parseUnits(discountPercent, 4)) :
+      BigInt(await this.getAssetInfo(assetType).then((info) => info.minDiscount));
+
+    const msToDeadline = daysValid ? BigInt(Number(daysValid) * 86400) * 1000n :
+      BigInt(await this.getAssetInfo(assetType).then((info) => info.minimumMsToDeadline));
 
     const shareCoins = await this.client.getCoins({
       owner: payerAddress,
@@ -145,8 +151,8 @@ export class SuiVaultSDK {
       vault: this.vaultId,
       accountant: this.accountantId,
       coin: shares,
-      u641: parseUnits(discountPercent, 4), // 0.01 = 1%
-      u642: BigInt(Number(daysValid) * 86400) * 1000n,
+      u641: discount,
+      u642: msToDeadline,
       clock: SUI_CLOCK_OBJECT_ID,
       denyList: DENY_LIST_ID,
     });
