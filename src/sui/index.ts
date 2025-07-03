@@ -8,10 +8,11 @@ import {
 } from "./gen/boring_vault/boring-vault/functions";
 import { DENY_LIST_ID } from "./config";
 import { split } from "./gen/sui/coin/functions";
-import { SuiClient } from "@mysten/sui/client";
+import { CoinBalance, SuiClient, SuiTransactionBlockResponse } from "@mysten/sui/client";
 import { normalizeStructTag, parseStructTag, SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
 import { formatUnits, parseUnits } from "viem";
-import { AddressTypeKey } from "./gen/boring_vault/boring-vault/structs";
+import { AddressTypeKey, QueueKey } from "./gen/boring_vault/boring-vault/structs";
+import { FieldsWithTypes } from "./gen/_framework/util";
 
 interface AccountantCache {
   decimals: number;
@@ -65,7 +66,7 @@ export class SuiVaultSDK {
     assetType: string,
     depositAmount: string,
     minMintAmount: string,
-  ) {
+  ): Promise<SuiTransactionBlockResponse> {
     let depositAssetCoins = await this.client.getCoins({
       owner: payerAddress,
       coinType: assetType,
@@ -116,7 +117,7 @@ export class SuiVaultSDK {
     shareAmount: string,
     discountPercent: string,
     daysValid: string,
-  ) {
+  ): Promise<SuiTransactionBlockResponse> {
     const shareType = await this.getShareType();
     if (!shareType) {
       throw new Error("Share type not found for vault");
@@ -163,7 +164,7 @@ export class SuiVaultSDK {
     payerAddress: string,
     assetType: string,
     timestamp: string,
-  ) {
+  ): Promise<SuiTransactionBlockResponse> {
     const shareType = await this.getShareType();
     if (!shareType) {
       throw new Error("Share type not found for vault");
@@ -192,7 +193,7 @@ export class SuiVaultSDK {
    * Results are cached to avoid repeated network calls
    * @returns Promise that resolves to the share type string, or null if not found
    */
-  async getShareType() {
+  async getShareType(): Promise<string | null> {
     if (this.shareType !== null) {
       return this.shareType;
     }
@@ -340,7 +341,7 @@ export class SuiVaultSDK {
    * @param assetType - The type identifier of the asset to check requests for
    * @returns Promise that resolves to the user's requests as a an array of QueueKey objects
    */
-  async getUserRequestsForAsset(ownerAddress: string, assetType: string) {
+  async getUserRequestsForAsset(ownerAddress: string, assetType: string): Promise<QueueKey[]> {
     const vault = await this.client.getObject({
       id: this.vaultId,
       options: { showContent: true },
@@ -348,7 +349,9 @@ export class SuiVaultSDK {
     const fields = (vault.data?.content as any)?.fields;
     const requestsId = fields?.requests_per_address.fields.id.id;
 
-    assetType = assetType.replace("0x", "");
+    // ensure the asset type is normalized (padded with leading 0s but no 0x prefix)
+    assetType = normalizeStructTag(assetType);
+    assetType = assetType.substring(2);
 
     const object = await this.client.getDynamicFieldObject({
       parentId: requestsId,
@@ -360,7 +363,11 @@ export class SuiVaultSDK {
         }
       }
     });
-    return (object.data?.content as any)?.fields?.value;
+    const arr = (object.data?.content as any)?.fields?.value as FieldsWithTypes[];
+    const queueKeys = arr.map((item) => {
+      return QueueKey.fromFieldsWithTypes(item);
+    })
+    return queueKeys;
 }
 
   //== Private helper functions ==
@@ -393,7 +400,7 @@ export class SuiVaultSDK {
     };
   }
 
-  async #getGenericTypeFromObject(objectId: string) {
+  async #getGenericTypeFromObject(objectId: string): Promise<string | null> {
     const objectData = await this.client.getObject({
       id: objectId,
       options: {
@@ -417,7 +424,7 @@ export class SuiVaultSDK {
   }
 
   // returns raw share balance as Sui CoinBalance object
-  async #getShareBalance(ownerAddress: string) {
+  async #getShareBalance(ownerAddress: string): Promise<CoinBalance> {
     const shareBalance = await this.client.getBalance({
       owner: ownerAddress,
       coinType: await this.getShareType(),
