@@ -9,7 +9,7 @@ import {
 import { DENY_LIST_ID } from "./config";
 import { split } from "./gen/sui/coin/functions";
 import { SuiClient } from "@mysten/sui/client";
-import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
+import { normalizeStructTag, parseStructTag, SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
 import { formatUnits, parseUnits } from "viem";
 import { AddressTypeKey } from "./gen/boring_vault/boring-vault/structs";
 
@@ -373,14 +373,12 @@ export class SuiVaultSDK {
     }
   
     const typeString = objectData.data.type;
-  
-    // Example: 0x2::coin::Coin<0x2::sui::SUI>
-    const genericMatch = typeString.match(/<(.+)>/);
-    if (genericMatch) {
-      const genericType = genericMatch[1];
-      return genericType;
+    const params = parseStructTag(typeString).typeParams;
+    
+    if (params.length > 0) {
+      return normalizeStructTag(params[0]);
     }
-  
+
     console.log('No generic parameter found.');
     return null;
   }
