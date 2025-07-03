@@ -10,10 +10,10 @@ import { SuiVaultSDK, createSuiVaultSDK } from "../index";
 import { SuiClient } from "@mysten/sui/client";
 import { parseUnits } from "viem";
 
-const TEST_ASSET_TREASURY_CAP = "0x4bfb993b596b36c910443e9491f1488efe0922d6585cffd8e176b09ce16ad526";
-const AUTH_ID = "0xbff900ce0a4b6779f6be9db0829f1ad1b3d02a37017d1a945cd56835a704bfb1";
-const VLBTC_VAULT_ID = "0x9744470b89f1c94330c629b260619a8aaedd3ce122400426d8a0e46bf4a7f2f1";
-const ACCOUNTANT_ID = "0x316e2901ce31cd7e16f26aabb1361301fdbdc10fa48bdbaff6455b6a5b3fe8c5";
+const TEST_ASSET_TREASURY_CAP = "0xf9a4cdfe9e948e9277289c1ea68ea5eb17747ab2b7f0d1beaacb969734911637";
+const AUTH_ID = "0xecfa41dea471e0012a3c72a45372362887953f21a3d836e812d68727604bb0ae";
+const VLBTC_VAULT_ID = "0x6e1d42532e00fe871d0adf7191b62cbe6eea8085b696ebb2f06bd28e6b70ebeb";
+const ACCOUNTANT_ID = "0xaba6fb06dd9d12de2b8d7746313e42fb7495c90dc1cf8c2ef6bd489062de5bf9";
 
 // Helper function to count events by type
 async function countEvents(client: SuiClient, eventType: string): Promise<number> {
@@ -168,6 +168,10 @@ describe("SuiVaultSDK", () => {
       const discount = "0.1000";
       const daysValid = "18.5";
 
+      // Get share type from sdk instead of using VLBTC.$typeName,
+      // because apparanetly there can be a discrepancy when the package ID contains a leading 0 (after 0x).
+      // This doesn't seem to affect other stuff, just can't use it for the string comparison below
+      const shareType = await sdk.getShareType();
       await expect(
         sdk.requestWithdraw(
           "0x0000000000000000000000000000000000000000000000000000000000000000", // Non-existent address
@@ -176,7 +180,7 @@ describe("SuiVaultSDK", () => {
           discount,
           daysValid,
         )
-      ).rejects.toThrow(`No shares found for type ${VLBTC.$typeName}`);
+      ).rejects.toThrow(`No shares found for type ${shareType}`);
     });
   });
 
