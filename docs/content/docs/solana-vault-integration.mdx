@@ -513,5 +513,3 @@ for (let i = 0; i < transactions.length; i++) {
   await connection.sendRawTransaction(transactions[i].serialize());
 }
 ```
-
-On mainnet the feeds are updated automatically, so this step is optional; on local testing it is **required**. 
