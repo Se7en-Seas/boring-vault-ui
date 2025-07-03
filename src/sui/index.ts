@@ -280,7 +280,7 @@ export class SuiVaultSDK {
    * @param requestId - The object ID of the withdrawal request
    * @returns Promise that resolves to the Unix timestamp when the request can be fulfilled
    */
-  async fetchRequestUnlockTime(requestId: string) {
+  async fetchRequestUnlockTime(requestId: string): Promise<string> {
     const request = await this.client.getObject({
       id: requestId,
       options: {
@@ -288,7 +288,9 @@ export class SuiVaultSDK {
       },
     });
     const fields = (request.data?.content as any)?.fields;
-    return fields?.creation_time_ms + fields?.ms_to_maturity / 1000;
+    const creationTime = BigInt(fields?.creation_time_ms);
+    const msToMaturity = BigInt(fields?.ms_to_maturity);
+    return ((creationTime + msToMaturity) / 1000n).toString();
   }
 
   /**
@@ -374,7 +376,7 @@ export class SuiVaultSDK {
   
     const typeString = objectData.data.type;
     const params = parseStructTag(typeString).typeParams;
-    
+
     if (params.length > 0) {
       return normalizeStructTag(params[0]);
     }
