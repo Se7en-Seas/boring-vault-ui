@@ -13,6 +13,13 @@ import { normalizeStructTag, parseStructTag, SUI_CLOCK_OBJECT_ID } from "@mysten
 import { formatUnits, parseUnits } from "viem";
 import { AddressTypeKey } from "./gen/boring_vault/boring-vault/structs";
 
+interface AccountantCache {
+  decimals: number;
+  oneShare: string;
+  platformFee: string;
+  performanceFee: string;
+}
+
 /**
  * SDK for interacting with Boring Vault on the Sui blockchain
  * Provides methods for depositing, withdrawing, and querying vault state
@@ -23,8 +30,8 @@ export class SuiVaultSDK {
   private vaultId: string;
   private accountantId: string;
 
-  private decimals: number | null = null;
-  private oneShare: string | null = null;
+  private accountantCache: AccountantCache | null = null;
+  private accountantCachePromise: Promise<AccountantCache> | null = null;
   private shareType: string | null = null;
   private shareTypePromise: Promise<string | null> | null = null;
 
@@ -97,7 +104,7 @@ export class SuiVaultSDK {
    * @param payerAddress - The address of the user requesting withdrawal
    * @param assetType - The type identifier of the asset to withdraw
    * @param shareAmount - The amount of shares to burn as a string (in human-readable format)
-   * @param discountPercent - The discount percentage for early withdrawal (4 decimal places, e.g., "0.0100" for 1%)
+   * @param discountPercent - The discount percentage for early withdrawal (4 decimal places, e.g., "0.01" for 1%)
    * @param daysValid - The number of days the withdrawal request remains valid
    * @returns Promise that resolves to the transaction result
    * @throws Error if share type cannot be determined
@@ -204,13 +211,8 @@ export class SuiVaultSDK {
    * @returns Promise that resolves to the number of decimal places
    */
   async getDecimals(): Promise<number> {
-    if (this.decimals !== null) {
-      return this.decimals;
-    }
-    
-    const oneShare = await this.getOneShare();
-    this.decimals = oneShare.length - 1;
-    return this.decimals;
+    const cache = await this.#getAccountantCache();
+    return cache.decimals;
   }
 
   /**
@@ -218,17 +220,26 @@ export class SuiVaultSDK {
    * @returns Promise that resolves to the one share value as a string
    */
   async getOneShare(): Promise<string> {
-    if (this.oneShare !== null) {
-      return this.oneShare;
-    }
+    const cache = await this.#getAccountantCache();
+    return cache.oneShare;
+  }
 
-    const accountant = await this.client.getObject({
-      id: this.accountantId,
-      options: { showContent: true },
-    });
-    const fields = (accountant.data?.content as any)?.fields;
-    this.oneShare = fields.one_share as string;
-    return this.oneShare;
+  /**
+   * Gets the platform fee from the accountant contract
+   * @returns Promise that resolves to the platform fee as a string (formatted with 4 decimals)
+   */
+  async getPlatformFee(): Promise<string> {
+    const cache = await this.#getAccountantCache();
+    return cache.platformFee;
+  }
+
+  /**
+   * Gets the performance fee from the accountant contract
+   * @returns Promise that resolves to the performance fee as a string (formatted with 4 decimals)
+   */
+  async getPerformanceFee(): Promise<string> {
+    const cache = await this.#getAccountantCache();
+    return cache.performanceFee;
   }
 
   /**
@@ -248,12 +259,11 @@ export class SuiVaultSDK {
   async fetchShareValue(): Promise<string> {
     const accountant = await this.client.getObject({
       id: this.accountantId,
-      options: {
-        showContent: true,
-      },
+      options: { showContent: true },
     });
     const fields = (accountant.data?.content as any)?.fields;
-    return formatUnits(BigInt(fields?.exchange_rate), await this.getDecimals());
+    const decimals = await this.getDecimals();
+    return formatUnits(BigInt(fields?.exchange_rate), decimals);
   }
 
   /**
@@ -263,16 +273,16 @@ export class SuiVaultSDK {
   async fetchTotalAssets(): Promise<string> {
     const accountant = await this.client.getObject({
       id: this.accountantId,
-      options: {
-        showContent: true,
-      },
+      options: { showContent: true },
     });
     const fields = (accountant.data?.content as any)?.fields;
-    const one_share = BigInt(fields?.one_share);
+    const oneShare = await this.getOneShare();
+    const decimals = await this.getDecimals();
+    const one_share = BigInt(oneShare);
     const total_shares = BigInt(fields?.total_shares);
-    const share_value = parseUnits(await this.fetchShareValue(), await this.getDecimals());
+    const share_value = parseUnits(await this.fetchShareValue(), decimals);
     // Calculate total assets: (total_shares * share_value) / one_share
-    return formatUnits(total_shares * share_value / one_share, await this.getDecimals());
+    return formatUnits(total_shares * share_value / one_share, decimals);
   }
 
   /**
@@ -283,9 +293,7 @@ export class SuiVaultSDK {
   async fetchRequestUnlockTime(requestId: string): Promise<string> {
     const request = await this.client.getObject({
       id: requestId,
-      options: {
-        showContent: true,
-      },
+      options: { showContent: true },
     });
     const fields = (request.data?.content as any)?.fields;
     const creationTime = BigInt(fields?.creation_time_ms);
@@ -300,9 +308,7 @@ export class SuiVaultSDK {
   async isVaultPaused(): Promise<boolean> {
     const vault = await this.client.getObject({
       id: this.vaultId,
-      options: {
-        showContent: true,
-      },
+      options: { showContent: true },
     });
     return (vault.data?.content as any)?.fields?.is_vault_paused;
   }
@@ -338,9 +344,7 @@ export class SuiVaultSDK {
   async getUserRequestsForAsset(ownerAddress: string, assetType: string) {
     const vault = await this.client.getObject({
       id: this.vaultId,
-      options: {
-        showContent: true,
-      },
+      options: { showContent: true },
     });
     const fields = (vault.data?.content as any)?.fields;
     const requestsId = fields?.requests_per_address.fields.id.id;
@@ -361,6 +365,34 @@ export class SuiVaultSDK {
 }
 
   //== Private helper functions ==
+
+  async #getAccountantCache(): Promise<AccountantCache> {
+    if (this.accountantCache !== null) {
+      return this.accountantCache;
+    }
+    
+    if (this.accountantCachePromise === null) {
+      this.accountantCachePromise = this.#initAccountantCache();
+    }
+    
+    this.accountantCache = await this.accountantCachePromise;
+    return this.accountantCache;
+  }
+
+  async #initAccountantCache(): Promise<AccountantCache> {
+    const accountant = await this.client.getObject({
+      id: this.accountantId,
+      options: { showContent: true },
+    });
+    const fields = (accountant.data?.content as any)?.fields;
+    const oneShare = fields.one_share as string;
+    return {
+      decimals: oneShare.length - 1, // Derive decimals from oneShare
+      oneShare,
+      platformFee: formatUnits(BigInt(fields.platform_fee), 4),
+      performanceFee: formatUnits(BigInt(fields.performance_fee), 4),
+    };
+  }
 
   async #getGenericTypeFromObject(objectId: string) {
     const objectData = await this.client.getObject({
