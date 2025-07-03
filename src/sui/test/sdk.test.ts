@@ -488,14 +488,14 @@ describe("SuiVaultSDK", () => {
     it("should return correct one_share value from accountant", async () => {
       const oneShare = await sdk.getOneShare();
       
-      // Should return a string (as returned by Sui object fields)
-      expect(typeof oneShare).toBe("string");
+      // Should return a bigint (as returned by SDK)
+      expect(typeof oneShare).toBe("bigint");
       
-      // Should be greater than 0 when converted to number
-      expect(Number(oneShare)).toBeGreaterThan(0);
+      // Should be greater than 0
+      expect(oneShare).toBeGreaterThan(0n);
       
       // Should be a reasonable value (not extremely large)
-      expect(Number(oneShare)).toBeLessThan(1000000000000000000); // 1e18
+      expect(oneShare).toBeLessThan(1000000000000000000n); // 1e18
     });
 
     it("should match the one_share value from direct object query", async () => {
@@ -505,7 +505,7 @@ describe("SuiVaultSDK", () => {
         options: { showContent: true },
       });
       const fields = (accountant.data?.content as any)?.fields;
-      const expectedOneShare = fields?.one_share;
+      const expectedOneShare = BigInt(fields?.one_share);
       
       // Get one_share from SDK
       const actualOneShare = await sdk.getOneShare();
@@ -535,7 +535,7 @@ describe("SuiVaultSDK", () => {
       const userShares = await sdk.fetchUserShares(ADMIN_ADDRESS);
 
       // Verify all metrics are consistent
-      expect(BigInt(oneShare)).toBeGreaterThan(0n);
+      expect(oneShare).toBeGreaterThan(0n);
       expect(parseUnits(shareValue, decimals)).toBeGreaterThan(0n);
       expect(parseUnits(totalAssets, decimals)).toBeGreaterThanOrEqual(0n);
       expect(parseUnits(userShares, decimals)).toBeGreaterThan(0n);
@@ -547,7 +547,7 @@ describe("SuiVaultSDK", () => {
       });
       const fields = (accountant.data?.content as any)?.fields;
       const totalShares = BigInt(fields?.total_shares);
-      const expectedTotalAssets = totalShares * parseUnits(shareValue, decimals) / BigInt(oneShare);
+      const expectedTotalAssets = totalShares * parseUnits(shareValue, decimals) / oneShare;
       
       const actualTotalAssets = parseUnits(totalAssets, decimals);
       const assetsDifference = actualTotalAssets > expectedTotalAssets ? 

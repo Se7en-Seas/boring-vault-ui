@@ -15,7 +15,7 @@ import { AddressTypeKey } from "./gen/boring_vault/boring-vault/structs";
 
 interface AccountantCache {
   decimals: number;
-  oneShare: string;
+  oneShare: bigint;
   platformFee: string;
   performanceFee: string;
 }
@@ -217,9 +217,9 @@ export class SuiVaultSDK {
 
   /**
    * Gets the "one share" value from the accountant contract
-   * @returns Promise that resolves to the one share value as a string
+   * @returns Promise that resolves to the one share value as a bigint
    */
-  async getOneShare(): Promise<string> {
+  async getOneShare(): Promise<bigint> {
     const cache = await this.#getAccountantCache();
     return cache.oneShare;
   }
@@ -276,9 +276,8 @@ export class SuiVaultSDK {
       options: { showContent: true },
     });
     const fields = (accountant.data?.content as any)?.fields;
-    const oneShare = await this.getOneShare();
+    const one_share = await this.getOneShare();
     const decimals = await this.getDecimals();
-    const one_share = BigInt(oneShare);
     const total_shares = BigInt(fields?.total_shares);
     const share_value = parseUnits(await this.fetchShareValue(), decimals);
     // Calculate total assets: (total_shares * share_value) / one_share
@@ -388,7 +387,7 @@ export class SuiVaultSDK {
     const oneShare = fields.one_share as string;
     return {
       decimals: oneShare.length - 1, // Derive decimals from oneShare
-      oneShare,
+      oneShare: BigInt(oneShare),
       platformFee: formatUnits(BigInt(fields.platform_fee), 4),
       performanceFee: formatUnits(BigInt(fields.performance_fee), 4),
     };
