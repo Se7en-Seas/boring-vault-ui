@@ -349,7 +349,7 @@ export class SuiVaultSDK {
    * @param assetType - The type identifier of the asset to check requests for
    * @returns Promise that resolves to the user's requests as a an array of timestamps
    */
-  async getUserRequestsForAsset(ownerAddress: string, assetType: string): Promise<string[]> {
+  async getUserRequestTimestampsForAsset(ownerAddress: string, assetType: string): Promise<string[]> {
     const vault = await this.client.getObject({
       id: this.vaultId,
       options: { showContent: true },
@@ -372,10 +372,10 @@ export class SuiVaultSDK {
       }
     });
     const arr = (object.data?.content as any)?.fields?.value as FieldsWithTypes[];
-    const queueKeys = arr.map((item) => {
+    const timestamps = arr.map((item) => {
       return QueueKey.fromFieldsWithTypes(item).timestamp.toString();
     })
-    return queueKeys;
+    return timestamps;
 }
 
 /**
