@@ -8,12 +8,17 @@ import {
 } from "./gen/boring_vault/boring-vault/functions";
 import { DENY_LIST_ID } from "./config";
 import { split } from "./gen/sui/coin/functions";
-import { CoinBalance, SuiClient, SuiTransactionBlockResponse } from "@mysten/sui/client";
+import {
+  CoinBalance,
+  MoveStruct,
+  SuiClient,
+  SuiParsedData,
+  SuiTransactionBlockResponse,
+} from "@mysten/sui/client";
 import { normalizeStructTag, parseStructTag, SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
 import { formatUnits, parseUnits } from "viem";
 import { AddressTypeKey, DepositableAsset, QueueKey } from "./gen/boring_vault/boring-vault/structs";
 import { FieldsWithTypes } from "./gen/_framework/util";
-import { TypeName } from "./gen/_dependencies/onchain/0x1/type-name/structs";
 import { phantom } from "./gen/_framework/reified";
 
 interface AccountantCache {
@@ -21,6 +26,18 @@ interface AccountantCache {
   oneShare: bigint;
   platformFee: string;
   performanceFee: string;
+}
+
+type DepositableAssetFields = {
+  allowWithdraws: boolean;
+  allowDeposits: boolean;
+  sharePremium: number;
+  msToMaturity: string;
+  minimumMsToDeadline: string;
+  minDiscount: string;
+  maxDiscount: string;
+  minimumShares: string;
+  withdrawCapacity: string;
 }
 
 /**
@@ -37,6 +54,8 @@ export class SuiVaultSDK {
   private accountantCachePromise: Promise<AccountantCache> | null = null;
   private shareType: string | null = null;
   private shareTypePromise: Promise<string | null> | null = null;
+  private depositableAssets: Map<string, DepositableAssetFields> | null = null;
+  private depositableAssetsPromise: Promise<Map<string, DepositableAssetFields>> | null = null;
 
   /**
    * Creates a new SuiVaultSDK instance
@@ -357,9 +376,7 @@ export class SuiVaultSDK {
     const fields = (vault.data?.content as any)?.fields;
     const requestsId = fields?.requests_per_address.fields.id.id;
 
-    // ensure the asset type is normalized (padded with leading 0s but no 0x prefix)
-    assetType = normalizeStructTag(assetType);
-    assetType = assetType.substring(2);
+    assetType = this.#normalizeAssetType(assetType);
 
     const object = await this.client.getDynamicFieldObject({
       parentId: requestsId,
@@ -383,25 +400,14 @@ export class SuiVaultSDK {
  * @returns Promise that resolves to an array of asset type strings, or null if no assets are found
  */
 async getDepositableAssets(): Promise<string[] | null> {
-  const vault = await this.client.getObject({
-    id: this.vaultId,
-    options: { showContent: true },
-  });
-  const fields = (vault.data?.content as any)?.fields;
-  const assetsId = fields.depositable_assets.fields.id.id;
-  const dynamicFields = await this.client.getDynamicFields({ parentId: assetsId });
-  const objectIds = dynamicFields.data.map((entry) => entry.objectId);
-  const objects = await this.client.multiGetObjects({
-    ids: objectIds,
-    options: { showContent: true, showType: true }
-  });
+  if (this.depositableAssets) return Array.from(this.depositableAssets.keys());
 
-  if (objects[0].data?.content?.dataType === "moveObject") {
-    return objects.map((object) => {
-      return (object.data?.content as any)?.fields?.name?.fields.name;
-    });
+  if (!this.depositableAssetsPromise) {
+    this.depositableAssetsPromise = this.#fetchDepositableAssets();
   }
-  return null;
+
+  this.depositableAssets = await this.depositableAssetsPromise;
+  return Array.from(this.depositableAssets.keys());
 }
 
 /**
@@ -409,42 +415,17 @@ async getDepositableAssets(): Promise<string[] | null> {
  * @param assetType - The type identifier of the asset to get info for
  * @returns Promise that resolves to the asset info as a JSON object
  */
-async getAssetInfo(assetType: string): Promise<{
-  allowWithdraws: boolean;
-  allowDeposits: boolean;
-  sharePremium: number;
-  msToMaturity: string;
-  minimumMsToDeadline: string;
-  minDiscount: string;
-  maxDiscount: string;
-  minimumShares: string;
-  withdrawCapacity: string;
-}> {
-  const vault = await this.client.getObject({
-    id: this.vaultId,
-    options: { showContent: true },
-  });
-  const fields = (vault.data?.content as any)?.fields;
-  const depositableAssetsId = fields.depositable_assets.fields.id.id;
+async getAssetInfo(assetType: string): Promise<DepositableAssetFields> {
+  assetType = this.#normalizeAssetType(assetType);
 
-  // ensure the asset type is normalized (padded with leading 0s but no 0x prefix)
-  assetType = normalizeStructTag(assetType);
-  assetType = assetType.substring(2);
-
-  const object = await this.client.getDynamicFieldObject({
-    parentId: depositableAssetsId,
-    name: {
-      type: TypeName.$typeName,
-      value: {
-        name: assetType,
-      }
-    }
-  });
-  const objectFields = (object.data?.content as any)?.fields.value as FieldsWithTypes;
-  
-  const shareType = await this.getShareType() as string;
-  const depositableAsset = DepositableAsset.fromFieldsWithTypes(phantom(shareType), objectFields);
-  return depositableAsset.toJSONField();
+  if (this.depositableAssets === null) {
+    await this.getDepositableAssets();
+  }
+  const assetInfo = this.depositableAssets?.get(assetType);
+  if (assetInfo === undefined) {
+    throw new Error(`Asset info not found for asset type ${assetType}`);
+  }
+  return assetInfo;
 }
 
   //== Private helper functions ==
@@ -507,6 +488,59 @@ async getAssetInfo(assetType: string): Promise<{
       coinType: await this.getShareType(),
     });
     return shareBalance;
+  }
+
+  // if data is a moveObject, return the fields, otherwise throw an error
+  #readFields(object: SuiParsedData): MoveStruct {
+    if (object.dataType === "moveObject") {
+      return object.fields;
+    }
+    throw new Error("Object is not a moveObject");
+  }
+
+  // ensure the asset type is normalized (padded with leading 0s but no 0x prefix)
+  #normalizeAssetType(assetType: string): string {
+    assetType = normalizeStructTag(assetType);
+    assetType = assetType.substring(2);
+    return assetType;
+  }
+
+  async #fetchDepositableAssets(): Promise<Map<string, DepositableAssetFields>> {
+    const vault = await this.client.getObject({
+      id: this.vaultId,
+      options: { showContent: true },
+    });
+    if (vault.data?.content?.dataType !== "moveObject") {
+      throw new Error("Vault is not a moveObject");
+    }
+
+    const fields = this.#readFields(vault.data?.content!) as {
+      depositable_assets: FieldsWithTypes;
+    };
+    const depositableAssetsId = fields.depositable_assets.fields.id.id;
+    const dynamicFields = await this.client.getDynamicFields({ parentId: depositableAssetsId });
+    const objectIds = dynamicFields.data.map((entry) => entry.objectId);
+    const objects = await this.client.multiGetObjects({
+      ids: objectIds,
+      options: { showContent: true }
+    });
+
+    const depositableAssets = new Map<string, DepositableAssetFields>();
+    if (objects[0].data?.content?.dataType === "moveObject") {
+      const shareType = await this.getShareType() as string;
+      objects.forEach((object) => {
+        const data = this.#readFields(object.data?.content!) as {
+          name: FieldsWithTypes;
+          value: FieldsWithTypes
+        };
+        const name = data.name.fields.name;
+
+        const depositableAssetStruct = DepositableAsset.fromFieldsWithTypes(phantom(shareType), data.value);
+        const value = depositableAssetStruct.toJSONField();
+        depositableAssets.set(name, value);
+      });
+    }
+    return depositableAssets;
   }
 }
 
