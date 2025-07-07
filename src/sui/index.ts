@@ -104,12 +104,7 @@ export class SuiVaultSDK {
       u64: parseUnits(depositAmount, await this.getDecimals()),
     });
 
-    const shareType = await this.getShareType();
-    if (!shareType) {
-      throw new Error("Share type not found for vault");
-    }
-
-    depositAndTransfer(depTx, [assetType, shareType], {
+    depositAndTransfer(depTx, [assetType, await this.getShareType()], {
       vault: this.vaultId,
       accountant: this.accountantId,
       coin: coin,
@@ -140,9 +135,6 @@ export class SuiVaultSDK {
     daysValid?: string,
   ): Promise<SuiTransactionBlockResponse> {
     const shareType = await this.getShareType();
-    if (!shareType) {
-      throw new Error("Share type not found for vault");
-    }
 
     const discount = discountPercent ? BigInt(parseUnits(discountPercent, 4)) :
       BigInt(await this.getAssetInfo(assetType).then((info) => info.minDiscount));
@@ -193,9 +185,6 @@ export class SuiVaultSDK {
     timestamp: string,
   ): Promise<SuiTransactionBlockResponse> {
     const shareType = await this.getShareType();
-    if (!shareType) {
-      throw new Error("Share type not found for vault");
-    }
 
     const cancelTx = new Transaction();
 
@@ -220,7 +209,7 @@ export class SuiVaultSDK {
    * Results are cached to avoid repeated network calls
    * @returns Promise that resolves to the share type string, or null if not found
    */
-  async getShareType(): Promise<string | null> {
+  async getShareType(): Promise<string> {
     if (this.shareType !== null) {
       return this.shareType;
     }
@@ -230,7 +219,7 @@ export class SuiVaultSDK {
     }
     
     this.shareType = await this.shareTypePromise;
-    return this.shareType;
+    return this.shareType!;
   }
 
   /**
@@ -458,7 +447,7 @@ async getAssetInfo(assetType: string): Promise<DepositableAssetFields> {
     };
   }
 
-  async #getGenericTypeFromObject(objectId: string): Promise<string | null> {
+  async #getGenericTypeFromObject(objectId: string): Promise<string> {
     const objectData = await this.client.getObject({
       id: objectId,
       options: {
@@ -477,8 +466,7 @@ async getAssetInfo(assetType: string): Promise<DepositableAssetFields> {
       return normalizeStructTag(params[0]);
     }
 
-    console.log('No generic parameter found.');
-    return null;
+    throw new Error('No generic parameter found.');
   }
 
   // returns raw share balance as Sui CoinBalance object
