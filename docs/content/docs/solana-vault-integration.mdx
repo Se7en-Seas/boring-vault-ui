@@ -3,6 +3,8 @@ title: Solana Vault Integration
 description: Complete SDK for interacting with Boring Vault on Solana blockchain
 ---
 
+> **🎉 New in v1.9.7:** Added `boringQueueStatuses` function for tracking withdraw request status with automatic filtering and performance optimization.
+
 ## Introduction
 
 The Boring Vault Solana SDK provides comprehensive tools for interacting with Boring Vault on the Solana blockchain. This SDK supports both SPL token deposits and native SOL deposits, along with queued withdrawals and comprehensive vault management.
@@ -12,6 +14,7 @@ The Boring Vault Solana SDK provides comprehensive tools for interacting with Bo
 - ✅ **SPL Token Deposits** - Deposit any supported SPL token into vaults
 - ✅ **Native SOL Deposits** - Direct SOL deposits without wrapping
 - ✅ **Queued Withdrawals** - Request withdrawals through the Boring Queue system
+- ✅ **Withdraw Status Tracking** - Check status of pending withdraw requests
 - ✅ **Input Validation** - Automatic validation of deposit amounts and parameters
 - ✅ **Wallet Support** - Compatible with both wallet adapters and keypairs
 - ✅ **Error Handling** - Comprehensive error handling with detailed messages
@@ -33,6 +36,25 @@ const vaultSDK = new VaultSDK('mainnet');
 ```
 
 ### Getting Vault Information
+
+#### Get User Share Balance
+
+```tsx
+async function getUserShares() {
+  const userAddress = 'user_wallet_address_here';
+  const vaultId = 1;
+  
+  try {
+    const userShares = await vaultSDK.fetchUserShares(userAddress, vaultId);
+    
+    console.log(`User owns ${userShares} shares in vault ${vaultId}`);
+    return userShares;
+  } catch (error) {
+    console.error('Error fetching user shares:', error);
+    return 0;
+  }
+}
+```
 
 #### Get Complete Vault Data
 
@@ -211,10 +233,18 @@ For advanced use cases, you can access the low-level `BoringVaultSolana` class d
 ### Creating a BoringVaultSolana Instance
 
 ```tsx
-import { createBoringVaultSolana } from 'boring-vault-ui';
+import { VaultSDK } from 'boring-vault-ui';
 
-const boringVault = createBoringVaultSolana({
-  urlOrMoniker: 'mainnet',
+// Access the low-level BoringVaultSolana instance
+const vaultSDK = new VaultSDK('mainnet');
+const boringVault = vaultSDK.getBoringVault();
+
+// Or create directly with custom configuration
+import { BoringVaultSolana } from 'boring-vault-ui';
+import { createSolanaClient } from 'gill';
+
+const boringVault = new BoringVaultSolana({
+  solanaClient: createSolanaClient({ urlOrMoniker: 'mainnet' }),
   programId: '5ZRnXG4GsUMLaN7w2DtJV1cgLgcXHmuHCmJ2MxoorWCE'
 });
 ```
@@ -227,16 +257,14 @@ async function getUserShares() {
   const vaultId = 1;
   
   try {
-    const balanceInfo = await boringVault.fetchUserShares(walletAddress, vaultId);
+    const userShares = await vaultSDK.fetchUserShares(walletAddress, vaultId);
     
-    console.log('Raw Balance:', balanceInfo.raw.toString());
-    console.log('Formatted Balance:', balanceInfo.formatted);
-    console.log('Decimals:', balanceInfo.decimals);
+    console.log(`User owns ${userShares} shares in vault ${vaultId}`);
     
-    return balanceInfo;
+    return userShares;
   } catch (error) {
     console.error('Error fetching user shares:', error);
-    return null;
+    return 0;
   }
 }
 ```
@@ -388,7 +416,7 @@ try {
 Here's a comprehensive example showing common vault operations:
 
 ```tsx
-import { VaultSDK, createBoringVaultSolana } from 'boring-vault-ui';
+import { VaultSDK } from 'boring-vault-ui';
 import { web3 } from '@coral-xyz/anchor';
 
 async function vaultOperationsExample() {
@@ -415,12 +443,11 @@ async function vaultOperationsExample() {
     
     // 3. Check user share balance
     console.log('\n=== Checking User Shares ===');
-    const boringVault = vaultSDK.getBoringVault();
-    const userShares = await boringVault.fetchUserShares(
+    const userShares = await vaultSDK.fetchUserShares(
       wallet.publicKey.toString(),
       vaultId
     );
-    console.log(`User Shares: ${userShares.formatted}`);
+    console.log(`User Shares: ${userShares}`);
     
     // 4. Deposit SOL
     console.log('\n=== Depositing SOL ===');
@@ -511,5 +538,171 @@ const { transactions, signers } = await buildPythOracleCrankTransactions(
 for (let i = 0; i < transactions.length; i++) {
   transactions[i].sign(...signers[i], keypair);
   await connection.sendRawTransaction(transactions[i].serialize());
+}
+```
+
+## User Share Management
+
+### fetchUserShares
+
+This function provides the decimal adjusted (human readable) numerical value of vault shares that a user owns in their account.
+
+#### Inputs
+
+- **userAddress**: The address of the user in the vault you'd like to get the shares for
+- **vaultId**: The vault ID to check shares for
+
+#### Outputs
+
+A promise that returns the decimal adjusted (human readable) total numerical value of all shares of a vault a user owns as a `number`.
+
+#### Example
+
+```tsx
+import { VaultSDK } from 'boring-vault-ui';
+
+const vaultSDK = new VaultSDK('https://api.mainnet-beta.solana.com');
+
+async function checkUserShares() {
+  const userAddress = 'YourWalletAddressHere';
+  const vaultId = 1;
+  
+  try {
+    const userShares = await vaultSDK.fetchUserShares(userAddress, vaultId);
+    
+    console.log(`User owns ${userShares} shares in vault ${vaultId}`);
+    
+    if (userShares > 0) {
+      console.log('User has shares in this vault');
+    } else {
+      console.log('User has no shares in this vault');
+    }
+    
+    return userShares;
+  } catch (error) {
+    console.error('Error fetching user shares:', error);
+    return 0;
+  }
+}
+```
+
+## Withdraw Status Tracking
+
+### boringQueueStatuses
+
+This function retrieves a list of all **NON-EXPIRED** withdraw intents for a user. It's designed to be compatible with the EVM version of the Boring Vault API.
+
+#### Inputs
+
+- **userAddress**: The user's wallet address (string or PublicKey)
+- **vaultId**: (Optional) vault ID to filter by - only returns requests for this specific vault
+
+#### Outputs
+
+A promise that returns a list of `BoringQueueStatus` objects with the following properties:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `nonce` | `number` | The nonce/ID of the withdraw request |
+| `user` | `string` | The user's wallet address |
+| `tokenOut` | `TokenMetadata` | The output token information |
+| `tokenOut.address` | `string` | Token mint address |
+| `tokenOut.decimals` | `number` | Decimal precision of the token |
+| `sharesWithdrawing` | `number` | Human-readable number of shares being withdrawn |
+| `assetsWithdrawing` | `number` | Human-readable number of tokens being withdrawn |
+| `creationTime` | `number` | Unix seconds when the request was made |
+| `secondsToMaturity` | `number` | Seconds until the request can be fulfilled |
+| `secondsToDeadline` | `number` | Seconds after maturity until the request expires |
+| `errorCode` | `number` | Error code (always 0 on Solana - valid requests only) |
+| `transactionHashOpened` | `string` | Transaction hash (empty string on Solana) |
+
+#### Features
+
+- ✅ **Performance Optimized**: Fetches only the latest 7 requests by default
+- ✅ **Automatic Filtering**: Only returns non-expired requests
+- ✅ **Token Metadata**: Automatically fetches token decimals and addresses
+- ✅ **Human-Readable**: Converts raw amounts to properly formatted numbers
+- ✅ **Vault Filtering**: Optional vault-specific filtering
+
+#### Example
+
+```tsx
+import { VaultSDK, type BoringQueueStatus } from 'boring-vault-ui';
+
+const vaultSDK = new VaultSDK('https://api.mainnet-beta.solana.com');
+
+async function checkWithdrawStatus() {
+  const userAddress = 'YourWalletAddressHere';
+  
+  try {
+    // Get all non-expired withdraw requests for a user
+    const statuses: BoringQueueStatus[] = await vaultSDK.boringQueueStatuses(userAddress);
+    
+    console.log(`Found ${statuses.length} pending withdraw requests:`);
+    
+    statuses.forEach((status, index) => {
+      console.log(`\nRequest ${index + 1}:`);
+      console.log(`  - Nonce: ${status.nonce}`);
+      console.log(`  - Token: ${status.tokenOut.address}`);
+      console.log(`  - Shares: ${status.sharesWithdrawing}`);
+      console.log(`  - Assets: ${status.assetsWithdrawing}`);
+      console.log(`  - Created: ${new Date(status.creationTime * 1000).toISOString()}`);
+      console.log(`  - Maturity: ${status.secondsToMaturity} seconds`);
+      console.log(`  - Deadline: ${status.secondsToDeadline} seconds`);
+      
+      // Check status
+      if (status.secondsToMaturity === 0) {
+        console.log(`  - Status: ✅ Ready to claim`);
+      } else {
+        console.log(`  - Status: ⏳ Maturing in ${Math.ceil(status.secondsToMaturity / 60)} minutes`);
+      }
+    });
+
+    // Get withdraw requests for a specific vault only
+    const vault1Statuses = await vaultSDK.boringQueueStatuses(userAddress, 1);
+    console.log(`\nFound ${vault1Statuses.length} requests for vault 1`);
+    
+    return statuses;
+  } catch (error) {
+    console.error('Error fetching withdraw statuses:', error);
+    return [];
+  }
+}
+
+// Usage in React component
+function WithdrawStatusComponent() {
+  const [statuses, setStatuses] = useState<BoringQueueStatus[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    async function fetchStatuses() {
+      try {
+        const vaultSDK = new VaultSDK('mainnet');
+        const results = await vaultSDK.boringQueueStatuses(userWalletAddress);
+        setStatuses(results);
+      } catch (error) {
+        console.error('Failed to fetch withdraw statuses:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    fetchStatuses();
+  }, [userWalletAddress]);
+  
+  if (loading) return <div>Loading withdraw requests...</div>;
+  
+  return (
+    <div>
+      <h3>Pending Withdrawals ({statuses.length})</h3>
+      {statuses.map((status) => (
+        <div key={status.nonce}>
+          <p>Withdrawing {status.sharesWithdrawing} shares</p>
+          <p>Token: {status.tokenOut.address}</p>
+          <p>Status: {status.secondsToMaturity === 0 ? 'Ready' : 'Maturing'}</p>
+        </div>
+      ))}
+    </div>
+  );
 }
 ```

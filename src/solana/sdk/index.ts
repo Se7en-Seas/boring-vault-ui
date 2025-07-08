@@ -1,5 +1,6 @@
 import { web3 } from '@coral-xyz/anchor';
 import { BoringVaultSolana } from './boring-vault-solana';
+import { BoringOnchainQueue, BoringQueueStatus } from './boring-onchain-queue';
 import { parseFullVaultData, FullVaultData } from './vault-state';
 import vaultIdl from '../idls/boring_vault_svm.json';
 import {
@@ -9,13 +10,7 @@ import { createSolanaClient, type SolanaClient, Address } from 'gill';
 import {
   JITO_SOL_MINT_ADDRESS,
   DEFAULT_DECIMALS,
-  JITOSOL_SOL_SWITCHBOARD_FEED,
-  JITOSOL_SOL_PYTH_FEED
 } from '../utils/constants';
-import {
-  bundleSwitchboardCrank,
-  type SwitchboardCrankConfig
-} from '../utils/switchboard-crank';
 
 /**
  * Vault SDK adapter for mainnet testing
@@ -24,6 +19,7 @@ import {
 export class VaultSDK {
   private rpc: SolanaClient['rpc'];
   private boringVault: BoringVaultSolana;
+  private boringQueue: BoringOnchainQueue;
   private programId: web3.PublicKey;
   private solanaClient: SolanaClient;
   private rpcUrl: string;
@@ -46,6 +42,12 @@ export class VaultSDK {
       programId: this.programId.toString()
     });
 
+    // Initialize the BoringOnchainQueue with the solanaClient
+    this.boringQueue = new BoringOnchainQueue({
+      solanaClient: this.solanaClient,
+      programId: this.programId.toString()
+    });
+
     // Initialize the shared connection
     this.connection = new web3.Connection(
       process.env.ALCHEMY_RPC_URL || this.rpcUrl,
@@ -58,6 +60,13 @@ export class VaultSDK {
    */
   getBoringVault(): BoringVaultSolana {
     return this.boringVault;
+  }
+
+  /**
+   * Get the BoringOnchainQueue instance
+   */
+  getBoringOnchainQueue(): BoringOnchainQueue {
+    return this.boringQueue;
   }
 
   /**
@@ -408,4 +417,37 @@ export class VaultSDK {
       throw new Error(`Failed to queue withdraw: ${error}`);
     }
   }
+
+  /**
+   * Get the decimal adjusted (human readable) numerical value of vault shares that a user owns
+   * 
+   * @param userAddress The address of the user in the vault you'd like to get the shares for
+   * @param vaultId The vault ID to check shares for
+   * @returns A promise that returns the decimal adjusted (human readable) total numerical value of all shares of a vault a user owns
+   */
+  async fetchUserShares(
+    userAddress: string | web3.PublicKey,
+    vaultId: number
+  ): Promise<number> {
+    const result = await this.boringVault.fetchUserShares(userAddress, vaultId);
+    return parseFloat(result.formatted);
+  }
+
+  /**
+   * Get all NON-EXPIRED withdraw requests for a user
+   * This function retrieves a list of all NON EXPIRED withdraw intents.
+   * 
+   * @param userAddress The user's wallet address (string or PublicKey)
+   * @param vaultId Optional vault ID filter
+   * @returns A promise that returns a list of BoringQueueStatus objects
+   */
+  async boringQueueStatuses(
+    userAddress: string | web3.PublicKey,
+    vaultId?: number
+  ): Promise<BoringQueueStatus[]> {
+    return await this.boringQueue.boringQueueStatuses(userAddress, vaultId);
+  }
 }
+
+// Export types for user consumption
+export type { BoringQueueStatus, TokenMetadata, WithdrawRequestInfo } from './boring-onchain-queue';

@@ -294,128 +294,40 @@ export async function testUserBalances(): Promise<any[] | undefined> {
 /**
  * Get user balance in the vault
  */
-export async function fetchUserShares(): Promise<any> {
-  console.log('\n=== CHECKING USER BALANCE IN VAULT ===');
+export async function fetchUserShares(userAddress?: string, vaultId?: number): Promise<void> {
+  console.log('\n=== TESTING USER SHARES FETCH ===');
   
   try {
     const vaultService = new VaultSDK(MAINNET_CONFIG.rpcUrl);
-    const vaultPubkey = MAINNET_CONFIG.vaultPubkey;
-    const signer = await loadKeypair();
-    const vaultData = await vaultService.getVaultData(vaultPubkey);
     
-    console.log(`Vault: ${vaultPubkey.toString()}`);
-    console.log(`Share Token Mint: ${vaultData.vaultState.shareMint.toString()}`);
-    
-    // Get the share mint account info to determine the token program
-    const connection = createConnection();
-    const shareMintInfo = await connection.getAccountInfo(vaultData.vaultState.shareMint);
-    
-    if (!shareMintInfo) {
-      console.log(`❌ Share mint account not found: ${vaultData.vaultState.shareMint.toString()}`);
-      return 0;
-    }
-    
-    // Get the token program from the share mint owner
-    const shareMintProgram = shareMintInfo.owner;
-    console.log(`Share Mint Token Program: ${shareMintProgram.toString()}`);
-    console.log(`Standard TOKEN_PROGRAM_ID: ${TOKEN_PROGRAM_ID.toString()}`);
-    console.log(`Is using standard token program: ${shareMintProgram.equals(TOKEN_PROGRAM_ID) ? 'Yes' : 'No'}`);
-    
-    // Check token accounts using both standard and token-2022 program IDs
-    console.log('\nChecking token accounts with multiple token programs:');
-    
-    // Try with standard TOKEN_PROGRAM_ID first (for debugging)
-    console.log(`\n1. Checking with standard TOKEN_PROGRAM_ID:`);
-    try {
-      const standardTokenResponse = await solanaClient.rpc.getTokenAccountsByOwner(
-        signer.address,
-        { programId: TOKEN_PROGRAM_ID.toString() as Address },
-        { encoding: 'base64' }
-      ).send();
-      
-      console.log(`Found ${standardTokenResponse.value.length} token accounts with standard program`);
-      
-      // Print all mint addresses for debugging
-      standardTokenResponse.value.forEach((item, index) => {
-        const data = Buffer.from(item.account.data[0], 'base64');
-        const accountData = AccountLayout.decode(data);
-        const mintString = new web3.PublicKey(accountData.mint).toString();
-        console.log(`  [${index}] Mint: ${mintString}`);
-      });
-    } catch (error) {
-      console.error(`Error checking standard token accounts: ${error}`);
-    }
-    
-    // Now try with the correct token program from share mint
-    console.log(`\n2. Checking with token program from share mint (${shareMintProgram.toString()}):`);
-    const tokenAccountsResponse = await solanaClient.rpc.getTokenAccountsByOwner(
-      signer.address,
-      { programId: shareMintProgram.toString() as Address },
-      { encoding: 'base64' }
-    ).send();
-    
-    console.log(`Found ${tokenAccountsResponse.value.length} token accounts with correct program`);
-    
-    // Convert shareMint to string for comparison
-    const shareMintString = vaultData.vaultState.shareMint.toString();
-    console.log(`Looking for share mint: ${shareMintString}`);
-    
-    // Print all mint addresses from these accounts
-    tokenAccountsResponse.value.forEach((item, index) => {
-      const data = Buffer.from(item.account.data[0], 'base64');
-      const accountData = AccountLayout.decode(data);
-      const mintString = new web3.PublicKey(accountData.mint).toString();
-      console.log(`  [${index}] Mint: ${mintString} (Amount: ${accountData.amount.toString()})`);
-    });
-    
-    // Look for share token account
-    const shareTokenAccount = tokenAccountsResponse.value.find(item => {
-      const data = Buffer.from(item.account.data[0], 'base64');
-      const accountData = AccountLayout.decode(data);
-      const mintString = new web3.PublicKey(accountData.mint).toString();
-      return mintString === shareMintString;
-    });
-    
-    if (shareTokenAccount) {
-      const data = Buffer.from(shareTokenAccount.account.data[0], 'base64');
-      const accountData = AccountLayout.decode(data);
-      const amount = accountData.amount.toString();
-      
-      console.log(`\n✅ User has ${amount} shares of this vault`);
-      console.log(`Share token account: ${shareTokenAccount.pubkey}`);
-      return amount;
+    // Use provided address or load from keypair
+    let targetUser: string;
+    if (userAddress) {
+      targetUser = userAddress;
     } else {
-      console.log(`\n❌ User does not have share tokens for this vault`);
-      
-      // Check if user's ATA exists with the share mint
-      console.log('\nChecking if user ATA exists for this share mint:');
-      const userShareATA = await getAssociatedTokenAddress(
-        vaultData.vaultState.shareMint,
-        new web3.PublicKey(signer.address),
-        true,
-        shareMintProgram,
-        ASSOCIATED_TOKEN_PROGRAM_ID
-      );
-      
-      console.log(`Expected user share ATA: ${userShareATA.toString()}`);
-      
-      const ataInfo = await connection.getAccountInfo(userShareATA);
-      if (ataInfo) {
-        console.log(`✅ ATA exists but may not have been included in the token accounts response`);
-        // Parse data to get amount
-        const accountData = AccountLayout.decode(ataInfo.data);
-        const amount = accountData.amount.toString();
-        console.log(`Token amount: ${amount}`);
-        return amount;
-      } else {
-        console.log(`❌ ATA does not exist - user hasn't received shares yet`);
-      }
-      
-      return 0;
+      const signer = await loadKeypair();
+      targetUser = signer.address;
     }
+    
+    // Use provided vault ID or default from config
+    const targetVaultId = vaultId ?? 12; // Default to vault 12 which is commonly used in tests
+    
+    console.log(`Fetching shares for user: ${targetUser}`);
+    console.log(`Vault ID: ${targetVaultId}`);
+    
+    // Use the simplified SDK method directly - no need to fetch full vault data
+    const userShares = await vaultService.fetchUserShares(targetUser, targetVaultId);
+    
+    console.log(`✅ User shares: ${userShares}`);
+    
+    if (userShares > 0) {
+      console.log(`User owns ${userShares} shares in vault ${targetVaultId}`);
+    } else {
+      console.log('User has no shares in this vault');
+    }
+    
   } catch (error) {
-    console.error('Error checking user balance:', error);
-    throw error;
+    console.error('Error fetching user shares:', error);
   }
 }
 
@@ -903,5 +815,189 @@ export async function checkQueueConfig(vaultId?: number): Promise<string | undef
   } catch (error) {
     console.error('Error checking comprehensive queue information:', error);
     return undefined;
+  }
+} 
+
+/**
+ * Test queue withdraw status functionality against mainnet
+ */
+export async function testQueueWithdrawStatus(vaultId?: number): Promise<void> {
+  console.log('\n=== TESTING QUEUE WITHDRAW STATUS FUNCTIONALITY ===');
+  
+  try {
+    // Create service instance
+    const vaultService = new VaultSDK(MAINNET_CONFIG.rpcUrl);
+    
+    // If no vault ID provided, get it from the configured vault
+    let targetVaultId: number;
+    if (vaultId !== undefined) {
+      targetVaultId = vaultId;
+      console.log(`Using specified Vault ID: ${targetVaultId}`);
+    } else {
+      const vaultPubkey = MAINNET_CONFIG.vaultPubkey;
+      console.log(`Fetching vault data for: ${vaultPubkey.toString()}`);
+      const vaultData = await vaultService.getVaultData(vaultPubkey);
+      targetVaultId = Number(vaultData.vaultState.vaultId);
+      console.log(`Using Vault ID from .env: ${targetVaultId}`);
+    }
+    
+    // Load signer for user-specific data
+    const signer = await loadKeypair();
+    console.log(`Testing with user: ${signer.address}`);
+    
+    // Get the queue instance
+    const queue = vaultService.getBoringOnchainQueue();
+    
+    // Test 1: Get User Withdraw State
+    console.log('\n=== 1. USER WITHDRAW STATE ===');
+    const userWithdrawState = await queue.getUserWithdrawState(signer.address);
+    
+    if (userWithdrawState) {
+      console.log(`✓ User has withdraw state`);
+      console.log(`  Last Nonce: ${userWithdrawState.lastNonce}`);
+      console.log(`  Total requests made: ${Number(userWithdrawState.lastNonce) + 1}`);
+    } else {
+      console.log(`❌ User has no withdraw state (no requests made yet)`);
+      console.log(`This is expected if the user hasn't made any queue withdraw requests.`);
+      return;
+    }
+    
+    // Test 2: Get All User Withdraw Requests
+    console.log('\n=== 2. ALL USER WITHDRAW REQUESTS ===');
+    const allRequests = await queue.getUserWithdrawRequests(signer.address);
+    console.log(`✓ Found ${allRequests.length} total withdraw request(s)`);
+    
+    if (allRequests.length === 0) {
+      console.log(`No withdraw requests found for user ${signer.address}`);
+      return;
+    }
+    
+    // Display all requests
+    allRequests.forEach((request: any, index: number) => {
+      console.log(`\nRequest ${index + 1}:`);
+      console.log(`  - Nonce: ${Number(request.data.nonce)}`);
+      console.log(`  - Vault ID: ${request.data.vaultId}`);
+      console.log(`  - Asset Out: ${request.data.assetOut.toString()}`);
+      console.log(`  - Share Amount: ${request.data.shareAmount.toString()} (${Number(request.data.shareAmount) / 1e9} shares)`);
+      console.log(`  - Asset Amount: ${request.data.assetAmount.toString()}`);
+      console.log(`  - Created: ${new Date(Number(request.data.creationTime) * 1000).toISOString()}`);
+      console.log(`  - Seconds to Maturity: ${request.data.secondsToMaturity}`);
+      console.log(`  - Seconds to Deadline: ${request.data.secondsToDeadline}`);
+      console.log(`  - Is Matured: ${request.isMatured}`);
+      console.log(`  - Is Expired: ${request.isExpired}`);
+      console.log(`  - Time to Maturity: ${request.timeToMaturity}s`);
+      console.log(`  - Time to Deadline: ${request.timeToDeadline}s`);
+      
+      // Status summary
+      let status = 'Unknown';
+      if (request.isExpired) {
+        status = 'Expired';
+      } else if (request.isMatured) {
+        status = 'Ready to fulfill';
+      } else {
+        status = `Maturing (${Math.ceil(request.timeToMaturity / 60)} minutes left)`;
+      }
+      console.log(`  - Status: ${status}`);
+    });
+    
+    // Test 3: Filter by Target Vault ID
+    console.log(`\n=== 3. REQUESTS FOR VAULT ${targetVaultId} ===`);
+    const vaultRequests = await queue.getUserWithdrawRequests(signer.address, targetVaultId);
+    console.log(`✓ Found ${vaultRequests.length} withdraw request(s) for vault ${targetVaultId}`);
+    
+    if (vaultRequests.length > 0) {
+      vaultRequests.forEach((request: any, index: number) => {
+        console.log(`\nVault ${targetVaultId} Request ${index + 1}:`);
+        console.log(`  - Nonce: ${Number(request.data.nonce)}`);
+        console.log(`  - Share Amount: ${Number(request.data.shareAmount) / 1e9} shares`);
+        console.log(`  - Asset Out: ${request.data.assetOut.toString()}`);
+        console.log(`  - Status: ${request.isExpired ? 'Expired' : request.isMatured ? 'Ready to fulfill' : 'Maturing'}`);
+      });
+    }
+    
+    // Test 4: Test boringQueueStatuses function (user-facing API)
+    console.log(`\n=== 4. BORING QUEUE STATUSES (USER-FACING API) ===`);
+    const queueStatuses = await queue.boringQueueStatuses(signer.address);
+    console.log(`✓ Retrieved ${queueStatuses.length} non-expired queue status(es)`);
+    
+    if (queueStatuses.length > 0) {
+      queueStatuses.forEach((status: any, index: number) => {
+        console.log(`\nStatus ${index + 1}:`);
+        console.log(`  - Nonce: ${status.nonce}`);
+        console.log(`  - User: ${status.user}`);
+        console.log(`  - Token Out: ${status.tokenOut.address} (${status.tokenOut.decimals} decimals)`);
+        console.log(`  - Shares Withdrawing: ${status.sharesWithdrawing}`);
+        console.log(`  - Assets Withdrawing: ${status.assetsWithdrawing}`);
+        console.log(`  - Creation Time: ${new Date(status.creationTime * 1000).toISOString()}`);
+        console.log(`  - Seconds to Maturity: ${status.secondsToMaturity}`);
+        console.log(`  - Seconds to Deadline: ${status.secondsToDeadline}`);
+        console.log(`  - Error Code: ${status.errorCode}`);
+        console.log(`  - Transaction Hash: ${status.transactionHashOpened || 'N/A'}`);
+      });
+    } else {
+      console.log(`No non-expired queue statuses found (expired requests are filtered out)`);
+    }
+    
+    // Test 5: Test boringQueueStatuses with vault filter
+    console.log(`\n=== 5. BORING QUEUE STATUSES FOR VAULT ${targetVaultId} ===`);
+    const vaultStatuses = await queue.boringQueueStatuses(signer.address, targetVaultId);
+    console.log(`✓ Retrieved ${vaultStatuses.length} non-expired queue status(es) for vault ${targetVaultId}`);
+    
+    if (vaultStatuses.length > 0) {
+      vaultStatuses.forEach((status: any, index: number) => {
+        console.log(`\nVault ${targetVaultId} Status ${index + 1}:`);
+        console.log(`  - Nonce: ${status.nonce}`);
+        console.log(`  - Shares Withdrawing: ${status.sharesWithdrawing}`);
+        console.log(`  - Assets Withdrawing: ${status.assetsWithdrawing}`);
+        console.log(`  - Token Out: ${status.tokenOut.address}`);
+        console.log(`  - Creation Time: ${new Date(status.creationTime * 1000).toISOString()}`);
+      });
+    }
+    
+    // Test 6: Test individual request lookup
+    if (allRequests.length > 0) {
+      console.log(`\n=== 6. INDIVIDUAL REQUEST LOOKUP ===`);
+      const firstRequest = allRequests[0];
+      const requestNonce = Number(firstRequest.data.nonce);
+      
+      console.log(`Testing getWithdrawRequest for nonce ${requestNonce}...`);
+      const individualRequest = await queue.getWithdrawRequest(signer.address, requestNonce);
+      
+      if (individualRequest) {
+        console.log(`✓ Successfully retrieved request ${requestNonce}`);
+        console.log(`  - Vault ID: ${individualRequest.data.vaultId}`);
+        console.log(`  - Asset Out: ${individualRequest.data.assetOut.toString()}`);
+        console.log(`  - Share Amount: ${Number(individualRequest.data.shareAmount) / 1e9} shares`);
+        console.log(`  - Is Matured: ${individualRequest.isMatured}`);
+        console.log(`  - Is Expired: ${individualRequest.isExpired}`);
+      } else {
+        console.log(`❌ Failed to retrieve request ${requestNonce}`);
+      }
+      
+      // Test getWithdrawStatus convenience wrapper
+      console.log(`\nTesting getWithdrawStatus wrapper for nonce ${requestNonce}...`);
+      const withdrawStatus = await queue.getWithdrawStatus(signer.address, requestNonce);
+      
+      console.log(`✓ Withdraw status retrieved`);
+      console.log(`  - Request exists: ${withdrawStatus.exists}`);
+      console.log(`  - Is matured: ${withdrawStatus.isMatured}`);
+      console.log(`  - Is expired: ${withdrawStatus.isExpired}`);
+      console.log(`  - Time to maturity: ${withdrawStatus.timeToMaturity}s`);
+      console.log(`  - Time to deadline: ${withdrawStatus.timeToDeadline}s`);
+    }
+    
+    // Test 7: Test non-existent request
+    console.log(`\n=== 7. NON-EXISTENT REQUEST TEST ===`);
+    const nonExistentStatus = await queue.getWithdrawStatus(signer.address, 999);
+    console.log(`✓ Non-existent request handled correctly`);
+    console.log(`  - Request exists: ${nonExistentStatus.exists}`);
+    console.log(`  - Is matured: ${nonExistentStatus.isMatured}`);
+    console.log(`  - Is expired: ${nonExistentStatus.isExpired}`);
+    
+    console.log('\n=== QUEUE WITHDRAW STATUS TEST COMPLETE ===');
+    
+  } catch (error) {
+    console.error('Error testing queue withdraw status:', error);
+    throw error;
   }
 } 
