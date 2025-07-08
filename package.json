@@ -1,6 +1,6 @@
 {
   "name": "boring-vault-ui",
-  "version": "1.9.6",
+  "version": "1.9.7",
   "description": "A reusable package to quickly integrate boring vaults onto a UI.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -23,6 +23,7 @@
     "dev": "webpack --mode production && webpack serve --mode development --open",
     "type:check": "tsc --noEmit",
     "test:solana": "ts-node src/solana/tests/solana-sdk-unit-tests.ts",
+    "test:solana-queue": "ts-node src/solana/tests/queue-unit-tests.ts",
     "mainnet-test-solana": "ts-node src/solana/tests/mainnet-test.ts"
   },
   "keywords": [],

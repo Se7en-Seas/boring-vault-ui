@@ -18,6 +18,7 @@ import {
   testUserBalances,
   fetchUserShares,
   checkQueueConfig,
+  testQueueWithdrawStatus,
 } from './mainnet-test-read';
 
 // Import oracle operations
@@ -41,15 +42,18 @@ function displayHelpText(errorMessage?: string): void {
   console.log('Available commands:');
   console.log('  1. analyze-vault - Analyze all vault accounts for debugging');
   console.log('  2. read-vault - Read the vault data');
-  console.log('  3. check-balance - Check the JITOSOL and share token balances');
+  console.log('  3. fetch-user-shares [vault-id] - Fetch user\'s vault share balance (default: vault 12)');
   console.log('  4. deposit - Test deposit functionality');
   console.log('  5. deposit-sol - Test SOL deposit functionality');
   console.log('  6. queue-withdraw - Test queue withdraw functionality');
   console.log('  7. check-queue-config [vault-id] - Check the queue program configuration for a specific vault (default: vault from .env)');
-  console.log('  8. pyth-oracle - Test Pyth oracle integration (price feeds and updates)');
-  console.log('  9. pyth-crank - Test Pyth oracle cranking specifically');
+  console.log('  8. test-queue-status [vault-id] - Test queue withdraw status functionality (default: vault from .env)');
+  console.log('  9. pyth-oracle - Test Pyth oracle integration (price feeds and updates)');
+  console.log('  10. pyth-crank - Test Pyth oracle cranking specifically');
   console.log('\nRun with a command to execute that test. Example: node dist/src/solana/tests/mainnet-test.js queue-withdraw');
+  console.log('For fetch-user-shares, optionally specify vault ID: node dist/src/solana/tests/mainnet-test.js fetch-user-shares 12');
   console.log('For check-queue-config, optionally specify vault ID: node dist/src/solana/tests/mainnet-test.js check-queue-config 9');
+  console.log('For test-queue-status, optionally specify vault ID: node dist/src/solana/tests/mainnet-test.js test-queue-status 9');
 }
 
 // Helper function to execute a test function and handle errors
@@ -77,8 +81,21 @@ async function main() {
       executeTest(() => analyzeVaultAccount());
     } else if (command === 'read-vault' || command === 'read') {
       executeTest(() => testReadOperations());
-    } else if (command === 'check-balance' || command === 'balance') {
-      executeTest(() => fetchUserShares());
+    } else if (command === 'fetch-user-shares' || command === 'user-shares' || command === 'check-balance' || command === 'balance') {
+      // Parse optional vault ID parameter
+      const vaultIdArg = args[1];
+      let vaultId: number | undefined;
+      
+      if (vaultIdArg) {
+        const parsedVaultId = parseInt(vaultIdArg, 10);
+        if (isNaN(parsedVaultId)) {
+          console.error(`Invalid vault ID: ${vaultIdArg}. Must be a number.`);
+          process.exit(1);
+        }
+        vaultId = parsedVaultId;
+      }
+      
+      executeTest(() => fetchUserShares(undefined, vaultId));
     } else if (command === 'deposit') {
       executeTest(() => testDeposit());
     } else if (command === 'deposit-sol') {
@@ -113,6 +130,21 @@ async function main() {
       }
       
       executeTest(() => checkQueueConfig(vaultId));
+    } else if (command === 'test-queue-status') {
+      // Parse optional vault ID parameter
+      const vaultIdArg = args[1];
+      let vaultId: number | undefined;
+      
+      if (vaultIdArg) {
+        const parsedVaultId = parseInt(vaultIdArg, 10);
+        if (isNaN(parsedVaultId)) {
+          console.error(`Invalid vault ID: ${vaultIdArg}. Must be a number.`);
+          process.exit(1);
+        }
+        vaultId = parsedVaultId;
+      }
+      
+      executeTest(() => testQueueWithdrawStatus(vaultId));
     } else if (command === 'pyth-oracle' || command === 'pyth') {
       executeTest(() => testPythOracle());
     } else if (command === 'pyth-crank') {
@@ -148,6 +180,7 @@ if (require.main === module) {
     testDepositSol,
     testQueueWithdraw,
     checkQueueConfig,
+    testQueueWithdrawStatus,
     main
   };
 }
