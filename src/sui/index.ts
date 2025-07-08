@@ -278,9 +278,12 @@ export class SuiVaultSDK {
       id: this.accountantId,
       options: { showContent: true },
     });
-    const fields = (accountant.data?.content as any)?.fields;
+
+    const fields = this.#readFields(accountant.data?.content!) as {
+      exchange_rate: string;
+    };
     const decimals = await this.getDecimals();
-    return formatUnits(BigInt(fields?.exchange_rate), decimals);
+    return formatUnits(BigInt(fields.exchange_rate), decimals);
   }
 
   /**
@@ -292,10 +295,12 @@ export class SuiVaultSDK {
       id: this.accountantId,
       options: { showContent: true },
     });
-    const fields = (accountant.data?.content as any)?.fields;
+    const fields = this.#readFields(accountant.data?.content!) as {
+      total_shares: string;
+    };
     const one_share = await this.getOneShare();
     const decimals = await this.getDecimals();
-    const total_shares = BigInt(fields?.total_shares);
+    const total_shares = BigInt(fields.total_shares);
     const share_value = parseUnits(await this.fetchShareValue(), decimals);
     // Calculate total assets: (total_shares * share_value) / one_share
     return formatUnits(total_shares * share_value / one_share, decimals);
@@ -311,9 +316,12 @@ export class SuiVaultSDK {
       id: requestId,
       options: { showContent: true },
     });
-    const fields = (request.data?.content as any)?.fields;
-    const creationTime = BigInt(fields?.creation_time_ms);
-    const msToMaturity = BigInt(fields?.ms_to_maturity);
+    const fields = this.#readFields(request.data?.content!) as {
+      creation_time_ms: string;
+      ms_to_maturity: string;
+    };
+    const creationTime = BigInt(fields.creation_time_ms);
+    const msToMaturity = BigInt(fields.ms_to_maturity);
     return ((creationTime + msToMaturity) / 1000n).toString();
   }
 
@@ -326,7 +334,10 @@ export class SuiVaultSDK {
       id: this.vaultId,
       options: { showContent: true },
     });
-    return (vault.data?.content as any)?.fields?.is_vault_paused;
+    const fields = this.#readFields(vault.data?.content!) as {
+      is_vault_paused: boolean;
+    };
+    return fields.is_vault_paused;
   }
 
   /**
@@ -344,10 +355,12 @@ export class SuiVaultSDK {
     });
 
     // the object is `Field<QueueKey, …>`
-    const nameFields = (data as any).content.fields.name.fields;
+    const nameFields = this.#readFields(data?.content!) as {
+      name: FieldsWithTypes;
+    };
     return {
-      account: nameFields.account as string,
-      timestamp: nameFields.timestamp as string,
+      account: nameFields.name.fields.account,
+      timestamp: nameFields.name.fields.timestamp,
     };
   }
 
@@ -362,8 +375,11 @@ export class SuiVaultSDK {
       id: this.vaultId,
       options: { showContent: true },
     });
-    const fields = (vault.data?.content as any)?.fields;
-    const requestsId = fields?.requests_per_address.fields.id.id;
+
+    const fields = this.#readFields(vault.data?.content!) as {
+      requests_per_address: FieldsWithTypes;
+    };
+    const requestsId = fields.requests_per_address.fields.id.id;
 
     assetType = this.#normalizeAssetType(assetType);
 
@@ -377,8 +393,14 @@ export class SuiVaultSDK {
         }
       }
     });
-    const arr = (object.data?.content as any)?.fields?.value as FieldsWithTypes[];
-    const timestamps = arr.map((item) => {
+    if (object.data?.content?.dataType !== "moveObject") {
+      throw new Error("No requests found for address");
+    }
+
+    const requestsArray = this.#readFields(object.data?.content!) as {
+      value: FieldsWithTypes[];
+    };
+    const timestamps = requestsArray.value.map((item) => {
       return QueueKey.fromFieldsWithTypes(item).timestamp.toString();
     })
     return timestamps;
@@ -437,8 +459,12 @@ async getAssetInfo(assetType: string): Promise<DepositableAssetFields> {
       id: this.accountantId,
       options: { showContent: true },
     });
-    const fields = (accountant.data?.content as any)?.fields;
-    const oneShare = fields.one_share as string;
+    const fields = this.#readFields(accountant.data?.content!) as {
+      one_share: string;
+      platform_fee: string;
+      performance_fee: string;
+    };
+    const oneShare = fields.one_share;
     return {
       decimals: oneShare.length - 1, // Derive decimals from oneShare
       oneShare: BigInt(oneShare),
@@ -498,9 +524,6 @@ async getAssetInfo(assetType: string): Promise<DepositableAssetFields> {
       id: this.vaultId,
       options: { showContent: true },
     });
-    if (vault.data?.content?.dataType !== "moveObject") {
-      throw new Error("Vault is not a moveObject");
-    }
 
     const fields = this.#readFields(vault.data?.content!) as {
       depositable_assets: FieldsWithTypes;
