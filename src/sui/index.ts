@@ -207,7 +207,7 @@ export class SuiVaultSDK {
   /**
    * Gets the share token type for this vault
    * Results are cached to avoid repeated network calls
-   * @returns Promise that resolves to the share type string, or null if not found
+   * @returns Promise that resolves to the share type string
    */
   async getShareType(): Promise<string> {
     if (this.shareType !== null) {
@@ -519,35 +519,56 @@ async getAssetInfo(assetType: string): Promise<DepositableAssetFields> {
     return assetType;
   }
 
+  /**
+   * Fetches all depositable assets and their configuration from the vault
+   * This method retrieves the dynamic fields from the vault's depositable_assets table
+   * and parses each asset's configuration including withdrawal/deposit permissions,
+   * share premium, maturity settings, and capacity limits
+   * @returns Promise that resolves to a Map of asset type strings to their configuration
+   */
   async #fetchDepositableAssets(): Promise<Map<string, DepositableAssetFields>> {
+    // Get the vault object to access its depositable_assets field
     const vault = await this.client.getObject({
       id: this.vaultId,
       options: { showContent: true },
     });
 
+    // Extract the depositable_assets table ID from the vault's fields
     const fields = this.#readFields(vault.data?.content!) as {
       depositable_assets: FieldsWithTypes;
     };
     const depositableAssetsId = fields.depositable_assets.fields.id.id;
+    
+    // Get all dynamic fields (asset entries) from the depositable_assets table
     const dynamicFields = await this.client.getDynamicFields({ parentId: depositableAssetsId });
     const objectIds = dynamicFields.data.map((entry) => entry.objectId);
+    
+    // Fetch the full object data for all asset entries in parallel
     const objects = await this.client.multiGetObjects({
       ids: objectIds,
       options: { showContent: true }
     });
 
+    // Parse each asset's configuration and build the result map
     const depositableAssets = new Map<string, DepositableAssetFields>();
     if (objects[0].data?.content?.dataType === "moveObject") {
+      // Get the share type needed for parsing DepositableAsset structs
       const shareType = await this.getShareType() as string;
+      
+      // Process each asset object
       objects.forEach((object) => {
+        // Extract the name and value fields from the dynamic field entry
         const data = this.#readFields(object.data?.content!) as {
           name: FieldsWithTypes;
           value: FieldsWithTypes
         };
         const name = data.name.fields.name;
 
+        // Parse the DepositableAsset struct
         const depositableAssetStruct = DepositableAsset.fromFieldsWithTypes(phantom(shareType), data.value);
         const value = depositableAssetStruct.toJSONField();
+        
+        // Store the asset configuration in the map using the asset type as the key
         depositableAssets.set(name, value);
       });
     }
