@@ -8,8 +8,14 @@ config({ path: path.resolve(process.cwd(), ".env") });
 export const PROJECT_ROOT = path.join(__dirname, "..", "..");
 
 export const DIR = process.cwd();
-export const FULLNODE_URL = process.env.FULLNODE_URL!;
-export const ADMIN_PRIVATE_KEY = process.env.ADMIN_PRIVATE_KEY!;
+export const FULLNODE_URL = process.env.FULLNODE_URL as string;
+if (!FULLNODE_URL) {
+  throw new Error("FULLNODE_URL is not set");
+}
+export const ADMIN_PRIVATE_KEY = process.env.ADMIN_PRIVATE_KEY as string;
+if (!ADMIN_PRIVATE_KEY) {
+  throw new Error("ADMIN_PRIVATE_KEY is not set");
+}
 export const DENY_LIST_ID = "0x403";
 export const ACTIVE_NETWORK = (process.env.NETWORK || "localnet") as
   | "mainnet"
