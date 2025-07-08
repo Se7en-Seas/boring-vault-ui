@@ -343,10 +343,13 @@ export class SuiVaultSDK {
   /**
    * Reads the fields of a queue key object to extract account and timestamp information
    * @param queueKeyId - The object ID of the queue key
-   * @returns Promise that resolves to an object containing the account address and timestamp
+   * @returns Promise that resolves to an object containing the account address, asset type and timestamp
    */
   async readQueueKeyFields(queueKeyId: string): Promise<{
     account: string;
+    assetType: {
+      name: string;
+    }
     timestamp: string;
   }> {
     const { data } = await this.client.getObject({
@@ -358,10 +361,7 @@ export class SuiVaultSDK {
     const nameFields = this.#readFields(data?.content!) as {
       name: FieldsWithTypes;
     };
-    return {
-      account: nameFields.name.fields.account,
-      timestamp: nameFields.name.fields.timestamp,
-    };
+    return QueueKey.fromFieldsWithTypes(nameFields.name).toJSONField();
   }
 
   /**
