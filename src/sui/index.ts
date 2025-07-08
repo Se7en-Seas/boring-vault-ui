@@ -21,7 +21,7 @@ import { AddressTypeKey, DepositableAsset, QueueKey } from "./gen/boring_vault/b
 import { FieldsWithTypes } from "./gen/_framework/util";
 import { phantom } from "./gen/_framework/reified";
 
-interface AccountantCache {
+type AccountantCache = {
   decimals: number;
   oneShare: bigint;
   platformFee: string;
