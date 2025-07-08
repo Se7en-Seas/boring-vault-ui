@@ -8,6 +8,7 @@ import { VLBTC } from "../gen/v-lbtc/vlbtc/structs";
 import { DepositEvent, WithdrawRequestedEvent, WithdrawRequestCancelledEvent } from "../gen/boring_vault/boring-vault/structs";
 import { SuiVaultSDK, createSuiVaultSDK } from "../index";
 import { SuiClient } from "@mysten/sui/client";
+import { normalizeStructTag } from "@mysten/sui/utils";
 import { parseUnits } from "viem";
 
 const TEST_ASSET_TREASURY_CAP = "0xf9a4cdfe9e948e9277289c1ea68ea5eb17747ab2b7f0d1beaacb969734911637";
@@ -123,7 +124,7 @@ describe("SuiVaultSDK", () => {
           depositAmount,
           minMintAmount,
         )
-      ).rejects.toThrow(`No coins found for asset ${ASSET.$typeName}`);
+      ).rejects.toThrow(`No coins found for asset ${normalizeStructTag(ASSET.$typeName)}`);
     });
   });
 

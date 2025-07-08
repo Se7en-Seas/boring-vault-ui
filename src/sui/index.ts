@@ -88,6 +88,8 @@ export class SuiVaultSDK {
     depositAmount: string,
     minMintAmount: string,
   ): Promise<SuiTransactionBlockResponse> {
+    assetType = normalizeStructTag(assetType);
+
     let depositAssetCoins = await this.client.getCoins({
       owner: payerAddress,
       coinType: assetType,
@@ -134,6 +136,7 @@ export class SuiVaultSDK {
     discountPercent?: string,
     daysValid?: string,
   ): Promise<SuiTransactionBlockResponse> {
+    assetType = normalizeStructTag(assetType);
     const shareType = await this.getShareType();
 
     const discount = discountPercent ? BigInt(parseUnits(discountPercent, 4)) :
@@ -184,6 +187,7 @@ export class SuiVaultSDK {
     assetType: string,
     timestamp: string,
   ): Promise<SuiTransactionBlockResponse> {
+    assetType = normalizeStructTag(assetType);
     const shareType = await this.getShareType();
 
     const cancelTx = new Transaction();
@@ -381,7 +385,7 @@ export class SuiVaultSDK {
     };
     const requestsId = fields.requests_per_address.fields.id.id;
 
-    assetType = this.#normalizeAssetType(assetType);
+    assetType = this.#normalizeTypeNameAsDynamicFieldKey(assetType);
 
     const object = await this.client.getDynamicFieldObject({
       parentId: requestsId,
@@ -427,7 +431,7 @@ async getDepositableAssets(): Promise<string[] | null> {
  * @returns Promise that resolves to the asset info as a JSON object
  */
 async getAssetInfo(assetType: string): Promise<DepositableAssetFields> {
-  assetType = this.#normalizeAssetType(assetType);
+  assetType = this.#normalizeTypeNameAsDynamicFieldKey(assetType);
 
   if (this.depositableAssets === null) {
     await this.getDepositableAssets();
@@ -513,10 +517,10 @@ async getAssetInfo(assetType: string): Promise<DepositableAssetFields> {
   }
 
   // ensure the asset type is normalized (padded with leading 0s but no 0x prefix)
-  #normalizeAssetType(assetType: string): string {
-    assetType = normalizeStructTag(assetType);
-    assetType = assetType.substring(2);
-    return assetType;
+  #normalizeTypeNameAsDynamicFieldKey(typeName: string): string {
+    typeName = normalizeStructTag(typeName);
+    typeName = typeName.substring(2);
+    return typeName;
   }
 
   /**
