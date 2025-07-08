@@ -257,16 +257,14 @@ async function getUserShares() {
   const vaultId = 1;
   
   try {
-    const balanceInfo = await boringVault.fetchUserShares(walletAddress, vaultId);
+    const userShares = await vaultSDK.fetchUserShares(walletAddress, vaultId);
     
-    console.log('Raw Balance:', balanceInfo.raw.toString());
-    console.log('Formatted Balance:', balanceInfo.formatted);
-    console.log('Decimals:', balanceInfo.decimals);
+    console.log(`User owns ${userShares} shares in vault ${vaultId}`);
     
-    return balanceInfo;
+    return userShares;
   } catch (error) {
     console.error('Error fetching user shares:', error);
-    return null;
+    return 0;
   }
 }
 ```

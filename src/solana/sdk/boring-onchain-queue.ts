@@ -1,7 +1,8 @@
 import { web3, BorshCoder, Idl } from '@coral-xyz/anchor';
 import { 
   BORING_QUEUE_PROGRAM_ID,
-  BASE_SEED_USER_WITHDRAW_STATE
+  BASE_SEED_USER_WITHDRAW_STATE,
+  DEFAULT_DECIMALS
 } from '../utils/constants';
 import { type SolanaClient, Address } from 'gill';
 import queueIdl from '../idls/boring_onchain_queue.json';
@@ -197,7 +198,10 @@ export class BoringOnchainQueue {
           nonce: Number(decoded.nonce),
           user: decoded.user.toString(),
           tokenOut: tokenMetadata,
-          sharesWithdrawing: Number(decoded.share_amount) / (10 ** 9), // Assuming 9 decimals for shares
+          // Share amounts use DEFAULT_DECIMALS (9) as vault shares are standardized to 9 decimals
+          // across all Boring Vault implementations for consistency
+          sharesWithdrawing: Number(decoded.share_amount) / (10 ** DEFAULT_DECIMALS),
+          // Asset amounts use the token's actual decimals fetched from the mint account
           assetsWithdrawing: Number(decoded.asset_amount) / (10 ** tokenMetadata.decimals),
           creationTime: Number(decoded.creation_time),
           secondsToMaturity: decoded.seconds_to_maturity,
