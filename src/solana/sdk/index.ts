@@ -1,7 +1,8 @@
 import { web3 } from '@coral-xyz/anchor';
 import { BoringVaultSolana } from './boring-vault-solana';
+import { BoringOnchainQueue, BoringQueueStatus } from './boring-onchain-queue';
 import { parseFullVaultData, FullVaultData } from './vault-state';
-import vaultIdl from '../idls/boring-vault-svm-idl.json';
+import vaultIdl from '../idls/boring_vault_svm.json';
 import {
   AccountLayout
 } from '@solana/spl-token';
@@ -9,12 +10,7 @@ import { createSolanaClient, type SolanaClient, Address } from 'gill';
 import {
   JITO_SOL_MINT_ADDRESS,
   DEFAULT_DECIMALS,
-  JITO_SOL_PRICE_FEED_ADDRESS
 } from '../utils/constants';
-import {
-  bundleSwitchboardCrank,
-  type SwitchboardCrankConfig
-} from '../utils/switchboard-crank';
 
 /**
  * Vault SDK adapter for mainnet testing
@@ -23,6 +19,7 @@ import {
 export class VaultSDK {
   private rpc: SolanaClient['rpc'];
   private boringVault: BoringVaultSolana;
+  private boringQueue: BoringOnchainQueue;
   private programId: web3.PublicKey;
   private solanaClient: SolanaClient;
   private rpcUrl: string;
@@ -45,6 +42,12 @@ export class VaultSDK {
       programId: this.programId.toString()
     });
 
+    // Initialize the BoringOnchainQueue with the solanaClient
+    this.boringQueue = new BoringOnchainQueue({
+      solanaClient: this.solanaClient,
+      programId: this.programId.toString()
+    });
+
     // Initialize the shared connection
     this.connection = new web3.Connection(
       process.env.ALCHEMY_RPC_URL || this.rpcUrl,
@@ -57,6 +60,13 @@ export class VaultSDK {
    */
   getBoringVault(): BoringVaultSolana {
     return this.boringVault;
+  }
+
+  /**
+   * Get the BoringOnchainQueue instance
+   */
+  getBoringOnchainQueue(): BoringOnchainQueue {
+    return this.boringQueue;
   }
 
   /**
@@ -219,9 +229,9 @@ export class VaultSDK {
   }
 
   /**
-   * Deposits native SOL into a vault with automatic oracle cranking
+   * Deposits native SOL into a vault
    * 
-   * @param wallet The wallet that will sign the transaction
+   * @param wallet The wallet that will sign the transaction (supports both keypairs and wallet adapters)
    * @param vaultId The ID of the vault to deposit into
    * @param depositAmount The amount of SOL to deposit (in lamports)
    * @param minMintAmount The minimum amount of shares to mint
@@ -237,7 +247,6 @@ export class VaultSDK {
       skipPreflight?: boolean;
       maxRetries?: number;
       skipStatusCheck?: boolean;
-      enableOracleCrank?: boolean; // New option to enable/disable oracle cranking
     } = {}
   ): Promise<string> {
     // Convert string inputs to proper types
@@ -258,95 +267,37 @@ export class VaultSDK {
     }
 
     try {
-      // Get the wallet's public key
-      const payerPublicKey = 'signTransaction' in wallet
-        ? wallet.publicKey
-        : wallet.publicKey;
-
-      // Build the base deposit transaction
-      const baseTransaction = await this.boringVault.buildDepositSolTransaction(
-        payerPublicKey,
+      // Build the deposit transaction
+      const transaction = await this.boringVault.buildDepositSolTransaction(
+        wallet.publicKey,
         vaultId,
         amount,
         minAmount
       );
 
-      let finalTransaction: web3.Transaction;
-      let lookupTables: any[] = [];
-
-      // Add oracle cranking (enabled by default)
-      if (options.enableOracleCrank !== false) {
-        console.log('Adding automatic oracle cranking to SOL deposit with 3 responses...');
-
-        try {
-          // Configure Switchboard cranking for jitoSOL price feed with 3 responses
-          const switchboardConfig: SwitchboardCrankConfig = {
-            connection: this.connection,
-            feedAddress: new web3.PublicKey(JITO_SOL_PRICE_FEED_ADDRESS),
-            payer: payerPublicKey,
-            numResponses: 3 // Always use 3 oracle responses
-          };
-
-          // Bundle the oracle crank with the deposit transaction
-          const bundledResult = await bundleSwitchboardCrank(
-            switchboardConfig,
-            baseTransaction.instructions
-          );
-
-          console.log(`✓ Added ${bundledResult.instructions.length - baseTransaction.instructions.length} oracle crank instructions`);
-
-          // Create a new transaction with bundled instructions
-          finalTransaction = new web3.Transaction();
-          finalTransaction.add(...bundledResult.instructions);
-          lookupTables = bundledResult.lookupTables;
-
-        } catch (oracleError) {
-          console.warn('Oracle cranking failed, proceeding with deposit only:', oracleError);
-          // Fallback to base transaction if oracle cranking fails
-          finalTransaction = baseTransaction;
-        }
-      } else {
-        console.log('Oracle cranking disabled, using deposit-only transaction');
-        finalTransaction = baseTransaction;
-      }
-
       // Add recent blockhash
       const { blockhash } = await this.connection.getLatestBlockhash('confirmed');
-      finalTransaction.recentBlockhash = blockhash;
-      finalTransaction.feePayer = payerPublicKey;
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = wallet.publicKey;
 
-      console.log('🔄 Using Versioned Transaction with lookup tables...');
+      console.log('📤 Sending transaction...');
 
-      // Create versioned transaction message
-      const message = new web3.TransactionMessage({
-        payerKey: payerPublicKey,
-        recentBlockhash: blockhash,
-        instructions: finalTransaction.instructions,
-      }).compileToV0Message(lookupTables);
-
-      // Create versioned transaction
-      const versionedTx = new web3.VersionedTransaction(message);
-
-      // Sign the versioned transaction
-      let signedTransaction: any;
+      // Sign the transaction
+      let signedTransaction: web3.Transaction;
       if ('signTransaction' in wallet) {
         // Using wallet adapter (browser extension)
-        // Cast to any to handle the type compatibility between Transaction and VersionedTransaction
-        signedTransaction = await wallet.signTransaction(versionedTx as any);
+        signedTransaction = await wallet.signTransaction(transaction);
       } else {
         // Using keypair directly
-        versionedTx.sign([wallet]);
-        signedTransaction = versionedTx;
+        transaction.sign(wallet);
+        signedTransaction = transaction;
       }
 
-      // Send versioned transaction
+      // Send transaction
       const signature = await this.connection.sendRawTransaction(signedTransaction.serialize(), {
         skipPreflight: options.skipPreflight || false,
         preflightCommitment: 'confirmed'
       });
-
-      console.log(`SOL deposit transaction sent! Signature: ${signature}`);
-      console.log(`View on explorer: https://solscan.io/tx/${signature}`);
 
       return signature;
     } catch (error) {
@@ -466,4 +417,37 @@ export class VaultSDK {
       throw new Error(`Failed to queue withdraw: ${error}`);
     }
   }
+
+  /**
+   * Get the decimal adjusted (human readable) numerical value of vault shares that a user owns
+   * 
+   * @param userAddress The address of the user in the vault you'd like to get the shares for
+   * @param vaultId The vault ID to check shares for
+   * @returns A promise that returns the decimal adjusted (human readable) total numerical value of all shares of a vault a user owns
+   */
+  async fetchUserShares(
+    userAddress: string | web3.PublicKey,
+    vaultId: number
+  ): Promise<number> {
+    const result = await this.boringVault.fetchUserShares(userAddress, vaultId);
+    return parseFloat(result.formatted);
+  }
+
+  /**
+   * Get all NON-EXPIRED withdraw requests for a user
+   * This function retrieves a list of all NON EXPIRED withdraw intents.
+   * 
+   * @param userAddress The user's wallet address (string or PublicKey)
+   * @param vaultId Optional vault ID filter
+   * @returns A promise that returns a list of BoringQueueStatus objects
+   */
+  async boringQueueStatuses(
+    userAddress: string | web3.PublicKey,
+    vaultId?: number
+  ): Promise<BoringQueueStatus[]> {
+    return await this.boringQueue.boringQueueStatuses(userAddress, vaultId);
+  }
 }
+
+// Export types for user consumption
+export type { BoringQueueStatus, TokenMetadata, WithdrawRequestInfo } from './boring-onchain-queue';

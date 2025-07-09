@@ -1,12 +1,17 @@
 {
   "name": "boring-vault-ui",
-  "version": "1.9.5",
+  "version": "1.9.7",
   "description": "A reusable package to quickly integrate boring vaults onto a UI.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": "./dist/index.js",
-    "./types": "./dist/types/index.d.ts"
+    "./types": "./dist/types/index.d.ts",
+    "./solana": {
+      "import": "./dist/solana/sdk/index.js",
+      "require": "./dist/solana/sdk/index.cjs",
+      "types": "./dist/solana/sdk/index.d.ts"
+    }
   },
   "files": [
     "dist/**/*"
@@ -20,6 +25,7 @@
     "type:check": "tsc --noEmit",
     "type:check:sui": "cd src/sui && tsc --noEmit",
     "test:solana": "ts-node src/solana/tests/solana-sdk-unit-tests.ts",
+    "test:solana-queue": "ts-node src/solana/tests/queue-unit-tests.ts",
     "mainnet-test-solana": "ts-node src/solana/tests/mainnet-test.ts",
     "test:sui": "jest --config src/sui/jest.config.js"
   },
@@ -34,11 +40,13 @@
     "@ethersproject/bytes": "^5.8.0",
     "@mysten/bcs": "^1.6.3",
     "@mysten/sui": "^1.34.0",
+    "@pythnetwork/hermes-client": "^2.0.0",
+    "@pythnetwork/pyth-solana-receiver": "^0.10.1",
     "@safe-global/safe-apps-provider": "^0.18.3",
     "@safe-global/safe-apps-sdk": "^9.1.0",
     "@solana/spl-token": "^0.4.13",
     "@switchboard-xyz/common": "^3.3.0",
-    "@switchboard-xyz/on-demand": "^2.9.0",
+    "@switchboard-xyz/on-demand": "^2.10.4",
     "@wagmi/connectors": "^5.7.13",
     "@wagmi/core": "^2.17.0",
     "dotenv": "^16.6.0",
@@ -49,6 +57,14 @@
     "react": "^18.2.0",
     "viem": "^2.21.2",
     "wagmi": "^2.15.0"
+  },
+  "overrides": {
+    "@coral-xyz/anchor": {
+      "@solana/web3.js": "^1.98.0"
+    },
+    "@pythnetwork/pyth-solana-receiver": {
+      "@solana/web3.js": "^1.77.0"
+    }
   },
   "devDependencies": {
     "@babel/core": "^7.24.4",
@@ -76,5 +92,10 @@
     "webpack": "^5.91.0",
     "webpack-cli": "^5.1.4",
     "webpack-dev-server": "^5.0.4"
+  },
+  "typesVersions": {
+    "*": {
+      "solana": ["dist/solana/sdk/index.d.ts"]
+    }
   }
 }
