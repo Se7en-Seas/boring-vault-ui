@@ -72,36 +72,36 @@ export async function analyzeVaultAccount(): Promise<void> {
     // Use the VaultSDK to parse the vault data
     console.log('\n--- Parsed Vault Data ---');
     const vaultData = await vaultService.getVaultData(vaultPubkey);
-    const vaultId = Number(vaultData.vaultState.vaultId);
+    const vaultId = Number(vaultData.config.vaultId);
     
-    console.log(`Vault ID: ${vaultData.vaultState.vaultId.toString()}`);
-    console.log(`Authority: ${vaultData.vaultState.authority.toString()}`);
-    console.log(`Pending Authority: ${vaultData.vaultState.pendingAuthority.toString()}`);
-    console.log(`Share Mint: ${vaultData.vaultState.shareMint.toString()}`);
-    console.log(`Deposit Sub-Account: ${vaultData.vaultState.depositSubAccount}`);
-    console.log(`Withdraw Sub-Account: ${vaultData.vaultState.withdrawSubAccount}`);
-    console.log(`Paused: ${vaultData.vaultState.paused}`);
+    console.log(`Vault ID: ${vaultData.config.vaultId.toString()}`);
+    console.log(`Authority: ${vaultData.config.authority.toString()}`);
+    console.log(`Pending Authority: ${vaultData.config.pendingAuthority.toString()}`);
+    console.log(`Share Mint: ${vaultData.config.shareMint.toString()}`);
+    console.log(`Deposit Sub-Account: ${vaultData.config.depositSubAccount}`);
+    console.log(`Withdraw Sub-Account: ${vaultData.config.withdrawSubAccount}`);
+    console.log(`Paused: ${vaultData.config.paused}`);
     
     // Display asset data if available
-    if (vaultData.tellerState) {
+    if (vaultData.teller) {
       console.log('\n--- Teller State ---');
-      const baseAssetMint = vaultData.tellerState.baseAsset.toString();
+      const baseAssetMint = vaultData.teller.baseAsset.toString();
       const baseAssetName = KNOWN_MINTS[baseAssetMint] || "Unknown";
       console.log(`Base Asset: ${baseAssetMint} (${baseAssetName})`);
-      console.log(`Decimals: ${vaultData.tellerState.decimals}`);
-      console.log(`Exchange Rate Provider: ${vaultData.tellerState.exchangeRateProvider.toString()}`);
-      console.log(`Exchange Rate: ${vaultData.tellerState.exchangeRate.toString()}`);
-      console.log(`Exchange Rate High Water Mark: ${vaultData.tellerState.exchangeRateHighWaterMark.toString()}`);
-      console.log(`Fees Owed In Base Asset: ${vaultData.tellerState.feesOwedInBaseAsset.toString()}`);
-      console.log(`Total Shares Last Update: ${vaultData.tellerState.totalSharesLastUpdate.toString()}`);
-      console.log(`Last Update Timestamp: ${new Date(Number(vaultData.tellerState.lastUpdateTimestamp) * 1000).toISOString()}`);
-      console.log(`Payout Address: ${vaultData.tellerState.payoutAddress.toString()}`);
-      console.log(`Allowed Exchange Rate Change Upper Bound: ${vaultData.tellerState.allowedExchangeRateChangeUpperBound / 100}%`);
-      console.log(`Allowed Exchange Rate Change Lower Bound: ${vaultData.tellerState.allowedExchangeRateChangeLowerBound / 100}%`);
-      console.log(`Minimum Update Delay In Seconds: ${vaultData.tellerState.minimumUpdateDelayInSeconds}`);
-      console.log(`Platform Fee: ${vaultData.tellerState.platformFeeBps / 100}%`);
-      console.log(`Performance Fee: ${vaultData.tellerState.performanceFeeBps / 100}%`);
-      console.log(`Withdraw Authority: ${vaultData.tellerState.withdrawAuthority.toString()}`);
+      console.log(`Decimals: ${vaultData.teller.decimals}`);
+      console.log(`Exchange Rate Provider: ${vaultData.teller.exchangeRateProvider.toString()}`);
+      console.log(`Exchange Rate: ${vaultData.teller.exchangeRate.toString()}`);
+      console.log(`Exchange Rate High Water Mark: ${vaultData.teller.exchangeRateHighWaterMark.toString()}`);
+      console.log(`Fees Owed In Base Asset: ${vaultData.teller.feesOwedInBaseAsset.toString()}`);
+      console.log(`Total Shares Last Update: ${vaultData.teller.totalSharesLastUpdate.toString()}`);
+      console.log(`Last Update Timestamp: ${new Date(Number(vaultData.teller.lastUpdateTimestamp) * 1000).toISOString()}`);
+      console.log(`Payout Address: ${vaultData.teller.payoutAddress.toString()}`);
+      console.log(`Allowed Exchange Rate Change Upper Bound: ${vaultData.teller.allowedExchangeRateChangeUpperBound / 100}%`);
+      console.log(`Allowed Exchange Rate Change Lower Bound: ${vaultData.teller.allowedExchangeRateChangeLowerBound / 100}%`);
+      console.log(`Minimum Update Delay In Seconds: ${vaultData.teller.minimumUpdateDelayInSeconds}`);
+      console.log(`Platform Fee: ${vaultData.teller.platformFeeBps / 100}%`);
+      console.log(`Performance Fee: ${vaultData.teller.performanceFeeBps / 100}%`);
+      console.log(`Withdraw Authority: ${vaultData.teller.withdrawAuthority.toString()}`);
     }
     
     // Derive and check important PDAs related to the vault
@@ -112,26 +112,26 @@ export async function analyzeVaultAccount(): Promise<void> {
     console.log(`\nVault State PDA: ${vaultStatePDA.toString()}`);
     
     // 2. Deposit Vault PDA
-    const depositVaultPDA = await boringVault.getVaultPDA(vaultId, vaultData.vaultState.depositSubAccount);
-    console.log(`\nDeposit Vault PDA (sub-account ${vaultData.vaultState.depositSubAccount}): ${depositVaultPDA.toString()}`);
+    const depositVaultPDA = await boringVault.getVaultPDA(vaultId, vaultData.config.depositSubAccount);
+    console.log(`\nDeposit Vault PDA (sub-account ${vaultData.config.depositSubAccount}): ${depositVaultPDA.toString()}`);
     const depositVaultInfo = await getAccountExistenceStatus(depositVaultPDA);
     console.log(`Status: ${depositVaultInfo}`);
     
     // 3. Withdraw Vault PDA
-    const withdrawVaultPDA = await boringVault.getVaultPDA(vaultId, vaultData.vaultState.withdrawSubAccount);
-    console.log(`\nWithdraw Vault PDA (sub-account ${vaultData.vaultState.withdrawSubAccount}): ${withdrawVaultPDA.toString()}`);
+    const withdrawVaultPDA = await boringVault.getVaultPDA(vaultId, vaultData.config.withdrawSubAccount);
+    console.log(`\nWithdraw Vault PDA (sub-account ${vaultData.config.withdrawSubAccount}): ${withdrawVaultPDA.toString()}`);
     const withdrawVaultInfo = await getAccountExistenceStatus(withdrawVaultPDA);
     console.log(`Status: ${withdrawVaultInfo}`);
     
     // 4. Share Token Mint PDA - We get this directly from vaultData but can also derive it
-    const shareMintPDA = vaultData.vaultState.shareMint;
+    const shareMintPDA = vaultData.config.shareMint;
     console.log(`\nShare Token Mint: ${shareMintPDA.toString()}`);
     const shareMintInfo = await getAccountExistenceStatus(shareMintPDA);
     console.log(`Status: ${shareMintInfo}`);
     
     // 5. Asset Data PDAs - If we have a base asset, check the related asset data
-    if (vaultData.tellerState && vaultData.tellerState.baseAsset) {
-      const baseAsset = vaultData.tellerState.baseAsset;
+    if (vaultData.teller && vaultData.teller.baseAsset) {
+      const baseAsset = vaultData.teller.baseAsset;
       console.log(`\nBase Asset: ${baseAsset.toString()}`);
       
       const assetDataPDA = await boringVault.getAssetDataPDA(vaultStatePDA, baseAsset);
@@ -209,19 +209,19 @@ export async function testReadOperations() {
     
     // Display vault data in a clean format
     console.log('\n=== VAULT STATE ===');
-    console.log(`Vault ID: ${vaultData.vaultState.vaultId.toString()}`);
-    console.log(`Authority: ${vaultData.vaultState.authority.toString()}`);
-    console.log(`Share Mint: ${vaultData.vaultState.shareMint.toString()}`);
-    console.log(`Deposit Sub-Account: ${vaultData.vaultState.depositSubAccount}`);
-    console.log(`Withdraw Sub-Account: ${vaultData.vaultState.withdrawSubAccount}`);
-    console.log(`Paused: ${vaultData.vaultState.paused}`);
+    console.log(`Vault ID: ${vaultData.config.vaultId.toString()}`);
+    console.log(`Authority: ${vaultData.config.authority.toString()}`);
+    console.log(`Share Mint: ${vaultData.config.shareMint.toString()}`);
+    console.log(`Deposit Sub-Account: ${vaultData.config.depositSubAccount}`);
+    console.log(`Withdraw Sub-Account: ${vaultData.config.withdrawSubAccount}`);
+    console.log(`Paused: ${vaultData.config.paused}`);
     
     // Display asset data if available
-    if (vaultData.tellerState) {
+    if (vaultData.teller) {
       console.log('\n=== ASSET DATA ===');
-      console.log(`Base Asset: ${vaultData.tellerState.baseAsset.toString()}`);
-      console.log(`Platform Fee: ${vaultData.tellerState.platformFeeBps / 100}%`);
-      console.log(`Performance Fee: ${vaultData.tellerState.performanceFeeBps / 100}%`);
+      console.log(`Base Asset: ${vaultData.teller.baseAsset.toString()}`);
+      console.log(`Platform Fee: ${vaultData.teller.platformFeeBps / 100}%`);
+      console.log(`Performance Fee: ${vaultData.teller.performanceFeeBps / 100}%`);
     }
     
     // Fetch vault balance
@@ -332,6 +332,51 @@ export async function fetchUserShares(userAddress?: string, vaultId?: number): P
 }
 
 /**
+ * Test fetching the value of 1 share in terms of the underlying base asset
+ */
+export async function testFetchShareValue(vaultId?: number): Promise<void> {
+  console.log('\n=== TESTING FETCH SHARE VALUE ===');
+  
+  try {
+    // Create service instance
+    const vaultService = new VaultSDK(MAINNET_CONFIG.rpcUrl);
+    
+    // Use provided vault ID or default to 12
+    const targetVaultId = vaultId ?? 12;
+    console.log(`Testing vault ID: ${targetVaultId}`);
+    
+    // Test high-level VaultSDK API
+    console.log('\n--- Testing VaultSDK.fetchShareValue() ---');
+    const shareValue = await vaultService.fetchShareValue(targetVaultId);
+    console.log(`✅ Share value: ${shareValue}`);
+    console.log(`1 share = ${shareValue} base asset units`);
+    
+    // Test low-level BoringVaultSolana API for detailed info
+    console.log('\n--- Testing BoringVaultSolana.fetchShareValue() ---');
+    const boringVault = vaultService.getBoringVault();
+    const shareValueInfo = await boringVault.fetchShareValue(targetVaultId);
+    
+    console.log(`Raw exchange rate: ${shareValueInfo.raw.toString()}`);
+    console.log(`Formatted exchange rate: ${shareValueInfo.formatted}`);
+    console.log(`Base asset decimals: ${shareValueInfo.decimals}`);
+    
+    // Validate that both APIs return consistent values
+    // Low-level API returns raw data, high-level API formats it
+    const lowLevelFormattedValue = Number(shareValueInfo.raw) / Math.pow(10, shareValueInfo.decimals);
+    if (Math.abs(shareValue - lowLevelFormattedValue) < 0.000000001) {
+      console.log(`✅ High-level and low-level APIs return consistent values`);
+      console.log(`   High-level: ${shareValue} (formatted)`);
+      console.log(`   Low-level: ${shareValueInfo.raw} raw → ${lowLevelFormattedValue} formatted`);
+    } else {
+      console.log(`❌ API inconsistency: ${shareValue} vs ${lowLevelFormattedValue}`);
+    }
+    
+  } catch (error) {
+    console.error('Error fetching share value:', error);
+  }
+}
+
+/**
  * Verify the existence of a specific Vault PDA and check its transaction history
  */
 export async function verifyVaultPDA(): Promise<void> {
@@ -349,11 +394,11 @@ export async function verifyVaultPDA(): Promise<void> {
     // Get vault data to extract vault ID
     console.log(`\nFetching data for vault: ${vaultPubkey.toString()}`);
     const vaultData = await vaultService.getVaultData(vaultPubkey);
-    const vaultId = Number(vaultData.vaultState.vaultId);
-    const depositSubAccount = vaultData.vaultState.depositSubAccount;
+    const vaultId = Number(vaultData.config.vaultId);
+    const depositSubAccount = vaultData.config.depositSubAccount;
     
     console.log(`Vault ID: ${vaultId}`);
-    console.log(`Authority: ${vaultData.vaultState.authority.toString()}`);
+    console.log(`Authority: ${vaultData.config.authority.toString()}`);
     console.log(`Deposit Sub-Account: ${depositSubAccount}`);
     
     // Create direct Solana connection for checking accounts
@@ -513,7 +558,7 @@ export async function checkQueueConfig(vaultId?: number): Promise<string | undef
       const vaultPubkey = MAINNET_CONFIG.vaultPubkey;
       console.log(`Fetching vault data for: ${vaultPubkey.toString()}`);
       const vaultData = await vaultService.getVaultData(vaultPubkey);
-      targetVaultId = Number(vaultData.vaultState.vaultId);
+      targetVaultId = Number(vaultData.config.vaultId);
       console.log(`Using Vault ID from .env: ${targetVaultId}`);
     }
     
@@ -837,7 +882,7 @@ export async function testQueueWithdrawStatus(vaultId?: number): Promise<void> {
       const vaultPubkey = MAINNET_CONFIG.vaultPubkey;
       console.log(`Fetching vault data for: ${vaultPubkey.toString()}`);
       const vaultData = await vaultService.getVaultData(vaultPubkey);
-      targetVaultId = Number(vaultData.vaultState.vaultId);
+      targetVaultId = Number(vaultData.config.vaultId);
       console.log(`Using Vault ID from .env: ${targetVaultId}`);
     }
     

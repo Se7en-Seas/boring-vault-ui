@@ -174,6 +174,18 @@ async function testTransactionFunctionality() {
       decimals: 9
     };
   };
+
+  // Mock the fetchShareValue method for testing
+  vault.fetchShareValue = async (vaultId: number) => {
+    console.log(`Mock: Getting share value for vault ID ${vaultId}`);
+    // Mock exchange rate: 1 share = 1.05 base asset (5% appreciation)
+    const rawValue = BigInt(1050000000); // 1.05 with 9 decimals
+    return {
+      raw: rawValue,
+      formatted: rawValue.toString(), // Raw string as per new low-level API
+      decimals: 9
+    };
+  };
   
   // Test fetchUserShares
   try {
@@ -186,6 +198,40 @@ async function testTransactionFunctionality() {
   } catch (error) {
     testFailures++;
     console.error('✗ Get balance test failed:', error);
+  }
+
+  // Test fetchShareValue
+  try {
+    console.log('\nTest 4.5: Testing fetchShareValue()...');
+    const shareValue = await vault.fetchShareValue(1); // vaultId
+    console.log(`✓ Get share value succeeded:`, shareValue);
+    
+    // Validate the response structure
+    if (shareValue.raw && shareValue.formatted && typeof shareValue.decimals === 'number') {
+      console.log(`✓ Share value response has correct structure`);
+      console.log(`  Raw: ${shareValue.raw.toString()}`);
+      console.log(`  Formatted: ${shareValue.formatted}`);
+      console.log(`  Decimals: ${shareValue.decimals}`);
+      
+      // Validate the values make sense (formatted should be raw string in low-level API)
+      const expectedFormatted = shareValue.raw.toString();
+      if (shareValue.formatted === expectedFormatted) {
+        console.log(`✓ Raw and formatted values are consistent (formatted contains raw string)`);
+      } else {
+        console.log(`⚠ Raw (${expectedFormatted}) and formatted (${shareValue.formatted}) values mismatch`);
+      }
+      
+      // Test that high-level formatting works correctly
+      const expectedDecimalValue = Number(shareValue.raw) / Math.pow(10, shareValue.decimals);
+      console.log(`✓ Expected decimal value: ${expectedDecimalValue}`);
+      console.log(`✓ Low-level API returns raw data, high-level API should format to: ${expectedDecimalValue}`);
+    } else {
+      testFailures++;
+      console.error('✗ Share value response missing required fields');
+    }
+  } catch (error) {
+    testFailures++;
+    console.error('✗ Get share value test failed:', error);
   }
   
   // Test deposit functionality

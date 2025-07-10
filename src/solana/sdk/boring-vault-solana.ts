@@ -16,10 +16,11 @@ import {
   BORING_VAULT_PROGRAM_ID,
   BORING_QUEUE_PROGRAM_ID,
   TOKEN_2022_PROGRAM_ID,
-  NATIVE_SOL_MINT
+  NATIVE_SOL_MINT,
+  DEFAULT_DECIMALS
 } from '../utils/constants';
 import { BalanceInfo, BoringVaultSolanaConfig } from '../types';
-import { parseFullVaultData } from './vault-state';
+import { parseFullVaultData, parseAssetData } from './vault-state';
 import { type SolanaClient, Address, createSolanaClient } from 'gill';
 import vaultIdl from '../idls/boring_vault_svm.json';
 import queueIdl from '../idls/boring_onchain_queue.json';
@@ -128,8 +129,8 @@ export class BoringVaultSolana {
     // Use parseFullVaultData from vault-state.ts, which already uses the Anchor coder
     const fullVaultData = parseFullVaultData(data);
     return { 
-      depositSubAccount: fullVaultData.vaultState.depositSubAccount,
-      withdrawSubAccount: fullVaultData.vaultState.withdrawSubAccount
+      depositSubAccount: fullVaultData.config.depositSubAccount,
+      withdrawSubAccount: fullVaultData.config.withdrawSubAccount
     };
   }
 
@@ -207,6 +208,53 @@ export class BoringVaultSolana {
       formatted: formattedBalance,
       decimals
     };
+  }
+
+  /**
+   * Get the value of 1 share in terms of the underlying base asset
+   * Uses the exchange_rate stored in the vault state
+   */
+  async fetchShareValue(vaultId: number): Promise<BalanceInfo> {
+    try {
+      // Get the vault state PDA and fetch the vault data
+      const vaultStatePDA = await this.getVaultStatePDA(vaultId);
+      
+      // Convert web3.PublicKey to Address type for gill
+      const address = vaultStatePDA.toBase58() as Address;
+      const response = await this.rpc.getAccountInfo(
+        address,
+        { encoding: 'base64' }
+      ).send();
+      
+      if (!response.value || !response.value.data || !response.value.data.length) {
+        throw new Error(`Vault state not found for vault ID ${vaultId}`);
+      }
+      
+      // Parse the vault data to get the exchange rate
+      const data = Buffer.from(response.value.data[0], 'base64');
+      const fullVaultData = parseFullVaultData(data);
+      
+      if (!fullVaultData.teller) {
+        throw new Error(`Teller state not found in vault ${vaultId}`);
+      }
+      
+      // Get the exchange rate from the teller state
+      const rawExchangeRate = fullVaultData.teller.exchangeRate;
+      
+      // Get the base asset decimals from the teller state
+      const baseAssetDecimals = fullVaultData.teller.decimals;
+      
+      // Return raw data - formatting will be done in the high-level API
+      return {
+        raw: rawExchangeRate,
+        formatted: rawExchangeRate.toString(), // Just return the raw string for now
+        decimals: baseAssetDecimals
+      };
+      
+    } catch (error) {
+      console.error('Error fetching share value:', error);
+      throw new Error(`Failed to fetch share value for vault ${vaultId}: ${error}`);
+    }
   }
   
   /**
@@ -359,16 +407,16 @@ export class BoringVaultSolana {
       throw new Error(`Asset data not found for ${assetType} deposits`);
     }
     
-    // Parse asset data using the parseFullVaultData function
+    // Parse asset data using the parseAssetData function
     const assetDataBuffer = Buffer.from(assetDataResponse.value.data[0], 'base64');
-    const parsedAssetData = parseFullVaultData(assetDataBuffer);
+    const parsedAssetData = parseAssetData(assetDataBuffer);
 
     // Get price feed address from the parsed asset data
-    if (!parsedAssetData.assetData || !parsedAssetData.assetData.priceFeed) {
+    if (!parsedAssetData.priceFeed) {
       throw new Error(`Price feed not found in asset data for ${assetType} deposits`);
     }
     
-    const priceFeedAddress = parsedAssetData.assetData.priceFeed;
+    const priceFeedAddress = parsedAssetData.priceFeed;
     console.log(`DEBUG: Price Feed Address: ${priceFeedAddress.toString()}`);
 
     return {
@@ -861,8 +909,8 @@ export class BoringVaultSolana {
     }
     // Parse asset data to get the price feed
     const assetDataBuffer = Buffer.from(assetDataResponse.value.data[0], 'base64');
-    const parsedAssetData = parseFullVaultData(assetDataBuffer);
-    const priceFeedAddress = parsedAssetData.assetData?.priceFeed;
+    const parsedAssetData = parseAssetData(assetDataBuffer);
+    const priceFeedAddress = parsedAssetData.priceFeed;
     if (!priceFeedAddress) {
       throw new Error(`Price feed not found in asset data for mint ${tokenOut.toString()}`);
     }
