@@ -1,8 +1,8 @@
 import { web3 } from '@coral-xyz/anchor';
 import { BoringVaultSolana } from './boring-vault-solana';
-import { BoringOnchainQueue, BoringQueueStatus } from './boring-onchain-queue';
+import { BoringOnchainQueue } from './boring-onchain-queue';
 import { parseFullVaultData } from './vault-state';
-import { FullVaultData } from '../types';
+import { FullVaultData, BoringQueueStatus } from '../types';
 import vaultIdl from '../idls/boring_vault_svm.json';
 import {
   AccountLayout
@@ -11,6 +11,8 @@ import { createSolanaClient, type SolanaClient, Address } from 'gill';
 import {
   JITO_SOL_MINT_ADDRESS,
   DEFAULT_DECIMALS,
+  SYSTEM_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
 } from '../utils/constants';
 
 /**
@@ -119,20 +121,46 @@ export class VaultSDK {
 
     // Convert web3.PublicKey to Address type for gill
     const depositAddress = depositPDA.toBase58() as Address;
-    // Check if token account exists
+    
+    // Check if account exists
     const response = await this.rpc.getAccountInfo(
       depositAddress,
       { encoding: 'base64' }
     ).send();
-    if (response.value) {
-      // Extract data from the gill response
-      const data = Buffer.from(response.value.data[0], 'base64');
-      // Parse token account data
-      const accountData = AccountLayout.decode(data);
-      return accountData.amount.toString();
+    
+    if (!response.value) {
+      return '0';
     }
 
-    // If no token account exists, return 0
+    // Check account owner to determine account type
+    const owner = response.value.owner;
+    
+    // System Program account (native SOL)
+    if (owner === SYSTEM_PROGRAM_ID) {
+      return response.value.lamports.toString();
+    }
+    
+    // Token Program account (SPL tokens)
+    if (owner === TOKEN_PROGRAM_ID) {
+      try {
+        // Extract data from the gill response
+        const data = Buffer.from(response.value.data[0], 'base64');
+        
+        // Validate that the account has enough data to be a token account
+        if (data.length < AccountLayout.span) {
+          return '0';
+        }
+        
+        // Parse token account data
+        const accountData = AccountLayout.decode(data);
+        return accountData.amount.toString();
+      } catch (error) {
+        // If we can't decode it as a token account, return 0
+        return '0';
+      }
+    }
+    
+    // Unknown account type
     return '0';
   }
 
@@ -497,4 +525,7 @@ export class VaultSDK {
 }
 
 // Export types for user consumption
-export type { BoringQueueStatus, TokenMetadata, WithdrawRequestInfo } from './boring-onchain-queue';
+export type { BoringQueueStatus, TokenMetadata, WithdrawRequestInfo } from '../types';
+
+// Export utility functions
+export { buildPythOracleCrankTransactions } from '../utils/pyth-oracle';

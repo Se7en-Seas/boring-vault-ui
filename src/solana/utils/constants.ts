@@ -57,6 +57,7 @@ export const TX_POLL_ERROR_INTERVAL_MS = 2000;
 
 // Solana system constants
 export const SYSTEM_PROGRAM_ID = '11111111111111111111111111111111';
+export const TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
 export const DEFAULT_RPC_URL = 'https://api.mainnet-beta.solana.com';
 
 // Oracle test constants

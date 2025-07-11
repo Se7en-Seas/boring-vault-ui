@@ -1,5 +1,6 @@
 import { web3 } from '@coral-xyz/anchor';
-import { BoringOnchainQueue, WithdrawRequestInfo, UserWithdrawState } from '../sdk/boring-onchain-queue';
+import { BoringOnchainQueue } from '../sdk/boring-onchain-queue';
+import { WithdrawRequestInfo, UserWithdrawState } from '../types';
 import { 
   BORING_VAULT_PROGRAM_ID,
 } from '../utils/constants';

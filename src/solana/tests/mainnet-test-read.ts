@@ -21,7 +21,8 @@ import {
   JITO_SOL_MINT_ADDRESS, 
   BORING_VAULT_PROGRAM_ID,
   CONFIG_SEED,
-  KNOWN_MINTS
+  KNOWN_MINTS,
+  SYSTEM_PROGRAM_ID,
 } from '../utils/constants';
 
 /**
@@ -342,6 +343,91 @@ export async function testFetchTotalAssets(vaultId?: number): Promise<void> {
 }
 
 /**
+ * Test getting vault balance (deposit account balance)
+ */
+export async function testGetVaultBalance(vaultId?: number): Promise<void> {
+  console.log('\n=== TESTING GET VAULT BALANCE ===');
+  
+  try {
+    // Create service instance
+    const vaultService = new VaultSDK(MAINNET_CONFIG.rpcUrl);
+    
+    // Use provided vault ID or default to 12
+    const targetVaultId = vaultId ?? 12;
+    console.log(`Testing vault ID: ${targetVaultId}`);
+    
+    // Get vault pubkey from vault ID
+    const vaultPubkey = await vaultService.getBoringVault().getVaultStatePDA(targetVaultId);
+    console.log(`Vault pubkey: ${vaultPubkey.toString()}`);
+    
+    // Debug: Get vault data for context
+    console.log('\n--- Vault Context Information ---');
+    const vaultData = await vaultService.getVaultData(vaultPubkey);
+    console.log(`Vault ID: ${vaultData.config.vaultId.toString()}`);
+    console.log(`Base Asset: ${vaultData.teller.baseAsset.toString()}`);
+    console.log(`Deposit Sub-Account: ${vaultData.config.depositSubAccount}`);
+    console.log(`Withdraw Sub-Account: ${vaultData.config.withdrawSubAccount}`);
+    
+    // Debug: Calculate and show deposit PDA
+    const depositPDA = await vaultService.getBoringVault().getVaultPDA(targetVaultId, vaultData.config.depositSubAccount);
+    console.log(`Calculated deposit PDA: ${depositPDA.toString()}`);
+    
+    // Debug: Get account info for the deposit PDA
+    console.log('\n--- Account Analysis ---');
+    const response = await vaultService['rpc'].getAccountInfo(
+      depositPDA.toBase58() as any,
+      { encoding: 'base64' }
+    ).send();
+    
+    if (response.value) {
+      console.log(`✅ Account exists:`);
+      console.log(`  - Owner: ${response.value.owner}`);
+      console.log(`  - Lamports: ${response.value.lamports}`);
+      console.log(`  - Data length: ${response.value.data.length}`);
+      console.log(`  - Data array length: ${response.value.data[0]?.length || 'N/A'}`);
+      console.log(`  - Executable: ${response.value.executable}`);
+      
+      // Determine account type
+      const owner = response.value.owner;
+      if (owner === SYSTEM_PROGRAM_ID) {
+        console.log(`  - Account Type: System Program (native SOL)`);
+      } else if (owner === TOKEN_PROGRAM_ID.toString()) {
+        console.log(`  - Account Type: Token Program (SPL token)`);
+      } else {
+        console.log(`  - Account Type: Unknown (${owner})`);
+      }
+      } else {
+      console.log(`❌ Account does not exist`);
+    }
+    
+    // Test getVaultBalance function
+    console.log('\n--- Testing VaultSDK.getVaultBalance() ---');
+    const balance = await vaultService.getVaultBalance(vaultPubkey);
+    console.log(`✅ Raw vault balance: ${balance}`);
+    
+    // Convert to human-readable format
+    const balanceNum = parseFloat(balance);
+    if (balanceNum > 0) {
+      // For System Program accounts, this is lamports (SOL)
+      // For Token Program accounts, this depends on the token decimals
+      const balanceInSol = balanceNum / Math.pow(10, 9);
+      console.log(`✅ Vault balance (assuming SOL): ${balanceInSol} SOL`);
+      console.log(`✅ Vault has deposits: ${balance} units`);
+      console.log(`✅ Equivalent to: ${balanceInSol.toFixed(6)} SOL`);
+          } else {
+      console.log(`⚠️  Vault has no deposits in deposit account`);
+      console.log(`This could mean:`);
+      console.log(`  - No deposits have been made yet`);
+      console.log(`  - All deposits have been withdrawn`);
+      console.log(`  - Assets are in other vault accounts (not the deposit account)`);
+    }
+    
+  } catch (error) {
+    console.error('Error getting vault balance:', error);
+  }
+}
+
+/**
  * Test queue withdraw status functionality against mainnet
  */
 export async function testQueueWithdrawStatus(vaultId?: number): Promise<void> {
@@ -457,7 +543,7 @@ export async function testQueueWithdrawStatus(vaultId?: number): Promise<void> {
         console.log(`  - Error Code: ${status.errorCode}`);
         console.log(`  - Transaction Hash: ${status.transactionHashOpened || 'N/A'}`);
       });
-    } else {
+        } else {
       console.log(`No non-expired queue statuses found (expired requests are filtered out)`);
     }
     
