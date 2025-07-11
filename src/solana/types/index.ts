@@ -58,11 +58,10 @@ export interface AssetData {
   feedId?: number[];
 }
 
-export interface OracleSource {
-  switchboardV2?: {};
-  pyth?: {};
-  pythV2?: {};
-}
+export type OracleSource = 
+  | { switchboardV2: {} }
+  | { pyth: {} }
+  | { pythV2: {} };
 
 export interface FullVaultData {
   config: VaultState;

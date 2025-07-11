@@ -1,16 +1,20 @@
 import { web3, Idl, BorshCoder } from '@coral-xyz/anchor';
 import vaultIdl from '../idls/boring_vault_svm.json';
-import { VaultState, TellerState, ManagerState, AssetData, FullVaultData } from '../types';
+import { VaultState, TellerState, ManagerState, AssetData, FullVaultData, OracleSource } from '../types';
 
 // Create BorshCoder instance
 const coder = new BorshCoder(vaultIdl as Idl);
 
-// Import discriminators directly from IDL
+// Import discriminators directly from IDL with proper validation
 const VAULT_DISCRIMINATORS = {
-  AssetData: vaultIdl.accounts.find(acc => acc.name === 'AssetData')?.discriminator || [],
-  BoringVault: vaultIdl.accounts.find(acc => acc.name === 'BoringVault')?.discriminator || [],
-  CpiDigest: vaultIdl.accounts.find(acc => acc.name === 'CpiDigest')?.discriminator || [],
-  ProgramConfig: vaultIdl.accounts.find(acc => acc.name === 'ProgramConfig')?.discriminator || [],
+  AssetData: vaultIdl.accounts.find(acc => acc.name === 'AssetData')?.discriminator 
+    ?? (() => { throw new Error('AssetData discriminator missing from IDL') })(),
+  BoringVault: vaultIdl.accounts.find(acc => acc.name === 'BoringVault')?.discriminator 
+    ?? (() => { throw new Error('BoringVault discriminator missing from IDL') })(),
+  CpiDigest: vaultIdl.accounts.find(acc => acc.name === 'CpiDigest')?.discriminator 
+    ?? (() => { throw new Error('CpiDigest discriminator missing from IDL') })(),
+  ProgramConfig: vaultIdl.accounts.find(acc => acc.name === 'ProgramConfig')?.discriminator 
+    ?? (() => { throw new Error('ProgramConfig discriminator missing from IDL') })(),
 } as const;
 
 /**
@@ -70,14 +74,16 @@ export function parseAssetData(data: Buffer): AssetData {
   try {
     const decoded = coder.accounts.decode('AssetData', data);
     
-    // Map oracle source enum
-    let oracleSource: any = {};
+    // Map oracle source enum with proper type safety
+    let oracleSource: OracleSource;
     if (decoded.oracle_source.switchboardV2 !== undefined) {
-      oracleSource.switchboardV2 = {};
+      oracleSource = { switchboardV2: {} };
     } else if (decoded.oracle_source.pyth !== undefined) {
-      oracleSource.pyth = {};
+      oracleSource = { pyth: {} };
     } else if (decoded.oracle_source.pythV2 !== undefined) {
-      oracleSource.pythV2 = {};
+      oracleSource = { pythV2: {} };
+    } else {
+      throw new Error('Unknown oracle source type');
     }
     
     return {
@@ -101,7 +107,9 @@ export function parseAssetData(data: Buffer): AssetData {
  * Determine account type from discriminator using IDL discriminators
  */
 export function getAccountType(data: Buffer): string | null {
-  if (data.length < 8) return null;
+  if (data.length < 8) {
+    throw new Error(`Buffer too short for discriminator: got ${data.length} bytes, expected at least 8 bytes`);
+  }
   
   const discriminator = Array.from(data.slice(0, 8));
   
