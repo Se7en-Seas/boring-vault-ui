@@ -451,6 +451,36 @@ export class VaultSDK {
   }
 
   /**
+   * Get the total supply of share tokens for a vault
+   * 
+   * @param vaultId The vault ID to get the share supply for
+   * @returns A promise that returns the decimal adjusted (human readable) total supply of share tokens
+   */
+  async fetchShareMintSupply(vaultId: number): Promise<number> {
+    const result = await this.boringVault.fetchShareMintSupply(vaultId);
+    
+    // Format the raw supply with the share token decimals
+    const formattedSupply = Number(result.raw) / Math.pow(10, result.decimals);
+    
+    return formattedSupply;
+  }
+
+  /**
+   * Get the total assets (TVL) of a vault in terms of the base asset
+   * 
+   * @param vaultId The vault ID to get the total assets for
+   * @returns A promise that returns the decimal adjusted (human readable) total asset numerical value of the vault (aka TVL) in terms of the baseAsset
+   */
+  async fetchTotalAssets(vaultId: number): Promise<number> {
+    const result = await this.boringVault.fetchTotalAssets(vaultId);
+    
+    // Format the raw total assets with the base asset decimals
+    const formattedTotalAssets = Number(result.raw) / Math.pow(10, result.decimals);
+    
+    return formattedTotalAssets;
+  }
+
+  /**
    * Get all NON-EXPIRED withdraw requests for a user
    * This function retrieves a list of all NON EXPIRED withdraw intents.
    * 

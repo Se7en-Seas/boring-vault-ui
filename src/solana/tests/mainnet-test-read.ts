@@ -377,6 +377,127 @@ export async function testFetchShareValue(vaultId?: number): Promise<void> {
 }
 
 /**
+ * Test fetching the total supply of share tokens for a vault
+ */
+export async function testFetchShareMintSupply(vaultId?: number): Promise<void> {
+  console.log('\n=== TESTING FETCH SHARE MINT SUPPLY ===');
+  
+  try {
+    // Create service instance
+    const vaultService = new VaultSDK(MAINNET_CONFIG.rpcUrl);
+    
+    // Use provided vault ID or default to 12
+    const targetVaultId = vaultId ?? 12;
+    console.log(`Testing vault ID: ${targetVaultId}`);
+    
+    // Test high-level VaultSDK API
+    console.log('\n--- Testing VaultSDK.fetchShareMintSupply() ---');
+    const shareSupply = await vaultService.fetchShareMintSupply(targetVaultId);
+    console.log(`✅ Share mint supply: ${shareSupply}`);
+    console.log(`Total supply: ${shareSupply} shares`);
+    
+    // Test low-level BoringVaultSolana API for detailed info
+    console.log('\n--- Testing BoringVaultSolana.fetchShareMintSupply() ---');
+    const boringVault = vaultService.getBoringVault();
+    const shareSupplyInfo = await boringVault.fetchShareMintSupply(targetVaultId);
+    
+    console.log(`Raw supply: ${shareSupplyInfo.raw.toString()}`);
+    console.log(`Formatted supply: ${shareSupplyInfo.formatted}`);
+    console.log(`Share token decimals: ${shareSupplyInfo.decimals}`);
+    
+    // Validate that both APIs return consistent values
+    // Low-level API returns raw data, high-level API formats it
+    const lowLevelFormattedSupply = Number(shareSupplyInfo.raw) / Math.pow(10, shareSupplyInfo.decimals);
+    if (Math.abs(shareSupply - lowLevelFormattedSupply) < 0.000000001) {
+      console.log(`✅ High-level and low-level APIs return consistent values`);
+      console.log(`   High-level: ${shareSupply} (formatted)`);
+      console.log(`   Low-level: ${shareSupplyInfo.raw} raw → ${lowLevelFormattedSupply} formatted`);
+    } else {
+      console.log(`❌ API inconsistency: ${shareSupply} vs ${lowLevelFormattedSupply}`);
+    }
+    
+    // Additional validation
+    if (shareSupply > 0) {
+      console.log(`✅ Share supply is positive: ${shareSupply}`);
+    } else {
+      console.log(`⚠️  Share supply is zero or negative: ${shareSupply}`);
+    }
+    
+  } catch (error) {
+    console.error('Error fetching share mint supply:', error);
+  }
+}
+
+/**
+ * Test fetching the total assets (TVL) of a vault in terms of the base asset
+ */
+export async function testFetchTotalAssets(vaultId?: number): Promise<void> {
+  console.log('\n=== TESTING FETCH TOTAL ASSETS (TVL) ===');
+  
+  try {
+    // Create service instance
+    const vaultService = new VaultSDK(MAINNET_CONFIG.rpcUrl);
+    
+    // Use provided vault ID or default to 12
+    const targetVaultId = vaultId ?? 12;
+    console.log(`Testing vault ID: ${targetVaultId}`);
+    
+    // Test high-level VaultSDK API
+    console.log('\n--- Testing VaultSDK.fetchTotalAssets() ---');
+    const totalAssets = await vaultService.fetchTotalAssets(targetVaultId);
+    console.log(`✅ Total assets (TVL): ${totalAssets}`);
+    console.log(`Vault TVL: ${totalAssets} base asset units`);
+    
+    // Test low-level BoringVaultSolana API for detailed info
+    console.log('\n--- Testing BoringVaultSolana.fetchTotalAssets() ---');
+    const boringVault = vaultService.getBoringVault();
+    const totalAssetsInfo = await boringVault.fetchTotalAssets(targetVaultId);
+    
+    console.log(`Raw total assets: ${totalAssetsInfo.raw.toString()}`);
+    console.log(`Formatted total assets: ${totalAssetsInfo.formatted}`);
+    console.log(`Base asset decimals: ${totalAssetsInfo.decimals}`);
+    
+    // Validate that both APIs return consistent values
+    // Low-level API returns raw data, high-level API formats it
+    const lowLevelFormattedAssets = Number(totalAssetsInfo.raw) / Math.pow(10, totalAssetsInfo.decimals);
+    if (Math.abs(totalAssets - lowLevelFormattedAssets) < 0.000000001) {
+      console.log(`✅ High-level and low-level APIs return consistent values`);
+      console.log(`   High-level: ${totalAssets} (formatted)`);
+      console.log(`   Low-level: ${totalAssetsInfo.raw} raw → ${lowLevelFormattedAssets} formatted`);
+    } else {
+      console.log(`❌ API inconsistency: ${totalAssets} vs ${lowLevelFormattedAssets}`);
+    }
+    
+    // Additional validation
+    if (totalAssets > 0) {
+      console.log(`✅ Total assets is positive: ${totalAssets}`);
+    } else {
+      console.log(`⚠️  Total assets is zero or negative: ${totalAssets}`);
+    }
+    
+    // Show the calculation breakdown for transparency
+    console.log('\n--- Calculation Breakdown ---');
+    const shareSupply = await vaultService.fetchShareMintSupply(targetVaultId);
+    const shareValue = await vaultService.fetchShareValue(targetVaultId);
+    const calculatedTVL = shareSupply * shareValue;
+    
+    console.log(`Share supply: ${shareSupply}`);
+    console.log(`Share value: ${shareValue}`);
+    console.log(`Calculated TVL: ${shareSupply} × ${shareValue} = ${calculatedTVL}`);
+    console.log(`Direct TVL fetch: ${totalAssets}`);
+    
+    if (Math.abs(calculatedTVL - totalAssets) < 0.000000001) {
+      console.log(`✅ Manual calculation matches fetchTotalAssets result`);
+    } else {
+      console.log(`⚠️  Manual calculation (${calculatedTVL}) differs from fetchTotalAssets (${totalAssets})`);
+    }
+    
+  } catch (error) {
+    console.error('Error fetching total assets:', error);
+  }
+}
+
+/**
  * Verify the existence of a specific Vault PDA and check its transaction history
  */
 export async function verifyVaultPDA(): Promise<void> {

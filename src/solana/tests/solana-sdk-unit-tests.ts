@@ -186,6 +186,31 @@ async function testTransactionFunctionality() {
       decimals: 9
     };
   };
+
+  // Mock the fetchShareMintSupply method for testing
+  vault.fetchShareMintSupply = async (vaultId: number) => {
+    console.log(`Mock: Getting share mint supply for vault ID ${vaultId}`);
+    // Mock total supply: 1,000,000 shares with 9 decimals
+    const rawSupply = BigInt(1000000000000000); // 1,000,000 with 9 decimals
+    return {
+      raw: rawSupply,
+      formatted: rawSupply.toString(), // Raw string as per new low-level API
+      decimals: 9
+    };
+  };
+
+  // Mock the fetchTotalAssets method for testing
+  vault.fetchTotalAssets = async (vaultId: number) => {
+    console.log(`Mock: Getting total assets for vault ID ${vaultId}`);
+    // Mock total assets: 1,000,000 shares * 1.05 share value = 1,050,000 base asset units
+    // With 9 decimals: 1,050,000 * 10^9 = 1,050,000,000,000,000
+    const rawTotalAssets = BigInt(1050000000000000); // 1,050,000 with 9 decimals
+    return {
+      raw: rawTotalAssets,
+      formatted: rawTotalAssets.toString(), // Raw string as per new low-level API
+      decimals: 9
+    };
+  };
   
   // Test fetchUserShares
   try {
@@ -232,6 +257,88 @@ async function testTransactionFunctionality() {
   } catch (error) {
     testFailures++;
     console.error('✗ Get share value test failed:', error);
+  }
+
+  // Test fetchShareMintSupply
+  try {
+    console.log('\nTest 4.6: Testing fetchShareMintSupply()...');
+    const shareMintSupply = await vault.fetchShareMintSupply(1); // vaultId
+    console.log(`✓ Get share mint supply succeeded:`, shareMintSupply);
+    
+    // Validate the response structure
+    if (shareMintSupply.raw && shareMintSupply.formatted && typeof shareMintSupply.decimals === 'number') {
+      console.log(`✓ Share mint supply response has correct structure`);
+      console.log(`  Raw: ${shareMintSupply.raw.toString()}`);
+      console.log(`  Formatted: ${shareMintSupply.formatted}`);
+      console.log(`  Decimals: ${shareMintSupply.decimals}`);
+      
+      // Validate the values make sense (formatted should be raw string in low-level API)
+      const expectedFormatted = shareMintSupply.raw.toString();
+      if (shareMintSupply.formatted === expectedFormatted) {
+        console.log(`✓ Raw and formatted values are consistent (formatted contains raw string)`);
+      } else {
+        console.log(`⚠ Raw (${expectedFormatted}) and formatted (${shareMintSupply.formatted}) values mismatch`);
+      }
+      
+      // Test that high-level formatting works correctly
+      const expectedDecimalValue = Number(shareMintSupply.raw) / Math.pow(10, shareMintSupply.decimals);
+      console.log(`✓ Expected decimal value: ${expectedDecimalValue}`);
+      console.log(`✓ Low-level API returns raw data, high-level API should format to: ${expectedDecimalValue}`);
+      
+             // Validate that the supply is a reasonable value (should be positive)
+       if (shareMintSupply.raw > BigInt(0)) {
+         console.log(`✓ Share mint supply is positive: ${shareMintSupply.raw.toString()}`);
+       } else {
+         console.log(`⚠ Share mint supply is zero or negative: ${shareMintSupply.raw.toString()}`);
+       }
+    } else {
+      testFailures++;
+      console.error('✗ Share mint supply response missing required fields');
+    }
+  } catch (error) {
+    testFailures++;
+    console.error('✗ Get share mint supply test failed:', error);
+  }
+
+  // Test fetchTotalAssets
+  try {
+    console.log('\nTest 4.7: Testing fetchTotalAssets()...');
+    const totalAssets = await vault.fetchTotalAssets(1); // vaultId
+    console.log(`✓ Get total assets succeeded:`, totalAssets);
+
+    // Validate the response structure
+    if (totalAssets.raw && totalAssets.formatted && typeof totalAssets.decimals === 'number') {
+      console.log(`✓ Total assets response has correct structure`);
+      console.log(`  Raw: ${totalAssets.raw.toString()}`);
+      console.log(`  Formatted: ${totalAssets.formatted}`);
+      console.log(`  Decimals: ${totalAssets.decimals}`);
+
+      // Validate the values make sense (formatted should be raw string in low-level API)
+      const expectedFormatted = totalAssets.raw.toString();
+      if (totalAssets.formatted === expectedFormatted) {
+        console.log(`✓ Raw and formatted values are consistent (formatted contains raw string)`);
+      } else {
+        console.log(`⚠ Raw (${expectedFormatted}) and formatted (${totalAssets.formatted}) values mismatch`);
+      }
+
+      // Test that high-level formatting works correctly
+      const expectedDecimalValue = Number(totalAssets.raw) / Math.pow(10, totalAssets.decimals);
+      console.log(`✓ Expected decimal value: ${expectedDecimalValue}`);
+      console.log(`✓ Low-level API returns raw data, high-level API should format to: ${expectedDecimalValue}`);
+
+      // Validate that the total assets is a reasonable value (should be positive)
+      if (totalAssets.raw > BigInt(0)) {
+        console.log(`✓ Total assets is positive: ${totalAssets.raw.toString()}`);
+      } else {
+        console.log(`⚠ Total assets is zero or negative: ${totalAssets.raw.toString()}`);
+      }
+    } else {
+      testFailures++;
+      console.error('✗ Total assets response missing required fields');
+    }
+  } catch (error) {
+    testFailures++;
+    console.error('✗ Get total assets test failed:', error);
   }
   
   // Test deposit functionality
