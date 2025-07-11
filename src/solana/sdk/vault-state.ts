@@ -1,4 +1,4 @@
-import { web3, Idl, BorshCoder } from '@coral-xyz/anchor';
+import { Idl, BorshCoder } from '@coral-xyz/anchor';
 import vaultIdl from '../idls/boring_vault_svm.json';
 import { VaultState, TellerState, ManagerState, AssetData, FullVaultData, OracleSource } from '../types';
 
@@ -74,16 +74,16 @@ export function parseAssetData(data: Buffer): AssetData {
   try {
     const decoded = coder.accounts.decode('AssetData', data);
     
-    // Map oracle source enum with proper type safety
+    // Map oracle source enum with proper type safety - handle PascalCase format from BorshCoder
     let oracleSource: OracleSource;
-    if (decoded.oracle_source.switchboardV2 !== undefined) {
+    if (decoded.oracle_source.SwitchboardV2 !== undefined) {
       oracleSource = { switchboardV2: {} };
-    } else if (decoded.oracle_source.pyth !== undefined) {
+    } else if (decoded.oracle_source.Pyth !== undefined) {
       oracleSource = { pyth: {} };
-    } else if (decoded.oracle_source.pythV2 !== undefined) {
+    } else if (decoded.oracle_source.PythV2 !== undefined) {
       oracleSource = { pythV2: {} };
     } else {
-      throw new Error('Unknown oracle source type');
+      throw new Error(`Unknown oracle source type. Available types: ${Object.keys(decoded.oracle_source).join(', ')}`);
     }
     
     return {

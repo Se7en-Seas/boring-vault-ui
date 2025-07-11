@@ -586,7 +586,7 @@ interface TransactionOptions {
 To guarantee the freshest JitoSOL/SOL price — crank the Pyth oracle just before sending your state-changing transaction:
 
 ```tsx
-import { buildPythOracleCrankTransactions } from 'boring-vault-ui/solana/';
+import { buildPythOracleCrankTransactions } from 'boring-vault-ui/solana';
 import { JITOSOL_SOL_PYTH_FEED } from 'boring-vault-ui';
 
 const { transactions, signers } = await buildPythOracleCrankTransactions(

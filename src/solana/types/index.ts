@@ -68,3 +68,50 @@ export interface FullVaultData {
   teller: TellerState;
   manager: ManagerState;
 }
+
+// Queue-related interfaces
+export interface WithdrawRequest {
+  vaultId: bigint;
+  assetOut: web3.PublicKey;
+  shareAmount: bigint;
+  assetAmount: bigint;
+  creationTime: bigint;
+  secondsToMaturity: number;
+  secondsToDeadline: number;
+  user: web3.PublicKey;
+  nonce: bigint;
+}
+
+export interface UserWithdrawState {
+  lastNonce: bigint;
+}
+
+export interface TokenMetadata {
+  address: string;
+  decimals: number;
+}
+
+export interface WithdrawRequestInfo {
+  address: web3.PublicKey;
+  data: WithdrawRequest;
+  isExpired: boolean;
+  isMatured: boolean;
+  timeToMaturity: number;
+  timeToDeadline: number;
+  // User-facing formatted data
+  formatted: {
+    nonce: number;
+    user: string;
+    tokenOut: TokenMetadata;
+    sharesWithdrawing: number;
+    assetsWithdrawing: number;
+    creationTime: number;
+    secondsToMaturity: number;
+    secondsToDeadline: number;
+    errorCode: number;
+    transactionHashOpened: string;
+  };
+}
+
+// Keep BoringQueueStatus as an alias for backward compatibility
+export type BoringQueueStatus = WithdrawRequestInfo['formatted'];

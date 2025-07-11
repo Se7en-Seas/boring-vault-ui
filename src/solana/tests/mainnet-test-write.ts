@@ -24,6 +24,7 @@ import {
   DEFAULT_DECIMALS,
   JITOSOL_SOL_PYTH_FEED
 } from '../utils/constants';
+import { pollTransactionStatus } from '../utils/transaction-utils';
 
 /**
  * Test deposit functionality with jitoSOL
@@ -179,87 +180,42 @@ export async function testDeposit(): Promise<string | undefined> {
       
       // Poll for transaction status
       console.log('Polling for transaction status...');
-      const maxAttempts = 30;
-      
-      // Poll transaction status
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        try {
-          const response = await connection.getSignatureStatuses([signature]);
-          const status = response.value[0];
-          
-          if (status) {
-            if (status.err) {
-              console.error(`\n❌ Transaction failed: ${JSON.stringify(status.err)}`);
-              console.log('Transaction polling stopped due to failure.');
-              throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
-            }
+      const confirmedSignature = await pollTransactionStatus(connection, signature);
+
+      // Get transaction details for debugging
+      try {
+        const txDetails = await connection.getTransaction(confirmedSignature, {
+          maxSupportedTransactionVersion: 0,
+        });
+        
+        if (txDetails && txDetails.meta) {
+          if (txDetails.meta.err) {
+            console.error(`Transaction error: ${JSON.stringify(txDetails.meta.err)}`);
+          } else {
+            console.log('Transaction successful!');
             
-            if (status.confirmationStatus === 'finalized' || status.confirmationStatus === 'confirmed') {
-              console.log(`\nTransaction ${status.confirmationStatus}!`);
-              
-              // Get transaction details for debugging
-              try {
-                const txDetails = await connection.getTransaction(signature, {
-                  maxSupportedTransactionVersion: 0,
-                });
+            // Log token balance changes if available
+            if (txDetails.meta.postTokenBalances && txDetails.meta.preTokenBalances) {
+              console.log('Token balance changes:');
+              txDetails.meta.postTokenBalances.forEach((postBalance) => {
+                const preBalance = txDetails.meta?.preTokenBalances?.find(
+                  (pre) => pre.accountIndex === postBalance.accountIndex
+                );
                 
-                if (txDetails && txDetails.meta) {
-                  if (txDetails.meta.err) {
-                    console.error(`Transaction error: ${JSON.stringify(txDetails.meta.err)}`);
-                  } else {
-                    console.log('Transaction successful!');
-                    
-                    // Log token balance changes if available
-                    if (txDetails.meta.postTokenBalances && txDetails.meta.preTokenBalances) {
-                      console.log('Token balance changes:');
-                      txDetails.meta.postTokenBalances.forEach((postBalance) => {
-                        const preBalance = txDetails.meta?.preTokenBalances?.find(
-                          (pre) => pre.accountIndex === postBalance.accountIndex
-                        );
-                        
-                        if (preBalance) {
-                          const change = (postBalance.uiTokenAmount.uiAmount || 0) - 
-                                        (preBalance.uiTokenAmount.uiAmount || 0);
-                          console.log(`  Mint: ${postBalance.mint}, Change: ${change}`);
-                        }
-                      });
-                    }
-                  }
+                if (preBalance) {
+                  const change = (postBalance.uiTokenAmount.uiAmount || 0) - 
+                                (preBalance.uiTokenAmount.uiAmount || 0);
+                  console.log(`  Mint: ${postBalance.mint}, Change: ${change}`);
                 }
-              } catch (detailsError) {
-                console.warn(`Could not fetch transaction details: ${detailsError}`);
-              }
-              
-              return signature;
+              });
             }
           }
-          
-          // Wait before next poll
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          process.stdout.write('.');
-        } catch (error) {
-          // Check if this is a transaction failure error that should stop polling
-          if (error instanceof Error && error.message.includes('Transaction failed:')) {
-            // This is a transaction failure, stop polling immediately
-            throw error;
-          }
-          
-          // This is a network/API error, continue polling but warn
-          console.warn(`\nError checking transaction status (attempt ${attempt + 1}/${maxAttempts}): ${error}`);
-          
-          // If we're near the end of attempts, stop polling
-          if (attempt >= maxAttempts - 3) {
-            console.log('Too many polling errors, stopping...');
-            throw new Error(`Polling failed after ${attempt + 1} attempts: ${error}`);
-          }
-          
-          await new Promise(resolve => setTimeout(resolve, 2000));
         }
+      } catch (detailsError) {
+        console.warn(`Could not fetch transaction details: ${detailsError}`);
       }
       
-      // If we reach here, polling finished without confirmation
-      console.log('\n❌ Transaction polling timed out - transaction may have failed or not been processed');
-      throw new Error(`Transaction polling timed out after ${maxAttempts} attempts. Signature: ${signature}`);
+      return confirmedSignature;
       
     } catch (error: any) {
       console.error('\nError executing deposit:', error);
@@ -375,115 +331,70 @@ export async function testQueueWithdraw(): Promise<string | undefined> {
       
       // Poll for transaction status
       console.log('Polling for transaction status...');
-      const maxAttempts = 30;
-      
-      // Poll transaction status
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        try {
-          const response = await connection.getSignatureStatuses([signature]);
-          const status = response.value[0];
-          
-          if (status) {
-            if (status.err) {
-              console.error(`\n❌ Transaction failed: ${JSON.stringify(status.err)}`);
-              console.log('Transaction polling stopped due to failure.');
-              throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+      const confirmedSignature = await pollTransactionStatus(connection, signature);
+
+      // Get transaction details for debugging
+      try {
+        const txDetails = await connection.getTransaction(confirmedSignature, {
+          maxSupportedTransactionVersion: 0,
+        });
+        
+        if (txDetails && txDetails.meta) {
+          if (txDetails.meta.err) {
+            console.error(`Transaction error: ${JSON.stringify(txDetails.meta.err)}`);
+          } else {
+            console.log('Transaction successful!');
+            
+            // Log token balance changes if available
+            if (txDetails.meta.postTokenBalances && txDetails.meta.preTokenBalances) {
+              console.log('Token balance changes:');
+              txDetails.meta.postTokenBalances.forEach((postBalance) => {
+                const preBalance = txDetails.meta?.preTokenBalances?.find(
+                  (pre) => pre.accountIndex === postBalance.accountIndex
+                );
+                
+                if (preBalance) {
+                  const change = (postBalance.uiTokenAmount.uiAmount || 0) - 
+                                (preBalance.uiTokenAmount.uiAmount || 0);
+                  console.log(`  Mint: ${postBalance.mint}, Change: ${change}`);
+                }
+              });
             }
             
-            if (status.confirmationStatus === 'finalized' || status.confirmationStatus === 'confirmed') {
-              console.log(`\nTransaction ${status.confirmationStatus}!`);
+            // Get updated share balance to verify the shares were transferred
+            try {
+              const newShareBalance = await boringVault.fetchUserShares(signer.address, vaultId);
+              console.log(`\nNew share balance: ${newShareBalance.formatted} (${newShareBalance.raw.toString()} raw)`);
               
-              // Get transaction details for debugging
-              try {
-                const txDetails = await connection.getTransaction(signature, {
-                  maxSupportedTransactionVersion: 0,
-                });
-                
-                if (txDetails && txDetails.meta) {
-                  if (txDetails.meta.err) {
-                    console.error(`Transaction error: ${JSON.stringify(txDetails.meta.err)}`);
-                  } else {
-                    console.log('Transaction successful!');
-                    
-                    // Log token balance changes if available
-                    if (txDetails.meta.postTokenBalances && txDetails.meta.preTokenBalances) {
-                      console.log('Token balance changes:');
-                      txDetails.meta.postTokenBalances.forEach((postBalance) => {
-                        const preBalance = txDetails.meta?.preTokenBalances?.find(
-                          (pre) => pre.accountIndex === postBalance.accountIndex
-                        );
-                        
-                        if (preBalance) {
-                          const change = (postBalance.uiTokenAmount.uiAmount || 0) - 
-                                        (preBalance.uiTokenAmount.uiAmount || 0);
-                          console.log(`  Mint: ${postBalance.mint}, Change: ${change}`);
-                        }
-                      });
-                    }
-                    
-                    // Get updated share balance to verify the shares were transferred
-                    try {
-                      const newShareBalance = await boringVault.fetchUserShares(signer.address, vaultId);
-                      console.log(`\nNew share balance: ${newShareBalance.formatted} (${newShareBalance.raw.toString()} raw)`);
-                      
-                      // Calculate the balance change in raw terms
-                      const rawBalanceChange = Number(userShares.raw) - Number(newShareBalance.raw);
-                      
-                      // Convert the raw balance change to a human-readable amount using fixed decimals
-                      const humanReadableBalanceChange = rawBalanceChange / 10**DEFAULT_DECIMALS;
-                      
-                      console.log(`Share balance change: -${rawBalanceChange} raw (-${humanReadableBalanceChange.toFixed(9)} shares)`);
-                      
-                      // Compare the human-readable amounts
-                      const expectedAmount = withdrawHumanReadable;
-                      const actualAmount = humanReadableBalanceChange;
-                      
-                      // Use approximate comparison with a small tolerance due to potential rounding
-                      const tolerance = 0.000001; // Allow for tiny rounding differences
-                      if (Math.abs(actualAmount - expectedAmount) > tolerance) {
-                        console.warn(`⚠️ Balance change doesn't match requested amount! Expected -${expectedAmount.toFixed(9)}, got -${actualAmount.toFixed(9)}`);
-                      } else {
-                        console.log('✅ Share balance change matches requested amount');
-                      }
-                    } catch (balanceError) {
-                      console.warn(`Could not fetch updated share balance: ${balanceError}`);
-                    }
-                  }
-                }
-              } catch (detailsError) {
-                console.warn(`Could not fetch transaction details: ${detailsError}`);
+              // Calculate the balance change in raw terms
+              const rawBalanceChange = Number(userShares.raw) - Number(newShareBalance.raw);
+              
+              // Convert the raw balance change to a human-readable amount using fixed decimals
+              const humanReadableBalanceChange = rawBalanceChange / 10**DEFAULT_DECIMALS;
+              
+              console.log(`Share balance change: -${rawBalanceChange} raw (-${humanReadableBalanceChange.toFixed(9)} shares)`);
+              
+              // Compare the human-readable amounts
+              const expectedAmount = withdrawHumanReadable;
+              const actualAmount = humanReadableBalanceChange;
+              
+              // Use approximate comparison with a small tolerance due to potential rounding
+              const tolerance = 0.000001; // Allow for tiny rounding differences
+              if (Math.abs(actualAmount - expectedAmount) > tolerance) {
+                console.warn(`⚠️ Balance change doesn't match requested amount! Expected -${expectedAmount.toFixed(9)}, got -${actualAmount.toFixed(9)}`);
+              } else {
+                console.log('✅ Share balance change matches requested amount');
               }
-              
-              return signature;
+            } catch (balanceError) {
+              console.warn(`Could not fetch updated share balance: ${balanceError}`);
             }
           }
-          
-          // Wait before next poll
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          process.stdout.write('.');
-        } catch (error) {
-          // Check if this is a transaction failure error that should stop polling
-          if (error instanceof Error && error.message.includes('Transaction failed:')) {
-            // This is a transaction failure, stop polling immediately
-            throw error;
-          }
-          
-          // This is a network/API error, continue polling but warn
-          console.warn(`\nError checking transaction status (attempt ${attempt + 1}/${maxAttempts}): ${error}`);
-          
-          // If we're near the end of attempts, stop polling
-          if (attempt >= maxAttempts - 3) {
-            console.log('Too many polling errors, stopping...');
-            throw new Error(`Polling failed after ${attempt + 1} attempts: ${error}`);
-          }
-          
-          await new Promise(resolve => setTimeout(resolve, 2000));
         }
+      } catch (detailsError) {
+        console.warn(`Could not fetch transaction details: ${detailsError}`);
       }
       
-      // If we reach here, polling finished without confirmation
-      console.log('\n❌ Transaction polling timed out - transaction may have failed or not been processed');
-      throw new Error(`Transaction polling timed out after ${maxAttempts} attempts. Signature: ${signature}`);
+      return confirmedSignature;
       
     } catch (error: any) {
       console.error('\nError executing queue withdraw:', error);
@@ -561,7 +472,6 @@ export async function testDepositSol(depositAmountSOL: number = 0.001): Promise<
       console.log('⚡ Cranking oracle...');
       try {
         const { buildPythOracleCrankTransactions } = await import('../utils/pyth-oracle');
-        const { pollTransactionStatus } = await import('../utils/transaction-utils');
         
         // Build oracle transactions
         const { transactions, signers } = await buildPythOracleCrankTransactions(
@@ -641,89 +551,45 @@ export async function testDepositSol(depositAmountSOL: number = 0.001): Promise<
       
       // Poll for transaction status using the same pattern as other tests
       console.log('Polling for transaction status...');
-      const maxAttempts = 30;
-      
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        try {
-          const response = await connection.getSignatureStatuses([signature]);
-          const status = response.value[0];
-          
-          if (status) {
-            if (status.err) {
-              console.error(`\n❌ Transaction failed: ${JSON.stringify(status.err)}`);
-              console.log('Transaction polling stopped due to failure.');
-              throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
-            }
+      const confirmedSignature = await pollTransactionStatus(connection, signature);
+
+      // Get transaction details for debugging
+      try {
+        const txDetails = await connection.getTransaction(confirmedSignature, {
+          maxSupportedTransactionVersion: 0,
+        });
+        
+        if (txDetails && txDetails.meta) {
+          if (txDetails.meta.err) {
+            console.error(`Transaction error: ${JSON.stringify(txDetails.meta.err)}`);
+          } else {
+            console.log('Transaction successful!');
             
-            if (status.confirmationStatus === 'finalized' || status.confirmationStatus === 'confirmed') {
-              console.log(`\nTransaction ${status.confirmationStatus}!`);
-              
-              // Get transaction details for debugging
-              try {
-                const txDetails = await connection.getTransaction(signature, {
-                  maxSupportedTransactionVersion: 0,
-                });
+            // Log token balance changes if available
+            if (txDetails.meta.postTokenBalances && txDetails.meta.preTokenBalances) {
+              console.log('Token balance changes:');
+              txDetails.meta.postTokenBalances.forEach((postBalance) => {
+                const preBalance = txDetails.meta?.preTokenBalances?.find(
+                  (pre) => pre.accountIndex === postBalance.accountIndex
+                );
                 
-                if (txDetails && txDetails.meta) {
-                  if (txDetails.meta.err) {
-                    console.error(`Transaction error: ${JSON.stringify(txDetails.meta.err)}`);
-                  } else {
-                    console.log('Transaction successful!');
-                    
-                    // Log token balance changes if available
-                    if (txDetails.meta.postTokenBalances && txDetails.meta.preTokenBalances) {
-                      console.log('Token balance changes:');
-                      txDetails.meta.postTokenBalances.forEach((postBalance) => {
-                        const preBalance = txDetails.meta?.preTokenBalances?.find(
-                          (pre) => pre.accountIndex === postBalance.accountIndex
-                        );
-                        
-                        if (preBalance) {
-                          const change = (postBalance.uiTokenAmount.uiAmount || 0) - 
-                                        (preBalance.uiTokenAmount.uiAmount || 0);
-                          console.log(`  Mint: ${postBalance.mint}, Change: ${change}`);
-                        }
-                      });
-                    }
-                  }
+                if (preBalance) {
+                  const change = (postBalance.uiTokenAmount.uiAmount || 0) - 
+                                (preBalance.uiTokenAmount.uiAmount || 0);
+                  console.log(`  Mint: ${postBalance.mint}, Change: ${change}`);
                 }
-              } catch (detailsError) {
-                console.warn(`Could not fetch transaction details: ${detailsError}`);
-              }
-              
-              console.log(`✅ Success! Signature: ${signature}`);
-              console.log(`🔍 Explorer: https://solscan.io/tx/${signature}`);
-              
-              return signature;
+              });
             }
           }
-          
-          // Wait before next poll
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          process.stdout.write('.');
-        } catch (error) {
-          // Check if this is a transaction failure error that should stop polling
-          if (error instanceof Error && error.message.includes('Transaction failed:')) {
-            // This is a transaction failure, stop polling immediately
-            throw error;
-          }
-          
-          // This is a network/API error, continue polling but warn
-          console.warn(`\nError checking transaction status (attempt ${attempt + 1}/${maxAttempts}): ${error}`);
-          
-          // If we're near the end of attempts, stop polling
-          if (attempt >= maxAttempts - 3) {
-            console.log('Too many polling errors, stopping...');
-            throw new Error(`Polling failed after ${attempt + 1} attempts: ${error}`);
-          }
-          
-          await new Promise(resolve => setTimeout(resolve, 2000));
         }
+      } catch (detailsError) {
+        console.warn(`Could not fetch transaction details: ${detailsError}`);
       }
       
-      // If we reach here, polling finished without confirmation
-      console.log('\n❌ Transaction polling timed out - transaction may have failed or not been processed');
-      throw new Error(`Transaction polling timed out after ${maxAttempts} attempts. Signature: ${signature}`);
+      console.log(`✅ Success! Signature: ${confirmedSignature}`);
+      console.log(`🔍 Explorer: https://solscan.io/tx/${confirmedSignature}`);
+      
+      return confirmedSignature;
       
     } catch (error: any) {
       console.error('❌ Deposit failed:', error.message || error);

@@ -1,6 +1,6 @@
 {
   "name": "boring-vault-ui",
-  "version": "1.9.7",
+  "version": "1.9.8",
   "description": "A reusable package to quickly integrate boring vaults onto a UI.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

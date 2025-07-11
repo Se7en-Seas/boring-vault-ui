@@ -6,56 +6,15 @@ import {
 } from '../utils/constants';
 import { type SolanaClient, Address } from 'gill';
 import queueIdl from '../idls/boring_onchain_queue.json';
-import { BoringVaultSolanaConfig } from '../types';
+import { 
+  BoringVaultSolanaConfig,
+  WithdrawRequest,
+  UserWithdrawState,
+  WithdrawRequestInfo,
+  TokenMetadata,
+  BoringQueueStatus
+} from '../types';
 import { MintLayout } from '@solana/spl-token';
-
-// Type definitions based on IDL
-export interface WithdrawRequest {
-  vaultId: bigint;
-  assetOut: web3.PublicKey;
-  shareAmount: bigint;
-  assetAmount: bigint;
-  creationTime: bigint;
-  secondsToMaturity: number;
-  secondsToDeadline: number;
-  user: web3.PublicKey;
-  nonce: bigint;
-}
-
-export interface UserWithdrawState {
-  lastNonce: bigint;
-}
-
-export interface WithdrawRequestInfo {
-  address: web3.PublicKey;
-  data: WithdrawRequest;
-  isExpired: boolean;
-  isMatured: boolean;
-  timeToMaturity: number;
-  timeToDeadline: number;
-  // User-facing formatted data
-  formatted: {
-    nonce: number;
-    user: string;
-    tokenOut: TokenMetadata;
-    sharesWithdrawing: number;
-    assetsWithdrawing: number;
-    creationTime: number;
-    secondsToMaturity: number;
-    secondsToDeadline: number;
-    errorCode: number;
-    transactionHashOpened: string;
-  };
-}
-
-// Token metadata interface
-export interface TokenMetadata {
-  address: string;
-  decimals: number;
-}
-
-// Keep BoringQueueStatus as an alias for backward compatibility
-export type BoringQueueStatus = WithdrawRequestInfo['formatted'];
 
 export class BoringOnchainQueue {
   private rpc: SolanaClient['rpc'];
