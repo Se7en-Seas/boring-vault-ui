@@ -13,6 +13,7 @@ import {
   DEFAULT_DECIMALS,
   SYSTEM_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
 } from '../utils/constants';
 
 /**
@@ -140,8 +141,8 @@ export class VaultSDK {
       return response.value.lamports.toString();
     }
     
-    // Token Program account (SPL tokens)
-    if (owner === TOKEN_PROGRAM_ID) {
+    // Token Program account (SPL tokens - both legacy and Token-2022)
+    if (owner === TOKEN_PROGRAM_ID || owner === TOKEN_2022_PROGRAM_ID) {
       try {
         // Extract data from the gill response
         const data = Buffer.from(response.value.data[0], 'base64');
