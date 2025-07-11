@@ -52,19 +52,19 @@ export async function testDeposit(): Promise<string | undefined> {
     // Get vault data to extract vault ID
     console.log(`\nFetching data for vault: ${vaultPubkey.toString()}`);
     const vaultData = await vaultService.getVaultData(vaultPubkey);
-    const vaultId = Number(vaultData.vaultState.vaultId);
+    const vaultId = Number(vaultData.config.vaultId);
     console.log(`Vault ID: ${vaultId}`);
-    console.log(`Vault Authority: ${vaultData.vaultState.authority.toString()}`);
-    console.log(`Paused: ${vaultData.vaultState.paused}`);
-    console.log(`Deposit Sub-Account: ${vaultData.vaultState.depositSubAccount}`);
-    console.log(`Withdraw Sub-Account: ${vaultData.vaultState.withdrawSubAccount}`);
+    console.log(`Vault Authority: ${vaultData.config.authority.toString()}`);
+    console.log(`Paused: ${vaultData.config.paused}`);
+    console.log(`Deposit Sub-Account: ${vaultData.config.depositSubAccount}`);
+    console.log(`Withdraw Sub-Account: ${vaultData.config.withdrawSubAccount}`);
     
     // Check asset data if available
-    if (vaultData.tellerState) {
+    if (vaultData.teller) {
       console.log('\nTeller State:');
-      console.log(`Base Asset: ${vaultData.tellerState.baseAsset.toString()}`);
-      console.log(`Exchange Rate: ${vaultData.tellerState.exchangeRate.toString()}`);
-      console.log(`Exchange Rate Provider: ${vaultData.tellerState.exchangeRateProvider.toString()}`);
+      console.log(`Base Asset: ${vaultData.teller.baseAsset.toString()}`);
+      console.log(`Exchange Rate: ${vaultData.teller.exchangeRate.toString()}`);
+      console.log(`Exchange Rate Provider: ${vaultData.teller.exchangeRateProvider.toString()}`);
     }
     
     // Create a direct web3.js connection for transaction sending
@@ -117,12 +117,12 @@ export async function testDeposit(): Promise<string | undefined> {
     
     // Get the current exchange rate and calculate expected shares properly
     console.log(`\nExchange Rate Analysis:`);
-    console.log(`Base Asset: ${vaultData.tellerState?.baseAsset || 'N/A'} (This looks like jitoSOL!)`);
-    console.log(`Vault Exchange Rate: ${vaultData.tellerState?.exchangeRate || 'N/A'}`);
+    console.log(`Base Asset: ${vaultData.teller?.baseAsset || 'N/A'} (This looks like jitoSOL!)`);
+    console.log(`Vault Exchange Rate: ${vaultData.teller?.exchangeRate || 'N/A'}`);
     
     // Calculate expected shares based on exchange rate
     // Exchange rate represents: shares per base asset unit
-    const exchangeRate = vaultData.tellerState?.exchangeRate || BigInt(1000000000);
+    const exchangeRate = vaultData.teller?.exchangeRate || BigInt(1000000000);
     console.log(`Using exchange rate: ${exchangeRate}`);
     
     // IMPORTANT: We're depositing SOL but the base asset is jitoSOL
@@ -316,11 +316,11 @@ export async function testQueueWithdraw(): Promise<string | undefined> {
     // Get vault data to extract vault ID
     console.log(`\nFetching data for vault: ${vaultPubkey.toString()}`);
     const vaultData = await vaultService.getVaultData(vaultPubkey);
-    const vaultId = Number(vaultData.vaultState.vaultId);
+    const vaultId = Number(vaultData.config.vaultId);
     console.log(`Vault ID: ${vaultId}`);
-    console.log(`Vault Authority: ${vaultData.vaultState.authority.toString()}`);
-    console.log(`Paused: ${vaultData.vaultState.paused}`);
-    console.log(`Share Mint: ${vaultData.vaultState.shareMint.toString()}`);
+    console.log(`Vault Authority: ${vaultData.config.authority.toString()}`);
+    console.log(`Paused: ${vaultData.config.paused}`);
+    console.log(`Share Mint: ${vaultData.config.shareMint.toString()}`);
     
     // Check user's share token balance
     const boringVault = vaultService.getBoringVault();
@@ -517,8 +517,8 @@ export async function testDepositSol(depositAmountSOL: number = 0.001): Promise<
     
     // Get vault data to extract vault ID
     const vaultData = await vaultService.getVaultData(vaultPubkey);
-    const vaultId = Number(vaultData.vaultState.vaultId);
-    console.log(`🏦 Vault ID: ${vaultId} | Paused: ${vaultData.vaultState.paused ? '❌' : '✅'}`);
+    const vaultId = Number(vaultData.config.vaultId);
+    console.log(`🏦 Vault ID: ${vaultId} | Paused: ${vaultData.config.paused ? '❌' : '✅'}`);
     
     // Check user's SOL balance
     const signerAddress = signer.address;

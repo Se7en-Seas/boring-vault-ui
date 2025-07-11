@@ -1,7 +1,8 @@
 import { web3 } from '@coral-xyz/anchor';
 import { BoringVaultSolana } from './boring-vault-solana';
 import { BoringOnchainQueue, BoringQueueStatus } from './boring-onchain-queue';
-import { parseFullVaultData, FullVaultData } from './vault-state';
+import { parseFullVaultData } from './vault-state';
+import { FullVaultData } from '../types';
 import vaultIdl from '../idls/boring_vault_svm.json';
 import {
   AccountLayout
@@ -90,16 +91,16 @@ export class VaultSDK {
     // Parse the full vault data using our comprehensive parser
     const vaultData = parseFullVaultData(data);
 
-    // For convenience, also return the token mint, which might be in the assetData
+    // For convenience, also return the token mint, which is in the teller state
     let tokenMint;
-    if (vaultData.tellerState?.baseAsset) {
-      tokenMint = vaultData.tellerState.baseAsset;
+    if (vaultData.teller?.baseAsset) {
+      tokenMint = vaultData.teller.baseAsset;
     }
 
     return {
       ...vaultData,
       tokenMint
-    };
+    } as FullVaultData & { tokenMint?: web3.PublicKey };
   }
 
   /**
@@ -108,10 +109,10 @@ export class VaultSDK {
   async getVaultBalance(vaultPubkey: web3.PublicKey): Promise<string> {
     // Get vault data using the proper parser
     const vaultData = await this.getVaultData(vaultPubkey);
-    const vaultId = Number(vaultData.vaultState.vaultId);
+    const vaultId = Number(vaultData.config.vaultId);
 
     // Use the depositSubAccount from the parsed data
-    const depositSubAccount = vaultData.vaultState.depositSubAccount;
+    const depositSubAccount = vaultData.config.depositSubAccount;
 
     // Check vault token account using the deposit sub-account value
     const depositPDA = await this.boringVault.getVaultPDA(vaultId, depositSubAccount);
@@ -431,6 +432,52 @@ export class VaultSDK {
   ): Promise<number> {
     const result = await this.boringVault.fetchUserShares(userAddress, vaultId);
     return parseFloat(result.formatted);
+  }
+
+  /**
+   * Get the value for 1 share of the vault in terms of the underlying baseAsset
+   * 
+   * @param vaultId The vault ID to get the share value for
+   * @returns A promise that returns the decimal adjusted (human readable) numerical value for 1 share in terms of the underlying baseAsset
+   */
+  async fetchShareValue(vaultId: number): Promise<number> {
+    const result = await this.boringVault.fetchShareValue(vaultId);
+    
+    // Format the raw exchange rate with the base asset decimals
+    // The exchange rate represents how much base asset 1 share is worth
+    const formattedValue = Number(result.raw) / Math.pow(10, result.decimals);
+    
+    return formattedValue;
+  }
+
+  /**
+   * Get the total supply of share tokens for a vault
+   * 
+   * @param vaultId The vault ID to get the share supply for
+   * @returns A promise that returns the decimal adjusted (human readable) total supply of share tokens
+   */
+  async fetchShareMintSupply(vaultId: number): Promise<number> {
+    const result = await this.boringVault.fetchShareMintSupply(vaultId);
+    
+    // Format the raw supply with the share token decimals
+    const formattedSupply = Number(result.raw) / Math.pow(10, result.decimals);
+    
+    return formattedSupply;
+  }
+
+  /**
+   * Get the total assets (TVL) of a vault in terms of the base asset
+   * 
+   * @param vaultId The vault ID to get the total assets for
+   * @returns A promise that returns the decimal adjusted (human readable) total asset numerical value of the vault (aka TVL) in terms of the baseAsset
+   */
+  async fetchTotalAssets(vaultId: number): Promise<number> {
+    const result = await this.boringVault.fetchTotalAssets(vaultId);
+    
+    // Format the raw total assets with the base asset decimals
+    const formattedTotalAssets = Number(result.raw) / Math.pow(10, result.decimals);
+    
+    return formattedTotalAssets;
   }
 
   /**
