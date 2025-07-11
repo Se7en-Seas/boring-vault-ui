@@ -1,4 +1,3 @@
-import * as fs from 'fs';
 import * as dotenv from 'dotenv';
 import { 
   solanaClient, 
@@ -14,8 +13,6 @@ import {
 // Import read operations
 import {
   analyzeVaultAccount,
-  testReadOperations,
-  testUserBalances,
   fetchUserShares,
   testFetchShareValue,
   testFetchTotalAssets,
@@ -42,16 +39,15 @@ function displayHelpText(errorMessage?: string): void {
   console.log('\n=== BORING VAULT MAINNET TEST ===');
   console.log('Available commands:');
   console.log('  1. analyze-vault - Analyze all vault accounts for debugging');
-  console.log('  2. read-vault - Read the vault data');
-  console.log('  3. fetch-user-shares [vault-id] - Fetch user\'s vault share balance (default: vault 12)');
-  console.log('  4. fetch-share-value [vault-id] - Get the value of 1 share in terms of base asset (default: vault 12)');
-  console.log('  5. fetch-total-assets [vault-id] - Get the total assets (TVL) of a vault (default: vault 12)');
-  console.log('  6. deposit - Test deposit functionality');
-  console.log('  7. deposit-sol - Test SOL deposit functionality');
-  console.log('  8. queue-withdraw - Test queue withdraw functionality');
-  console.log('  9. test-queue-status [vault-id] - Test queue withdraw status functionality (default: vault from .env)');
-  console.log('  10. pyth-oracle - Test Pyth oracle integration (price feeds and updates)');
-  console.log('  11. pyth-crank - Test Pyth oracle cranking specifically');
+  console.log('  2. fetch-user-shares [vault-id] - Fetch user\'s vault share balance (default: vault 12)');
+  console.log('  3. fetch-share-value [vault-id] - Get the value of 1 share in terms of base asset (default: vault 12)');
+  console.log('  4. fetch-total-assets [vault-id] - Get the total assets (TVL) of a vault (default: vault 12)');
+  console.log('  5. deposit - Test deposit functionality');
+  console.log('  6. deposit-sol - Test SOL deposit functionality');
+  console.log('  7. queue-withdraw - Test queue withdraw functionality');
+  console.log('  8. test-queue-status [vault-id] - Test queue withdraw status functionality (default: vault from .env)');
+  console.log('  9. pyth-oracle - Test Pyth oracle integration (price feeds and updates)');
+  console.log('  10. pyth-crank - Test Pyth oracle cranking specifically');
   console.log('\nRun with a command to execute that test. Example: node dist/src/solana/tests/mainnet-test.js queue-withdraw');
   console.log('For fetch-user-shares, optionally specify vault ID: node dist/src/solana/tests/mainnet-test.js fetch-user-shares 12');
   console.log('For fetch-share-value, optionally specify vault ID: node dist/src/solana/tests/mainnet-test.js fetch-share-value 12');
@@ -82,8 +78,6 @@ async function main() {
     // Route commands to the appropriate test function
     if (command === 'analyze-vault' || command === 'analyze') {
       executeTest(() => analyzeVaultAccount());
-    } else if (command === 'read-vault' || command === 'read') {
-      executeTest(() => testReadOperations());
     } else if (command === 'fetch-user-shares' || command === 'user-shares' || command === 'check-balance' || command === 'balance') {
       // Parse optional vault ID parameter
       const vaultIdArg = args[1];
@@ -191,15 +185,9 @@ if (require.main === module) {
   // If this file is imported, export the test functions
   module.exports = {
     analyzeVaultAccount,
-    testReadOperations,
-    testUserBalances,
     fetchUserShares,
     testFetchShareValue,
     testFetchTotalAssets,
-    testDeposit,
-    testDepositSol,
-    testQueueWithdraw,
     testQueueWithdrawStatus,
-    main
   };
 }
