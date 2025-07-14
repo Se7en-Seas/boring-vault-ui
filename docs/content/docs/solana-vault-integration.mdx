@@ -21,6 +21,54 @@ The Boring Vault Solana SDK provides comprehensive tools for interacting with Bo
 - ✅ **Error Handling** - Comprehensive error handling with detailed messages
 - ✅ **Transaction Monitoring** - Built-in transaction status polling and explorer links
 
+## Installation & Dependency Management
+
+### Basic Installation
+
+```bash
+npm install boring-vault-ui
+```
+
+### Peer Dependencies
+
+This package requires the following peer dependencies:
+
+```bash
+npm install @solana/web3.js@">=1.77.0 <2.0.0" @coral-xyz/anchor@^0.31.1 @pythnetwork/pyth-solana-receiver@^0.10.1
+```
+
+### Handling Dependency Conflicts
+
+Due to version conflicts in the Solana ecosystem, you may encounter module resolution errors. If you see errors like:
+
+```
+Error: Package subpath './dist/lib/client' is not defined by "exports" in .../rpc-websockets/package.json
+```
+
+Add the following **overrides** to your `package.json`:
+
+```json
+{
+  "overrides": {
+    "@coral-xyz/anchor": {
+      "@solana/web3.js": "^1.98.0"
+    },
+    "@pythnetwork/pyth-solana-receiver": {
+      "@solana/web3.js": "^1.77.0"
+    }
+  }
+}
+```
+
+After adding the overrides, run:
+
+```bash
+rm -rf node_modules package-lock.json
+npm install
+```
+
+> **💡 Note:** The overrides force all packages to use compatible versions of `@solana/web3.js`, preventing module resolution conflicts common in the Solana ecosystem.
+
 ## VaultSDK
 
 The `VaultSDK` class is the main interface for interacting with Boring Vault on Solana.
