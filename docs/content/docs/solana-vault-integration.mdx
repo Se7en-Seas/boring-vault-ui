@@ -3,8 +3,6 @@ title: Solana Vault Integration
 description: Complete SDK for interacting with Boring Vault on Solana blockchain
 ---
 
-> **🎉 New in v1.9.7:** Added `boringQueueStatuses` function for tracking withdraw request status with automatic filtering and performance optimization.
-
 ## Introduction
 
 The Boring Vault Solana SDK provides comprehensive tools for interacting with Boring Vault on the Solana blockchain. This SDK supports both SPL token deposits and native SOL deposits, along with queued withdrawals and comprehensive vault management.
@@ -21,11 +19,49 @@ The Boring Vault Solana SDK provides comprehensive tools for interacting with Bo
 - ✅ **Error Handling** - Comprehensive error handling with detailed messages
 - ✅ **Transaction Monitoring** - Built-in transaction status polling and explorer links
 
+## Installation & Dependency Management
+
+### Installation
+
+```bash
+npm install boring-vault-ui
+```
+
+### Handling Dependency Conflicts
+
+Due to version conflicts in the Solana ecosystem, you may encounter module resolution errors. If you see errors like:
+
+```
+Error: Package subpath './dist/lib/client' is not defined by "exports" in .../rpc-websockets/package.json
+```
+
+Add the following **overrides** to your `package.json`:
+
+```json
+{
+  "overrides": {
+    "@coral-xyz/anchor": {
+      "@solana/web3.js": "^1.98.0"
+    },
+    "@pythnetwork/pyth-solana-receiver": {
+      "@solana/web3.js": "^1.77.0"
+    }
+  }
+}
+```
+
+After adding the overrides, run:
+
+```bash
+rm -rf node_modules package-lock.json
+npm install
+```
+
 ## VaultSDK
 
 The `VaultSDK` class is the main interface for interacting with Boring Vault on Solana.
 
-### Installation & Setup
+### Setup
 
 ```tsx
 import { VaultSDK } from 'boring-vault-ui';
