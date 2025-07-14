@@ -181,40 +181,40 @@ export async function testDeposit(): Promise<string | undefined> {
       // Poll for transaction status
       console.log('Polling for transaction status...');
       const confirmedSignature = await pollTransactionStatus(connection, signature);
-
-      // Get transaction details for debugging
-      try {
+              
+              // Get transaction details for debugging
+              try {
         const txDetails = await connection.getTransaction(confirmedSignature, {
-          maxSupportedTransactionVersion: 0,
-        });
-        
-        if (txDetails && txDetails.meta) {
-          if (txDetails.meta.err) {
-            console.error(`Transaction error: ${JSON.stringify(txDetails.meta.err)}`);
-          } else {
-            console.log('Transaction successful!');
-            
-            // Log token balance changes if available
-            if (txDetails.meta.postTokenBalances && txDetails.meta.preTokenBalances) {
-              console.log('Token balance changes:');
-              txDetails.meta.postTokenBalances.forEach((postBalance) => {
-                const preBalance = txDetails.meta?.preTokenBalances?.find(
-                  (pre) => pre.accountIndex === postBalance.accountIndex
-                );
+                  maxSupportedTransactionVersion: 0,
+                });
                 
-                if (preBalance) {
-                  const change = (postBalance.uiTokenAmount.uiAmount || 0) - 
-                                (preBalance.uiTokenAmount.uiAmount || 0);
-                  console.log(`  Mint: ${postBalance.mint}, Change: ${change}`);
+                if (txDetails && txDetails.meta) {
+                  if (txDetails.meta.err) {
+                    console.error(`Transaction error: ${JSON.stringify(txDetails.meta.err)}`);
+                  } else {
+                    console.log('Transaction successful!');
+                    
+                    // Log token balance changes if available
+                    if (txDetails.meta.postTokenBalances && txDetails.meta.preTokenBalances) {
+                      console.log('Token balance changes:');
+                      txDetails.meta.postTokenBalances.forEach((postBalance) => {
+                        const preBalance = txDetails.meta?.preTokenBalances?.find(
+                          (pre) => pre.accountIndex === postBalance.accountIndex
+                        );
+                        
+                        if (preBalance) {
+                          const change = (postBalance.uiTokenAmount.uiAmount || 0) - 
+                                        (preBalance.uiTokenAmount.uiAmount || 0);
+                          console.log(`  Mint: ${postBalance.mint}, Change: ${change}`);
+                        }
+                      });
+                    }
+                  }
                 }
-              });
-            }
-          }
-        }
-      } catch (detailsError) {
-        console.warn(`Could not fetch transaction details: ${detailsError}`);
-      }
-      
+              } catch (detailsError) {
+                console.warn(`Could not fetch transaction details: ${detailsError}`);
+              }
+              
       return confirmedSignature;
       
     } catch (error: any) {
@@ -332,68 +332,68 @@ export async function testQueueWithdraw(): Promise<string | undefined> {
       // Poll for transaction status
       console.log('Polling for transaction status...');
       const confirmedSignature = await pollTransactionStatus(connection, signature);
-
-      // Get transaction details for debugging
-      try {
+              
+              // Get transaction details for debugging
+              try {
         const txDetails = await connection.getTransaction(confirmedSignature, {
-          maxSupportedTransactionVersion: 0,
-        });
-        
-        if (txDetails && txDetails.meta) {
-          if (txDetails.meta.err) {
-            console.error(`Transaction error: ${JSON.stringify(txDetails.meta.err)}`);
-          } else {
-            console.log('Transaction successful!');
-            
-            // Log token balance changes if available
-            if (txDetails.meta.postTokenBalances && txDetails.meta.preTokenBalances) {
-              console.log('Token balance changes:');
-              txDetails.meta.postTokenBalances.forEach((postBalance) => {
-                const preBalance = txDetails.meta?.preTokenBalances?.find(
-                  (pre) => pre.accountIndex === postBalance.accountIndex
-                );
+                  maxSupportedTransactionVersion: 0,
+                });
                 
-                if (preBalance) {
-                  const change = (postBalance.uiTokenAmount.uiAmount || 0) - 
-                                (preBalance.uiTokenAmount.uiAmount || 0);
-                  console.log(`  Mint: ${postBalance.mint}, Change: ${change}`);
+                if (txDetails && txDetails.meta) {
+                  if (txDetails.meta.err) {
+                    console.error(`Transaction error: ${JSON.stringify(txDetails.meta.err)}`);
+                  } else {
+                    console.log('Transaction successful!');
+                    
+                    // Log token balance changes if available
+                    if (txDetails.meta.postTokenBalances && txDetails.meta.preTokenBalances) {
+                      console.log('Token balance changes:');
+                      txDetails.meta.postTokenBalances.forEach((postBalance) => {
+                        const preBalance = txDetails.meta?.preTokenBalances?.find(
+                          (pre) => pre.accountIndex === postBalance.accountIndex
+                        );
+                        
+                        if (preBalance) {
+                          const change = (postBalance.uiTokenAmount.uiAmount || 0) - 
+                                        (preBalance.uiTokenAmount.uiAmount || 0);
+                          console.log(`  Mint: ${postBalance.mint}, Change: ${change}`);
+                        }
+                      });
+                    }
+                    
+                    // Get updated share balance to verify the shares were transferred
+                    try {
+                      const newShareBalance = await boringVault.fetchUserShares(signer.address, vaultId);
+                      console.log(`\nNew share balance: ${newShareBalance.formatted} (${newShareBalance.raw.toString()} raw)`);
+                      
+                      // Calculate the balance change in raw terms
+                      const rawBalanceChange = Number(userShares.raw) - Number(newShareBalance.raw);
+                      
+                      // Convert the raw balance change to a human-readable amount using fixed decimals
+                      const humanReadableBalanceChange = rawBalanceChange / 10**DEFAULT_DECIMALS;
+                      
+                      console.log(`Share balance change: -${rawBalanceChange} raw (-${humanReadableBalanceChange.toFixed(9)} shares)`);
+                      
+                      // Compare the human-readable amounts
+                      const expectedAmount = withdrawHumanReadable;
+                      const actualAmount = humanReadableBalanceChange;
+                      
+                      // Use approximate comparison with a small tolerance due to potential rounding
+                      const tolerance = 0.000001; // Allow for tiny rounding differences
+                      if (Math.abs(actualAmount - expectedAmount) > tolerance) {
+                        console.warn(`⚠️ Balance change doesn't match requested amount! Expected -${expectedAmount.toFixed(9)}, got -${actualAmount.toFixed(9)}`);
+                      } else {
+                        console.log('✅ Share balance change matches requested amount');
+                      }
+                    } catch (balanceError) {
+                      console.warn(`Could not fetch updated share balance: ${balanceError}`);
+                    }
+                  }
                 }
-              });
-            }
-            
-            // Get updated share balance to verify the shares were transferred
-            try {
-              const newShareBalance = await boringVault.fetchUserShares(signer.address, vaultId);
-              console.log(`\nNew share balance: ${newShareBalance.formatted} (${newShareBalance.raw.toString()} raw)`);
-              
-              // Calculate the balance change in raw terms
-              const rawBalanceChange = Number(userShares.raw) - Number(newShareBalance.raw);
-              
-              // Convert the raw balance change to a human-readable amount using fixed decimals
-              const humanReadableBalanceChange = rawBalanceChange / 10**DEFAULT_DECIMALS;
-              
-              console.log(`Share balance change: -${rawBalanceChange} raw (-${humanReadableBalanceChange.toFixed(9)} shares)`);
-              
-              // Compare the human-readable amounts
-              const expectedAmount = withdrawHumanReadable;
-              const actualAmount = humanReadableBalanceChange;
-              
-              // Use approximate comparison with a small tolerance due to potential rounding
-              const tolerance = 0.000001; // Allow for tiny rounding differences
-              if (Math.abs(actualAmount - expectedAmount) > tolerance) {
-                console.warn(`⚠️ Balance change doesn't match requested amount! Expected -${expectedAmount.toFixed(9)}, got -${actualAmount.toFixed(9)}`);
-              } else {
-                console.log('✅ Share balance change matches requested amount');
+              } catch (detailsError) {
+                console.warn(`Could not fetch transaction details: ${detailsError}`);
               }
-            } catch (balanceError) {
-              console.warn(`Could not fetch updated share balance: ${balanceError}`);
-            }
-          }
-        }
-      } catch (detailsError) {
-        console.warn(`Could not fetch transaction details: ${detailsError}`);
-      }
-      
+              
       return confirmedSignature;
       
     } catch (error: any) {
@@ -552,40 +552,40 @@ export async function testDepositSol(depositAmountSOL: number = 0.001): Promise<
       // Poll for transaction status using the same pattern as other tests
       console.log('Polling for transaction status...');
       const confirmedSignature = await pollTransactionStatus(connection, signature);
-
-      // Get transaction details for debugging
-      try {
+              
+              // Get transaction details for debugging
+              try {
         const txDetails = await connection.getTransaction(confirmedSignature, {
-          maxSupportedTransactionVersion: 0,
-        });
-        
-        if (txDetails && txDetails.meta) {
-          if (txDetails.meta.err) {
-            console.error(`Transaction error: ${JSON.stringify(txDetails.meta.err)}`);
-          } else {
-            console.log('Transaction successful!');
-            
-            // Log token balance changes if available
-            if (txDetails.meta.postTokenBalances && txDetails.meta.preTokenBalances) {
-              console.log('Token balance changes:');
-              txDetails.meta.postTokenBalances.forEach((postBalance) => {
-                const preBalance = txDetails.meta?.preTokenBalances?.find(
-                  (pre) => pre.accountIndex === postBalance.accountIndex
-                );
+                  maxSupportedTransactionVersion: 0,
+                });
                 
-                if (preBalance) {
-                  const change = (postBalance.uiTokenAmount.uiAmount || 0) - 
-                                (preBalance.uiTokenAmount.uiAmount || 0);
-                  console.log(`  Mint: ${postBalance.mint}, Change: ${change}`);
+                if (txDetails && txDetails.meta) {
+                  if (txDetails.meta.err) {
+                    console.error(`Transaction error: ${JSON.stringify(txDetails.meta.err)}`);
+                  } else {
+                    console.log('Transaction successful!');
+                    
+                    // Log token balance changes if available
+                    if (txDetails.meta.postTokenBalances && txDetails.meta.preTokenBalances) {
+                      console.log('Token balance changes:');
+                      txDetails.meta.postTokenBalances.forEach((postBalance) => {
+                        const preBalance = txDetails.meta?.preTokenBalances?.find(
+                          (pre) => pre.accountIndex === postBalance.accountIndex
+                        );
+                        
+                        if (preBalance) {
+                          const change = (postBalance.uiTokenAmount.uiAmount || 0) - 
+                                        (preBalance.uiTokenAmount.uiAmount || 0);
+                          console.log(`  Mint: ${postBalance.mint}, Change: ${change}`);
+                        }
+                      });
+                    }
+                  }
                 }
-              });
-            }
-          }
-        }
-      } catch (detailsError) {
-        console.warn(`Could not fetch transaction details: ${detailsError}`);
-      }
-      
+              } catch (detailsError) {
+                console.warn(`Could not fetch transaction details: ${detailsError}`);
+              }
+              
       console.log(`✅ Success! Signature: ${confirmedSignature}`);
       console.log(`🔍 Explorer: https://solscan.io/tx/${confirmedSignature}`);
       

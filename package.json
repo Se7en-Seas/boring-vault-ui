@@ -89,5 +89,10 @@
     "*": {
       "solana": ["dist/solana/sdk/index.d.ts"]
     }
+  },
+  "peerDependencies": {
+    "@solana/web3.js": "^1.77.0",
+    "@coral-xyz/anchor": "^0.31.1",
+    "@pythnetwork/pyth-solana-receiver": "^0.10.1"
   }
 }

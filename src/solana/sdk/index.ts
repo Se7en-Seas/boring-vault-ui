@@ -144,23 +144,23 @@ export class VaultSDK {
     // Token Program account (SPL tokens - both legacy and Token-2022)
     if (owner === TOKEN_PROGRAM_ID || owner === TOKEN_2022_PROGRAM_ID) {
       try {
-        // Extract data from the gill response
-        const data = Buffer.from(response.value.data[0], 'base64');
+      // Extract data from the gill response
+      const data = Buffer.from(response.value.data[0], 'base64');
         
         // Validate that the account has enough data to be a token account
         if (data.length < AccountLayout.span) {
           return '0';
         }
         
-        // Parse token account data
-        const accountData = AccountLayout.decode(data);
-        return accountData.amount.toString();
+      // Parse token account data
+      const accountData = AccountLayout.decode(data);
+      return accountData.amount.toString();
       } catch (error) {
         // If we can't decode it as a token account, return 0
         return '0';
       }
     }
-    
+
     // Unknown account type
     return '0';
   }

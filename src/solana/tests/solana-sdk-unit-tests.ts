@@ -174,7 +174,7 @@ async function testTransactionFunctionality() {
       decimals: 9
     };
   };
-
+  
   // Mock the fetchShareValue method for testing
   vault.fetchShareValue = async (vaultId: number) => {
     console.log(`Mock: Getting share value for vault ID ${vaultId}`);
