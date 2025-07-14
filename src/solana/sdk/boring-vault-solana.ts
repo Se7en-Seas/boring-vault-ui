@@ -1,4 +1,4 @@
-import { web3 } from '@coral-xyz/anchor';
+import { web3, BorshCoder, Idl, BN } from '@coral-xyz/anchor';
 import { 
   TOKEN_PROGRAM_ID, 
   ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -16,10 +16,11 @@ import {
   BORING_VAULT_PROGRAM_ID,
   BORING_QUEUE_PROGRAM_ID,
   TOKEN_2022_PROGRAM_ID,
-  NATIVE_SOL_MINT
+  NATIVE_SOL_MINT,
+  DEFAULT_DECIMALS
 } from '../utils/constants';
 import { BalanceInfo, BoringVaultSolanaConfig } from '../types';
-import { parseFullVaultData } from './vault-state';
+import { parseFullVaultData, parseAssetData } from './vault-state';
 import { type SolanaClient, Address, createSolanaClient } from 'gill';
 import vaultIdl from '../idls/boring_vault_svm.json';
 import queueIdl from '../idls/boring_onchain_queue.json';
@@ -30,10 +31,14 @@ import queueIdl from '../idls/boring_onchain_queue.json';
 export class BoringVaultSolana {
   private rpc: SolanaClient['rpc'];
   private programId: web3.PublicKey;
+  private vaultCoder: BorshCoder;
+  private queueCoder: BorshCoder;
   
   constructor({ solanaClient, programId }: BoringVaultSolanaConfig) {
     this.rpc = solanaClient.rpc;
     this.programId = new web3.PublicKey(programId);
+    this.vaultCoder = new BorshCoder(vaultIdl as Idl);
+    this.queueCoder = new BorshCoder(queueIdl as Idl);
   }
 
   /**
@@ -128,8 +133,8 @@ export class BoringVaultSolana {
     // Use parseFullVaultData from vault-state.ts, which already uses the Anchor coder
     const fullVaultData = parseFullVaultData(data);
     return { 
-      depositSubAccount: fullVaultData.vaultState.depositSubAccount,
-      withdrawSubAccount: fullVaultData.vaultState.withdrawSubAccount
+      depositSubAccount: fullVaultData.config.depositSubAccount,
+      withdrawSubAccount: fullVaultData.config.withdrawSubAccount
     };
   }
 
@@ -208,7 +213,130 @@ export class BoringVaultSolana {
       decimals
     };
   }
+
+  /**
+   * Get the value of 1 share in terms of the underlying base asset
+   * Uses the exchange_rate stored in the vault state
+   */
+  async fetchShareValue(vaultId: number): Promise<BalanceInfo> {
+    try {
+      // Get the vault state PDA and fetch the vault data
+      const vaultStatePDA = await this.getVaultStatePDA(vaultId);
+      
+      // Convert web3.PublicKey to Address type for gill
+      const address = vaultStatePDA.toBase58() as Address;
+      const response = await this.rpc.getAccountInfo(
+        address,
+        { encoding: 'base64' }
+      ).send();
+      
+      if (!response.value || !response.value.data || !response.value.data.length) {
+        throw new Error(`Vault state not found for vault ID ${vaultId}`);
+      }
+      
+      // Parse the vault data to get the exchange rate
+      const data = Buffer.from(response.value.data[0], 'base64');
+      const fullVaultData = parseFullVaultData(data);
+      
+      if (!fullVaultData.teller) {
+        throw new Error(`Teller state not found in vault ${vaultId}`);
+      }
+      
+      // Get the exchange rate from the teller state
+      const rawExchangeRate = fullVaultData.teller.exchangeRate;
+      
+      // Get the base asset decimals from the teller state
+      const baseAssetDecimals = fullVaultData.teller.decimals;
+      
+      // Return raw data - formatting will be done in the high-level API
+      return {
+        raw: rawExchangeRate,
+        formatted: rawExchangeRate.toString(), // Just return the raw string for now
+        decimals: baseAssetDecimals
+      };
+      
+    } catch (error) {
+      console.error('Error fetching share value:', error);
+      throw new Error(`Failed to fetch share value for vault ${vaultId}: ${error}`);
+    }
+  }
   
+  /**
+   * Get the total supply of share tokens for a vault
+   * @param vaultId - The vault ID
+   * @returns BalanceInfo with the total supply of share tokens
+   */
+  async fetchShareMintSupply(vaultId: number): Promise<BalanceInfo> {
+    try {
+      // Get the vault state PDA and share token mint PDA
+      const vaultStatePDA = await this.getVaultStatePDA(vaultId);
+      const shareMintPDA = await this.getShareTokenPDA(vaultStatePDA);
+      
+      // Get the share token mint account info
+      const shareMintAddress = shareMintPDA.toBase58() as Address;
+      const mintResponse = await this.rpc.getAccountInfo(
+        shareMintAddress,
+        { encoding: 'base64' }
+      ).send();
+      
+      if (!mintResponse.value || !mintResponse.value.data || !mintResponse.value.data.length) {
+        throw new Error(`Share token mint account not found for vault ${vaultId}`);
+      }
+      
+      // Decode the mint data to get the supply
+      const mintData = MintLayout.decode(Buffer.from(mintResponse.value.data[0], 'base64'));
+      
+      // Return raw data - formatting will be done in the high-level API
+      return {
+        raw: mintData.supply,
+        formatted: mintData.supply.toString(), // Just return the raw string for now
+        decimals: mintData.decimals
+      };
+      
+    } catch (error) {
+      console.error('Error fetching share mint supply:', error);
+      throw new Error(`Failed to fetch share mint supply for vault ${vaultId}: ${error}`);
+    }
+  }
+
+  /**
+   * Get the total assets (TVL) of a vault in terms of the base asset
+   * Calculated as: total share supply * exchange rate
+   * @param vaultId - The vault ID
+   * @returns BalanceInfo with the total assets value in terms of the base asset
+   */
+  async fetchTotalAssets(vaultId: number): Promise<BalanceInfo> {
+    try {
+      // Get both the share supply and share value
+      const [shareSupply, shareValue] = await Promise.all([
+        this.fetchShareMintSupply(vaultId),
+        this.fetchShareValue(vaultId)
+      ]);
+      
+      // Calculate total assets = total shares * share value
+      // Both values are in their respective decimal formats, so we need to handle the math carefully
+      // shareSupply.raw is in share token decimals
+      // shareValue.raw is in base asset decimals (exchange rate)
+      
+      // The exchange rate represents how much base asset 1 share is worth
+      // So: totalAssets = (shareSupply.raw * shareValue.raw) / (10^shareSupply.decimals)
+      // This gives us the result in base asset decimals
+      
+      const totalAssetsRaw = (shareSupply.raw * shareValue.raw) / BigInt(Math.pow(10, shareSupply.decimals));
+      
+      // Return raw data - formatting will be done in the high-level API
+      return {
+        raw: totalAssetsRaw,
+        formatted: totalAssetsRaw.toString(), // Just return the raw string for now
+        decimals: shareValue.decimals // Use base asset decimals
+      };
+      
+    } catch (error) {
+      console.error('Error fetching total assets:', error);
+      throw new Error(`Failed to fetch total assets for vault ${vaultId}: ${error}`);
+    }
+  }
+
   /**
    * Helper to format raw balance with decimals
    */
@@ -260,6 +388,14 @@ export class BoringVaultSolana {
       throw new Error(`Instruction '${instructionName}' or its discriminator not found in IDL`);
     }
     return Buffer.from(instruction.discriminator);
+  }
+
+  /**
+   * Generic serialization function for instruction arguments using BorshCoder
+   */
+  private serializeArgs<T>(typeName: string, args: T, idl: 'vault' | 'queue' = 'vault'): Buffer {
+    const coder = idl === 'vault' ? this.vaultCoder : this.queueCoder;
+    return coder.types.encode(typeName, args);
   }
 
   /**
@@ -359,16 +495,16 @@ export class BoringVaultSolana {
       throw new Error(`Asset data not found for ${assetType} deposits`);
     }
     
-    // Parse asset data using the parseFullVaultData function
+    // Parse asset data using the parseAssetData function
     const assetDataBuffer = Buffer.from(assetDataResponse.value.data[0], 'base64');
-    const parsedAssetData = parseFullVaultData(assetDataBuffer);
+    const parsedAssetData = parseAssetData(assetDataBuffer);
 
     // Get price feed address from the parsed asset data
-    if (!parsedAssetData.assetData || !parsedAssetData.assetData.priceFeed) {
+    if (!parsedAssetData.priceFeed) {
       throw new Error(`Price feed not found in asset data for ${assetType} deposits`);
     }
     
-    const priceFeedAddress = parsedAssetData.assetData.priceFeed;
+    const priceFeedAddress = parsedAssetData.priceFeed;
     console.log(`DEBUG: Price Feed Address: ${priceFeedAddress.toString()}`);
 
     return {
@@ -499,33 +635,19 @@ export class BoringVaultSolana {
   }
 
   /**
-   * Serializes deposit arguments into a buffer
+   * Serializes deposit arguments using BorshCoder
    */
   private serializeDepositArgs(vaultId: number, depositAmount: bigint, minMintAmount: bigint): Buffer {
-    const buffer = Buffer.alloc(24); // 8 bytes for each u64
+    const depositArgs = {
+      vault_id: new BN(vaultId),
+      deposit_amount: new BN(depositAmount.toString()),
+      min_mint_amount: new BN(minMintAmount.toString())
+    };
     
-    // Write vaultId as u64 LE
-    this.writeUint64LE(buffer, BigInt(vaultId), 0);
-    
-    // Write depositAmount as u64 LE
-    this.writeUint64LE(buffer, depositAmount, 8);
-    
-    // Write minMintAmount as u64 LE
-    this.writeUint64LE(buffer, minMintAmount, 16);
-    
-    return buffer;
+    return this.serializeArgs('DepositArgs', depositArgs, 'vault');
   }
 
-  /**
-   * Helper to write a uint64 to a buffer in little-endian format
-   */
-  private writeUint64LE(buffer: Buffer, value: bigint, offset: number): void {
-    const low = Number(value & BigInt(0xffffffff));
-    const high = Number(value >> BigInt(32) & BigInt(0xffffffff));
-    
-    buffer.writeUint32LE(low, offset);
-    buffer.writeUint32LE(high, offset + 4);
-  }
+
 
   /**
    * Deposits SPL tokens into the vault
@@ -560,7 +682,7 @@ export class BoringVaultSolana {
   }
 
   /**
-   * Serializes request_withdraw arguments into a buffer
+   * Serializes request_withdraw arguments using BorshCoder
    */
   private serializeRequestWithdrawArgs(
     vaultId: number, 
@@ -568,28 +690,14 @@ export class BoringVaultSolana {
     discount: number,
     secondsToDeadline: number
   ): Buffer {
-    // From the IDL: vault_id (u64), share_amount (u64), discount (u16), seconds_to_deadline (u32)
-    const buffer = Buffer.alloc(22); // 8 + 8 + 2 + 4 bytes
+    const requestWithdrawArgs = {
+      vault_id: new BN(vaultId),
+      share_amount: new BN(shareAmount.toString()),
+      discount: discount,
+      seconds_to_deadline: secondsToDeadline
+    };
     
-    console.log(`DEBUG: Serializing request_withdraw args:`);
-    console.log(`  - vaultId: ${vaultId} (${typeof vaultId})`);
-    console.log(`  - shareAmount: ${shareAmount.toString()} (${typeof shareAmount})`);
-    console.log(`  - discount: ${discount} (${typeof discount})`);
-    console.log(`  - secondsToDeadline: ${secondsToDeadline} (${typeof secondsToDeadline})`);
-    
-    // Write vaultId as u64 LE
-    this.writeUint64LE(buffer, BigInt(vaultId), 0);
-    
-    // Write shareAmount as u64 LE
-    this.writeUint64LE(buffer, shareAmount, 8);
-    
-    // Write discount as u16 LE
-    buffer.writeUInt16LE(discount, 16);
-    
-    // Write secondsToDeadline as u32 LE
-    buffer.writeUInt32LE(secondsToDeadline, 18);
-    
-    return buffer;
+    return this.serializeArgs('RequestWithdrawArgs', requestWithdrawArgs, 'queue');
   }
 
   /**
@@ -861,8 +969,8 @@ export class BoringVaultSolana {
     }
     // Parse asset data to get the price feed
     const assetDataBuffer = Buffer.from(assetDataResponse.value.data[0], 'base64');
-    const parsedAssetData = parseFullVaultData(assetDataBuffer);
-    const priceFeedAddress = parsedAssetData.assetData?.priceFeed;
+    const parsedAssetData = parseAssetData(assetDataBuffer);
+    const priceFeedAddress = parsedAssetData.priceFeed;
     if (!priceFeedAddress) {
       throw new Error(`Price feed not found in asset data for mint ${tokenOut.toString()}`);
     }

@@ -3,8 +3,6 @@ title: Solana Vault Integration
 description: Complete SDK for interacting with Boring Vault on Solana blockchain
 ---
 
-> **🎉 New in v1.9.7:** Added `boringQueueStatuses` function for tracking withdraw request status with automatic filtering and performance optimization.
-
 ## Introduction
 
 The Boring Vault Solana SDK provides comprehensive tools for interacting with Boring Vault on the Solana blockchain. This SDK supports both SPL token deposits and native SOL deposits, along with queued withdrawals and comprehensive vault management.
@@ -15,16 +13,55 @@ The Boring Vault Solana SDK provides comprehensive tools for interacting with Bo
 - ✅ **Native SOL Deposits** - Direct SOL deposits without wrapping
 - ✅ **Queued Withdrawals** - Request withdrawals through the Boring Queue system
 - ✅ **Withdraw Status Tracking** - Check status of pending withdraw requests
+- ✅ **Vault Information** - Get share values, supply, and total assets (TVL)
 - ✅ **Input Validation** - Automatic validation of deposit amounts and parameters
 - ✅ **Wallet Support** - Compatible with both wallet adapters and keypairs
 - ✅ **Error Handling** - Comprehensive error handling with detailed messages
 - ✅ **Transaction Monitoring** - Built-in transaction status polling and explorer links
 
+## Installation & Dependency Management
+
+### Installation
+
+```bash
+npm install boring-vault-ui
+```
+
+### Handling Dependency Conflicts
+
+Due to version conflicts in the Solana ecosystem, you may encounter module resolution errors. If you see errors like:
+
+```
+Error: Package subpath './dist/lib/client' is not defined by "exports" in .../rpc-websockets/package.json
+```
+
+Add the following **overrides** to your `package.json`:
+
+```json
+{
+  "overrides": {
+    "@coral-xyz/anchor": {
+      "@solana/web3.js": "^1.98.0"
+    },
+    "@pythnetwork/pyth-solana-receiver": {
+      "@solana/web3.js": "^1.77.0"
+    }
+  }
+}
+```
+
+After adding the overrides, run:
+
+```bash
+rm -rf node_modules package-lock.json
+npm install
+```
+
 ## VaultSDK
 
 The `VaultSDK` class is the main interface for interacting with Boring Vault on Solana.
 
-### Installation & Setup
+### Setup
 
 ```tsx
 import { VaultSDK } from 'boring-vault-ui';
@@ -103,6 +140,58 @@ async function checkVaultBalance() {
   } catch (error) {
     console.error('Error fetching vault balance:', error);
     return '0';
+  }
+}
+```
+
+#### Get Share Value
+
+Get the value of 1 share in terms of the underlying base asset.
+
+```tsx
+async function getShareValue() {
+  const vaultId = 1;
+  
+  try {
+    const shareValue = await vaultSDK.fetchShareValue(vaultId);
+    
+    console.log(`1 share = ${shareValue} base asset units`);
+    console.log(`Current exchange rate: ${shareValue}`);
+    
+    return shareValue;
+  } catch (error) {
+    console.error('Error fetching share value:', error);
+    return 0;
+  }
+}
+```
+
+#### Get Total Assets (TVL)
+
+Get the total value locked (TVL) in a vault, calculated as total shares × share value.
+
+```tsx
+async function getVaultTVL() {
+  const vaultId = 1;
+  
+  try {
+    const totalAssets = await vaultSDK.fetchTotalAssets(vaultId);
+    
+    console.log(`Vault TVL: ${totalAssets} base asset units`);
+    console.log(`Total value locked: ${totalAssets}`);
+    
+    // You can also verify the calculation manually
+    const shareSupply = await vaultSDK.fetchShareMintSupply(vaultId);
+    const shareValue = await vaultSDK.fetchShareValue(vaultId);
+    const calculatedTVL = shareSupply * shareValue;
+    
+    console.log(`Manual calculation: ${shareSupply} × ${shareValue} = ${calculatedTVL}`);
+    console.log(`Direct fetch: ${totalAssets}`);
+    
+    return totalAssets;
+  } catch (error) {
+    console.error('Error fetching total assets:', error);
+    return 0;
   }
 }
 ```
@@ -449,7 +538,14 @@ async function vaultOperationsExample() {
     );
     console.log(`User Shares: ${userShares}`);
     
-    // 4. Deposit SOL
+    // 4. Get share value and total assets
+    console.log('\n=== Checking Share Value & TVL ===');
+    const shareValue = await vaultSDK.fetchShareValue(vaultId);
+    const totalAssets = await vaultSDK.fetchTotalAssets(vaultId);
+    console.log(`Share Value: ${shareValue} base asset units`);
+    console.log(`Total Assets (TVL): ${totalAssets} base asset units`);
+    
+    // 5. Deposit SOL
     console.log('\n=== Depositing SOL ===');
     const depositAmount = BigInt('100000000'); // 0.1 SOL
     const minMintAmount = BigInt('95000000');  // 5% slippage
@@ -462,7 +558,7 @@ async function vaultOperationsExample() {
     );
     console.log(`SOL Deposit Success: ${depositSignature}`);
     
-    // 5. Queue withdrawal
+    // 6. Queue withdrawal
     console.log('\n=== Queuing Withdrawal ===');
     const withdrawSignature = await vaultSDK.queueBoringWithdraw(
       wallet,
@@ -526,7 +622,7 @@ interface TransactionOptions {
 To guarantee the freshest JitoSOL/SOL price — crank the Pyth oracle just before sending your state-changing transaction:
 
 ```tsx
-import { buildPythOracleCrankTransactions } from 'boring-vault-ui/solana/';
+import { buildPythOracleCrankTransactions } from 'boring-vault-ui/solana';
 import { JITOSOL_SOL_PYTH_FEED } from 'boring-vault-ui';
 
 const { transactions, signers } = await buildPythOracleCrankTransactions(
@@ -581,6 +677,69 @@ async function checkUserShares() {
     return userShares;
   } catch (error) {
     console.error('Error fetching user shares:', error);
+    return 0;
+  }
+}
+```
+
+### fetchShareValue
+
+This function retrieves the value for 1 share of the vault in terms of the underlying baseAsset.
+
+#### Inputs
+
+- **vaultId**: The vault ID to get the share value for
+
+#### Outputs
+
+A promise that returns the decimal adjusted (human readable) numerical value for 1 share in terms of the underlying baseAsset as a `number`.
+
+#### Example
+
+```tsx
+async function checkShareValue() {
+  const vaultId = 1;
+  
+  try {
+    const shareValue = await vaultSDK.fetchShareValue(vaultId);
+    
+    console.log(`1 share = ${shareValue} base asset units`);
+    console.log(`Current exchange rate: ${shareValue}`);
+    
+    return shareValue;
+  } catch (error) {
+    console.error('Error fetching share value:', error);
+    return 0;
+  }
+}
+```
+
+### fetchTotalAssets
+
+This function retrieves a vault's TVL in terms of the baseAsset of the vault. Calculated as total shares × share value.
+
+#### Inputs
+
+- **vaultId**: The vault ID to get the total assets for
+
+#### Outputs
+
+A promise that returns the decimal adjusted (human readable) total asset numerical value of the vault (aka TVL) in terms of the baseAsset as a `number`.
+
+#### Example
+
+```tsx
+async function checkVaultTVL() {
+  const vaultId = 1;
+  
+  try {
+    const totalAssets = await vaultSDK.fetchTotalAssets(vaultId);
+    
+    console.log(`Vault TVL: ${totalAssets} base asset units`);
+    
+    return totalAssets;
+  } catch (error) {
+    console.error('Error fetching total assets:', error);
     return 0;
   }
 }

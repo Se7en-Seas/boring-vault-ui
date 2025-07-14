@@ -1,227 +1,158 @@
-import { web3, Idl, BorshCoder } from '@coral-xyz/anchor';
+import { Idl, BorshCoder } from '@coral-xyz/anchor';
 import vaultIdl from '../idls/boring_vault_svm.json';
+import { VaultState, TellerState, ManagerState, AssetData, FullVaultData, OracleSource } from '../types';
 
-// Complete Vault State structure from IDL
-export interface VaultState {
-  vaultId: bigint;
-  authority: web3.PublicKey;
-  pendingAuthority: web3.PublicKey;
-  paused: boolean;
-  shareMint: web3.PublicKey;
-  depositSubAccount: number;
-  withdrawSubAccount: number;
-}
+// Create BorshCoder instance
+const coder = new BorshCoder(vaultIdl as Idl);
 
-// Correctly matches AssetData from IDL
-export interface AssetData {
-  allowDeposits: boolean;
-  allowWithdrawals: boolean;
-  sharePremiumBps: number;
-  isPeggedToBaseAsset: boolean;
-  priceFeed: web3.PublicKey;
-  inversePriceFeed: boolean;
-  maxStaleness: bigint;
-  minSamples: number;
-}
+// Import discriminators directly from IDL with proper validation
+const VAULT_DISCRIMINATORS = {
+  AssetData: vaultIdl.accounts.find(acc => acc.name === 'AssetData')?.discriminator 
+    ?? (() => { throw new Error('AssetData discriminator missing from IDL') })(),
+  BoringVault: vaultIdl.accounts.find(acc => acc.name === 'BoringVault')?.discriminator 
+    ?? (() => { throw new Error('BoringVault discriminator missing from IDL') })(),
+  CpiDigest: vaultIdl.accounts.find(acc => acc.name === 'CpiDigest')?.discriminator 
+    ?? (() => { throw new Error('CpiDigest discriminator missing from IDL') })(),
+  ProgramConfig: vaultIdl.accounts.find(acc => acc.name === 'ProgramConfig')?.discriminator 
+    ?? (() => { throw new Error('ProgramConfig discriminator missing from IDL') })(),
+} as const;
 
-// TellerState structure from IDL
-export interface TellerState {
-  baseAsset: web3.PublicKey;
-  decimals: number;
-  exchangeRateProvider: web3.PublicKey;
-  exchangeRate: bigint;
-  exchangeRateHighWaterMark: bigint;
-  feesOwedInBaseAsset: bigint;
-  totalSharesLastUpdate: bigint;
-  lastUpdateTimestamp: bigint;
-  payoutAddress: web3.PublicKey;
-  allowedExchangeRateChangeUpperBound: number;
-  allowedExchangeRateChangeLowerBound: number;
-  minimumUpdateDelayInSeconds: number;
-  platformFeeBps: number;
-  performanceFeeBps: number;
-  withdrawAuthority: web3.PublicKey;
-}
+/**
+ * Parse vault state data using BorshCoder - much cleaner approach
+ */
+export function parseVaultState(data: Buffer): FullVaultData {
+  try {
+    const decoded = coder.accounts.decode('BoringVault', data);
+    
+    // Simple field mapping - BorshCoder handles the heavy lifting
+    const config: VaultState = {
+      vaultId: BigInt(decoded.config.vault_id),
+      authority: decoded.config.authority,
+      pendingAuthority: decoded.config.pending_authority,
+      paused: decoded.config.paused,
+      shareMint: decoded.config.share_mint,
+      depositSubAccount: decoded.config.deposit_sub_account,
+      withdrawSubAccount: decoded.config.withdraw_sub_account,
+    };
 
-// Full vault account data with all parsed structures
-export interface FullVaultData {
-  discriminator: string;
-  vaultState: VaultState;
-  tellerState?: TellerState;
-  assetData?: AssetData; // The actual AssetData from the IDL
-  rawData: Buffer;
-  // Added properties to support enhanced data display
-  tokenMint?: web3.PublicKey;
-  readableData?: {
-    vaultId: string;
-    paused: boolean;
-    baseAsset: string;
-    baseAssetMinimum?: string;
-    exchangeRate: string;
-    feesOwed: string;
-    totalShares: string;
-    lastUpdate: string;
-    platformFee: string;
-    performanceFee: string;
-    [key: string]: any; // Allow additional properties
-  };
+    const teller: TellerState = {
+      baseAsset: decoded.teller.base_asset,
+      decimals: decoded.teller.decimals,
+      exchangeRateProvider: decoded.teller.exchange_rate_provider,
+      exchangeRate: BigInt(decoded.teller.exchange_rate),
+      exchangeRateHighWaterMark: BigInt(decoded.teller.exchange_rate_high_water_mark),
+      feesOwedInBaseAsset: BigInt(decoded.teller.fees_owed_in_base_asset),
+      totalSharesLastUpdate: BigInt(decoded.teller.total_shares_last_update),
+      lastUpdateTimestamp: BigInt(decoded.teller.last_update_timestamp),
+      payoutAddress: decoded.teller.payout_address,
+      allowedExchangeRateChangeUpperBound: decoded.teller.allowed_exchange_rate_change_upper_bound,
+      allowedExchangeRateChangeLowerBound: decoded.teller.allowed_exchange_rate_change_lower_bound,
+      minimumUpdateDelayInSeconds: decoded.teller.minimum_update_delay_in_seconds,
+      platformFeeBps: decoded.teller.platform_fee_bps,
+      performanceFeeBps: decoded.teller.performance_fee_bps,
+      withdrawAuthority: decoded.teller.withdraw_authority,
+    };
+
+    const manager: ManagerState = {
+      strategist: decoded.manager.strategist,
+    };
+
+    return {
+      config,
+      teller,
+      manager,
+    };
+  } catch (error) {
+    throw new Error(`Failed to parse BoringVault state: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 /**
- * Parse buffer data into a complete vault account structure using IDL
+ * Parse asset data using BorshCoder
+ */
+export function parseAssetData(data: Buffer): AssetData {
+  try {
+    const decoded = coder.accounts.decode('AssetData', data);
+    
+    // Map oracle source enum with proper type safety - handle PascalCase format from BorshCoder
+    let oracleSource: OracleSource;
+    if (decoded.oracle_source.SwitchboardV2 !== undefined) {
+      oracleSource = { switchboardV2: {} };
+    } else if (decoded.oracle_source.Pyth !== undefined) {
+      oracleSource = { pyth: {} };
+    } else if (decoded.oracle_source.PythV2 !== undefined) {
+      oracleSource = { pythV2: {} };
+    } else {
+      throw new Error(`Unknown oracle source type. Available types: ${Object.keys(decoded.oracle_source).join(', ')}`);
+    }
+    
+    return {
+      allowDeposits: decoded.allow_deposits,
+      allowWithdrawals: decoded.allow_withdrawals,
+      sharePremiumBps: decoded.share_premium_bps,
+      isPeggedToBaseAsset: decoded.is_pegged_to_base_asset,
+      priceFeed: decoded.price_feed,
+      inversePriceFeed: decoded.inverse_price_feed,
+      maxStaleness: BigInt(decoded.max_staleness),
+      minSamples: decoded.min_samples,
+      oracleSource,
+      feedId: decoded.feed_id,
+    };
+  } catch (error) {
+    throw new Error(`Failed to parse AssetData: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
+ * Determine account type from discriminator using IDL discriminators
+ */
+export function getAccountType(data: Buffer): string | null {
+  if (data.length < 8) {
+    throw new Error(`Buffer too short for discriminator: got ${data.length} bytes, expected at least 8 bytes`);
+  }
+  
+  const discriminator = Array.from(data.slice(0, 8));
+  
+  for (const [accountType, expectedDiscriminator] of Object.entries(VAULT_DISCRIMINATORS)) {
+    if (expectedDiscriminator && expectedDiscriminator.length === 8 &&
+        discriminator.every((byte, i) => byte === expectedDiscriminator[i])) {
+      return accountType;
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Legacy function for backward compatibility - now much simpler
  */
 export function parseFullVaultData(data: Buffer): FullVaultData {
-  // Keep a copy of the raw data
-  const rawData = Buffer.from(data);
+  const accountType = getAccountType(data);
   
-  // Initialize BorshCoder with the IDL
-  const coder = new BorshCoder(vaultIdl as Idl);
-  
-  // Extract the account discriminator (first 8 bytes)
-  const discriminator = data.slice(0, 8);
-  const discriminatorHex = Buffer.from(discriminator).toString('hex');
-  
-  // Find the account type by discriminator
-  let accountType = '';
-  
-  // Go through all account types in the IDL
-  const accountTypes = Object.keys((vaultIdl as any).accounts || []);
-  for (const name of accountTypes) {
-    try {
-      // Get discriminator for this account type
-      const accountDiscriminator = coder.accounts.accountDiscriminator(name);
-      if (Buffer.from(accountDiscriminator).toString('hex') === discriminatorHex) {
-        accountType = name;
-        break;
-      }
-    } catch (e) {
-      // Skip if we can't get discriminator for this account type
-      console.log(`Could not get discriminator for account type: ${name}`);
-    }
-  }
-
-  // If we couldn't identify the account type, try with defined discriminators from IDL
-  if (!accountType) {
-    // Try to use the discriminators directly from the IDL if available
-    for (const account of (vaultIdl as any).accounts || []) {
-      if (account.discriminator) {
-        const accDiscBuffer = Buffer.from(account.discriminator);
-        if (accDiscBuffer.toString('hex') === discriminatorHex) {
-          accountType = account.name;
-          break;
-        }
-      }
-    }
-  }
-
-  // If we couldn't identify the account type, throw an error
-  if (!accountType) {
-    throw new Error(`Unknown account discriminator: ${discriminatorHex}`);
+  if (accountType !== 'BoringVault') {
+    throw new Error(`Expected BoringVault account, got ${accountType}`);
   }
   
-  // Deserialize the account data according to its type
-  let accountData;
-  try {
-    accountData = coder.accounts.decode(accountType, data);
-  } catch (e) {
-    console.error(`Error decoding account data: ${e}`);
-    throw new Error(`Failed to decode account data: ${e}`);
-  }
-  
-  // Initialize vault state and teller state objects
-  let vaultState: VaultState = {
-    vaultId: BigInt(0),
-    authority: new web3.PublicKey(0),
-    pendingAuthority: new web3.PublicKey(0),
-    paused: false,
-    shareMint: new web3.PublicKey(0),
-    depositSubAccount: 0,
-    withdrawSubAccount: 0
-  };
-  
-  let tellerState: TellerState | undefined;
-  let assetData: AssetData | undefined;
-  
-  // Parse based on account type
-  if (accountType === 'BoringVault') {
-    // For BoringVault, extract vaultState from the config field
-    vaultState = {
-      vaultId: accountData.config?.vault_id ? BigInt(accountData.config.vault_id.toString()) : BigInt(0),
-      authority: accountData.config?.authority || new web3.PublicKey(0),
-      pendingAuthority: accountData.config?.pending_authority || new web3.PublicKey(0),
-      paused: accountData.config?.paused || false,
-      shareMint: accountData.config?.share_mint || new web3.PublicKey(0),
-      depositSubAccount: accountData.config?.deposit_sub_account || 0,
-      withdrawSubAccount: accountData.config?.withdraw_sub_account || 0
-    };
-    
-    // Extract teller state from the teller field
-    if (accountData.teller) {
-      tellerState = {
-        baseAsset: accountData.teller.base_asset || new web3.PublicKey(0),
-        decimals: accountData.teller.decimals || 0,
-        exchangeRateProvider: accountData.teller.exchange_rate_provider || new web3.PublicKey(0),
-        exchangeRate: accountData.teller.exchange_rate ? BigInt(accountData.teller.exchange_rate.toString()) : BigInt(0),
-        exchangeRateHighWaterMark: accountData.teller.exchange_rate_high_water_mark ? BigInt(accountData.teller.exchange_rate_high_water_mark.toString()) : BigInt(0),
-        feesOwedInBaseAsset: accountData.teller.fees_owed_in_base_asset ? BigInt(accountData.teller.fees_owed_in_base_asset.toString()) : BigInt(0),
-        totalSharesLastUpdate: accountData.teller.total_shares_last_update ? BigInt(accountData.teller.total_shares_last_update.toString()) : BigInt(0),
-        lastUpdateTimestamp: accountData.teller.last_update_timestamp ? BigInt(accountData.teller.last_update_timestamp.toString()) : BigInt(0),
-        payoutAddress: accountData.teller.payout_address || new web3.PublicKey(0),
-        allowedExchangeRateChangeUpperBound: accountData.teller.allowed_exchange_rate_change_upper_bound || 0,
-        allowedExchangeRateChangeLowerBound: accountData.teller.allowed_exchange_rate_change_lower_bound || 0,
-        minimumUpdateDelayInSeconds: accountData.teller.minimum_update_delay_in_seconds || 0,
-        platformFeeBps: accountData.teller.platform_fee_bps || 0,
-        performanceFeeBps: accountData.teller.performance_fee_bps || 0,
-        withdrawAuthority: accountData.teller.withdraw_authority || new web3.PublicKey(0)
-      };
-    }
-  } else if (accountType === 'AssetData') {
-    // Parse AssetData account
-    assetData = {
-      allowDeposits: accountData.allow_deposits || false,
-      allowWithdrawals: accountData.allow_withdrawals || false,
-      sharePremiumBps: accountData.share_premium_bps || 0,
-      isPeggedToBaseAsset: accountData.is_pegged_to_base_asset || false,
-      priceFeed: accountData.price_feed || new web3.PublicKey(0),
-      inversePriceFeed: accountData.inverse_price_feed || false,
-      maxStaleness: accountData.max_staleness ? BigInt(accountData.max_staleness.toString()) : BigInt(0),
-      minSamples: accountData.min_samples || 0
-    };
-  }
-  
-  // Create readable data for display
-  const readableData = {
-    vaultId: vaultState.vaultId.toString(),
-    paused: vaultState.paused,
-    baseAsset: tellerState ? tellerState.baseAsset.toString() : 'Unknown',
-    exchangeRate: tellerState ? formatBNWithDecimals(tellerState.exchangeRate, 9) : '0',
-    feesOwed: tellerState ? formatBNWithDecimals(tellerState.feesOwedInBaseAsset, 9) : '0',
-    totalShares: tellerState ? formatBNWithDecimals(tellerState.totalSharesLastUpdate, 9) : '0',
-    lastUpdate: tellerState ? new Date(Number(tellerState.lastUpdateTimestamp) * 1000).toISOString() : 'Unknown',
-    platformFee: tellerState ? `${tellerState.platformFeeBps / 100}%` : '0%',
-    performanceFee: tellerState ? `${tellerState.performanceFeeBps / 100}%` : '0%'
-  };
-
-  // Set tokenMint to baseAsset if available
-  const tokenMint = tellerState ? tellerState.baseAsset : undefined;
-  
-  return {
-    discriminator: discriminatorHex,
-    vaultState,
-    tellerState,
-    assetData,
-    rawData,
-    tokenMint,
-    readableData
-  };
+  return parseVaultState(data);
 }
 
 /**
- * Format a BN value to a readable string with decimals
+ * Helper function to get exchange rate from parsed vault data
  */
-export function formatBNWithDecimals(amount: bigint, decimals: number): string {
-  const amountStr = amount.toString().padStart(decimals + 1, '0');
-  const integerPart = amountStr.slice(0, -decimals) || '0';
-  const decimalPart = amountStr.slice(-decimals);
-  return `${integerPart}.${decimalPart}`;
+export function getExchangeRate(vaultData: FullVaultData): bigint {
+  return vaultData.teller.exchangeRate;
+}
+
+/**
+ * Helper function to get base asset decimals from parsed vault data
+ */
+export function getBaseAssetDecimals(vaultData: FullVaultData): number {
+  return vaultData.teller.decimals;
+}
+
+/**
+ * Helper function to check if vault is paused
+ */
+export function isVaultPaused(vaultData: FullVaultData): boolean {
+  return vaultData.config.paused;
 } 
