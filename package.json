@@ -1,6 +1,6 @@
 {
   "name": "boring-vault-ui",
-  "version": "1.9.9",
+  "version": "1.9.8",
   "description": "A reusable package to quickly integrate boring vaults onto a UI.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -89,10 +89,5 @@
     "*": {
       "solana": ["dist/solana/sdk/index.d.ts"]
     }
-  },
-  "peerDependencies": {
-    "@solana/web3.js": ">=1.77.0 <2.0.0",
-    "@coral-xyz/anchor": "^0.31.1",
-    "@pythnetwork/pyth-solana-receiver": "^0.10.1"
   }
 }
