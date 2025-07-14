@@ -1,4 +1,4 @@
-import { Transaction } from "@mysten/sui/transactions";
+import { Transaction, TransactionResult } from "@mysten/sui/transactions";
 import { signAndExecute, getClient, Network } from "./utils/execute";
 import {
   cancelWithdrawByReqIdAndTransfer,
@@ -7,7 +7,6 @@ import {
   requestWithdraw,
 } from "./gen/boring_vault/boring-vault/functions";
 import { DENY_LIST_ID } from "./config";
-import { split } from "./gen/sui/coin/functions";
 import {
   CoinBalance,
   MoveStruct,
@@ -20,6 +19,9 @@ import { formatUnits, parseUnits } from "viem";
 import { AddressTypeKey, DepositableAsset, QueueKey } from "./gen/boring_vault/boring-vault/structs";
 import { FieldsWithTypes } from "./gen/_framework/util";
 import { phantom } from "./gen/_framework/reified";
+import { isSUI } from "./gen/sui/sui/structs";
+
+Error.stackTraceLimit = Infinity;
 
 type AccountantCache = {
   decimals: number;
@@ -90,22 +92,8 @@ export class SuiVaultSDK {
   ): Promise<SuiTransactionBlockResponse> {
     assetType = normalizeStructTag(assetType);
 
-    let depositAssetCoins = await this.client.getCoins({
-      owner: payerAddress,
-      coinType: assetType,
-    });
-
-    if (!depositAssetCoins.data.length) {
-      throw new Error(`No coins found for asset ${assetType}`);
-    }
-
     const depTx = new Transaction();
-
-    let coin = split(depTx, assetType, {
-      coin: depositAssetCoins.data[0].coinObjectId,
-      u64: parseUnits(depositAmount, await this.getDecimals()),
-    });
-
+    const coin = await this.#mergeAndSplitCoins(payerAddress, assetType, depositAmount, depTx);
     depositAndTransfer(depTx, [assetType, await this.getShareType()], {
       vault: this.vaultId,
       accountant: this.accountantId,
@@ -145,26 +133,12 @@ export class SuiVaultSDK {
     const msToDeadline = daysValid ? BigInt(Number(daysValid) * 86400) * 1000n :
       BigInt(await this.getAssetInfo(assetType).then((info) => info.minimumMsToDeadline));
 
-    const shareCoins = await this.client.getCoins({
-      owner: payerAddress,
-      coinType: shareType,
-    });
-
-    if (!shareCoins.data.length) {
-      throw new Error(`No shares found for type ${shareType}`);
-    }
-
     const withdrawTx = new Transaction();
-
-    let shares = split(withdrawTx, shareType, {
-      coin: shareCoins.data[0].coinObjectId,
-      u64: parseUnits(shareAmount, await this.getDecimals()),
-    });
-
+    const shares = await this.#mergeAndSplitCoins(payerAddress, shareType, shareAmount, withdrawTx);
     requestWithdraw(withdrawTx, [assetType, shareType], {
       vault: this.vaultId,
       accountant: this.accountantId,
-      coin: shares,
+      coin: shares as TransactionResult,
       u641: discount,
       u642: msToDeadline,
       clock: SUI_CLOCK_OBJECT_ID,
@@ -577,6 +551,72 @@ async getAssetInfo(assetType: string): Promise<DepositableAssetFields> {
       });
     }
     return depositableAssets;
+  }
+
+  // merge and split coins to get the amount of coins needed to deposit/withdraw
+  async #mergeAndSplitCoins(
+    ownerAddress: string,
+    assetType: string,
+    amount: string,
+    tx: Transaction,
+  ): Promise<TransactionResult> {
+    const initialBalance = await this.client.getBalance({
+      owner: ownerAddress,
+      coinType: assetType,
+    });
+    const currentTotal = BigInt(initialBalance.totalBalance);
+    const parsedAmount = parseUnits(amount, await this.getDecimals());
+    if (currentTotal < parsedAmount) {
+      throw new Error(`Insufficient balance for ${assetType}`);
+    }
+
+    // For native SUI, we can split directly from the gas coin
+    if (isSUI(assetType)) {
+      return tx.splitCoins(tx.gas, [parsedAmount]);
+    }
+
+    /*
+     * For other coin types we need to
+     * 1. Pick a target coin (first coin of first page)
+     * 2. If first coin doesn't cover it, merge the rest of the coins into it
+     * 3. Split the required amount out of the merged coin
+     *
+     * `getCoins` is paginated so we keep requesting pages until we
+     *  run out of pages.
+     */
+    let coinsPage = await this.client.getCoins({
+      owner: ownerAddress,
+      coinType: assetType,
+    });
+    // Pick the first coin as the target coin we will keep
+    const [firstCoin, ...rest] = coinsPage.data;
+
+    // Fast-path: one coin already covers the desired amount
+    if (BigInt(firstCoin.balance) >= parsedAmount) {
+      return tx.splitCoins(firstCoin.coinObjectId, [parsedAmount]);
+    }
+
+    // Merge the rest of the coins into the first coin
+    let coinsToMerge: string[] = rest.map((coin) => coin.coinObjectId);
+    let numPages = 1; // we cannot merge more than 10 pages (500 coin objects) in one PTB
+    let mergedBalance = BigInt(firstCoin.balance) + BigInt(rest.reduce((acc, coin) => acc + BigInt(coin.balance), 0n));
+    while (coinsPage.hasNextPage && numPages < 10) {
+      const nextPage = await this.client.getCoins({
+        owner: ownerAddress,
+        coinType: assetType,
+        cursor: coinsPage.nextCursor,
+      });
+      coinsToMerge.push(...nextPage.data.map((coin) => coin.coinObjectId));
+      // Calculate the total balance for this page of coins and add it to our running total
+      mergedBalance += BigInt(nextPage.data.reduce((acc, coin) => acc + BigInt(coin.balance), 0n));
+      coinsPage = nextPage;
+      numPages++;
+    }
+    if (mergedBalance < parsedAmount) {
+      throw new Error(`Insufficient balance for ${assetType} within 10 pages`);
+    }
+    tx.mergeCoins(firstCoin.coinObjectId, coinsToMerge);
+    return tx.splitCoins(firstCoin.coinObjectId, [parsedAmount]);
   }
 }
 

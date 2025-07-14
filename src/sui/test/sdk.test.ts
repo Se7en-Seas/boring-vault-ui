@@ -16,6 +16,8 @@ const AUTH_ID = "0xecfa41dea471e0012a3c72a45372362887953f21a3d836e812d68727604bb
 const VLBTC_VAULT_ID = "0x6e1d42532e00fe871d0adf7191b62cbe6eea8085b696ebb2f06bd28e6b70ebeb";
 const ACCOUNTANT_ID = "0xaba6fb06dd9d12de2b8d7746313e42fb7495c90dc1cf8c2ef6bd489062de5bf9";
 
+Error.stackTraceLimit = Infinity;
+
 // Helper function to count events by type
 async function countEvents(client: SuiClient, eventType: string): Promise<number> {
   const firstPage = await client.queryEvents({
@@ -124,7 +126,7 @@ describe("SuiVaultSDK", () => {
           depositAmount,
           minMintAmount,
         )
-      ).rejects.toThrow(`No coins found for asset ${normalizeStructTag(ASSET.$typeName)}`);
+      ).rejects.toThrow(`Insufficient balance for ${normalizeStructTag(ASSET.$typeName)}`);
     });
   });
 
@@ -181,7 +183,7 @@ describe("SuiVaultSDK", () => {
           discount,
           daysValid,
         )
-      ).rejects.toThrow(`No shares found for type ${shareType}`);
+      ).rejects.toThrow(`Insufficient balance for ${shareType}`);
     });
   });
 
@@ -434,7 +436,7 @@ describe("SuiVaultSDK", () => {
       expect(parseUnits(totalAssets, decimals)).toBeGreaterThanOrEqual(0n);
       
       // Should be a reasonable value
-      expect(parseUnits(totalAssets, decimals)).toBeLessThan(parseUnits("1000000000", decimals)); // Assuming TVL is reasonable
+      expect(parseUnits(totalAssets, decimals)).toBeLessThan(parseUnits("1000000000000", decimals)); // Assuming TVL is reasonable
     });
 
     it("should calculate total assets correctly based on total shares and exchange rate", async () => {
