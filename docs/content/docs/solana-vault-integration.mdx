@@ -64,7 +64,7 @@ The `VaultSDK` class is the main interface for interacting with Boring Vault on 
 ### Setup
 
 ```tsx
-import { VaultSDK } from 'boring-vault-ui';
+import { VaultSDK } from 'boring-vault-ui/solana';
 
 // Initialize the SDK with an RPC URL
 const vaultSDK = new VaultSDK('https://api.mainnet-beta.solana.com');
@@ -322,14 +322,14 @@ For advanced use cases, you can access the low-level `BoringVaultSolana` class d
 ### Creating a BoringVaultSolana Instance
 
 ```tsx
-import { VaultSDK } from 'boring-vault-ui';
+import { VaultSDK } from 'boring-vault-ui/solana';
 
 // Access the low-level BoringVaultSolana instance
 const vaultSDK = new VaultSDK('mainnet');
 const boringVault = vaultSDK.getBoringVault();
 
 // Or create directly with custom configuration
-import { BoringVaultSolana } from 'boring-vault-ui';
+import { BoringVaultSolana } from 'boring-vault-ui/solana';
 import { createSolanaClient } from 'gill';
 
 const boringVault = new BoringVaultSolana({
@@ -505,7 +505,7 @@ try {
 Here's a comprehensive example showing common vault operations:
 
 ```tsx
-import { VaultSDK } from 'boring-vault-ui';
+import { VaultSDK } from 'boring-vault-ui/solana';
 import { web3 } from '@coral-xyz/anchor';
 
 async function vaultOperationsExample() {
@@ -587,7 +587,7 @@ import {
   JITO_SOL_MINT_ADDRESS,
   TOKEN_2022_PROGRAM_ID,
   DEFAULT_DECIMALS
-} from 'boring-vault-ui';
+} from 'boring-vault-ui/solana';
 
 console.log('Boring Vault Program:', BORING_VAULT_PROGRAM_ID);
 console.log('Boring Queue Program:', BORING_QUEUE_PROGRAM_ID);
@@ -622,8 +622,7 @@ interface TransactionOptions {
 To guarantee the freshest JitoSOL/SOL price — crank the Pyth oracle just before sending your state-changing transaction:
 
 ```tsx
-import { buildPythOracleCrankTransactions } from 'boring-vault-ui/solana';
-import { JITOSOL_SOL_PYTH_FEED } from 'boring-vault-ui';
+import { buildPythOracleCrankTransactions, JITOSOL_SOL_PYTH_FEED } from 'boring-vault-ui/solana';
 
 const { transactions, signers } = await buildPythOracleCrankTransactions(
   connection,
@@ -655,7 +654,7 @@ A promise that returns the decimal adjusted (human readable) total numerical val
 #### Example
 
 ```tsx
-import { VaultSDK } from 'boring-vault-ui';
+import { VaultSDK } from 'boring-vault-ui/solana';
 
 const vaultSDK = new VaultSDK('https://api.mainnet-beta.solana.com');
 
@@ -786,7 +785,7 @@ A promise that returns a list of `BoringQueueStatus` objects with the following 
 #### Example
 
 ```tsx
-import { VaultSDK, type BoringQueueStatus } from 'boring-vault-ui';
+import { VaultSDK, type BoringQueueStatus } from 'boring-vault-ui/solana';
 
 const vaultSDK = new VaultSDK('https://api.mainnet-beta.solana.com');
 
