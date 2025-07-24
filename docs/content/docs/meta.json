@@ -15,7 +15,7 @@
     "boring-queue",
     "merkle-distributions",
     "boring-queue-ui-integration",
-    "---Deprecated---",
+    "---Legacy---",
     "withdraw-queue",
     "delay-withdraws"
   ]
