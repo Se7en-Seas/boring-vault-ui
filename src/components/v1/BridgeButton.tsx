@@ -77,10 +77,10 @@ const BridgeButton: React.FC<BridgeButtonProps> = ({
     vaultEthersContract,
   } = useBoringVaultV1();
 
-  const [shareBalance, setShareBalance] = React.useState(0.0);
-  const [shareAmount, setShareAmount] = React.useState("");
+  const [shareBalance, setShareBalance] = React.useState<number>(0.0);
+  const [shareAmount, setShareAmount] = React.useState<string>("");
   const [destinationChain, setDestinationChain] = React.useState<LayerZeroChain>("ethereum");
-  const [maxFee, setMaxFee] = React.useState("0.003"); // Default max fee in ETH
+  const [maxFee, setMaxFee] = React.useState<string>("0.003"); // Default max fee in ETH
   const signer = useEthersSigner();
 
   // Available destination chains (excluding current chain)
