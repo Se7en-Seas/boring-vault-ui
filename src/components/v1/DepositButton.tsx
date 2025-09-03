@@ -150,6 +150,11 @@ const DepositButton: React.FC<DepositButtonProps> = ({
       });
     }
   }, [depositStatus, toast]);
+  const isButtonDisabled = !signer ||
+    !depositAmount ||
+    parseFloat(depositAmount || "0") <= 0 ||
+    parseFloat(depositAmount || "0") > balance ||
+    depositStatus.loading;
 
   return (
     <>
@@ -199,9 +204,9 @@ const DepositButton: React.FC<DepositButtonProps> = ({
                   {...inputProps}
                 />
                 <FormHelperText textAlign="right">
-                  Balance: {balance.toFixed(6)} {selectedToken.displayName} 
-                  <Button 
-                    size="xs" 
+                  Balance: {balance.toFixed(6)} {selectedToken.displayName}
+                  <Button
+                    size="xs"
                     ml={2}
                     onClick={() => setDepositAmount(balance.toString())}
                   >
@@ -216,12 +221,6 @@ const DepositButton: React.FC<DepositButtonProps> = ({
               <Button
                 mt={4}
                 onClick={() => deposit(signer!, depositAmount, selectedToken)}
- const isButtonDisabled = !signer || 
-                  !depositAmount || 
-                  parseFloat(depositAmount || "0") <= 0 || 
-                  parseFloat(depositAmount || "0") > balance ||
-                  depositStatus.loading;
-                  
                 isDisabled={isButtonDisabled}
                 isLoading={depositStatus.loading}
                 loadingText="Depositing..."
@@ -235,9 +234,9 @@ const DepositButton: React.FC<DepositButtonProps> = ({
                 mt={4}
                 onClick={() => depositWithPermit(signer!, depositAmount, selectedToken)}
                 isDisabled={
-                  !signer || 
-                  !depositAmount || 
-                  parseFloat(depositAmount || "0") <= 0 || 
+                  !signer ||
+                  !depositAmount ||
+                  parseFloat(depositAmount || "0") <= 0 ||
                   parseFloat(depositAmount || "0") > balance ||
                   depositStatus.loading
                 }

@@ -32,9 +32,10 @@ import { Token } from "../../types";
 import { formatUnits } from "ethers";
 import { useEthersSigner } from "../../hooks/ethers";
 import { 
-  LayerZeroChain, 
-  LAYERZERO_CHAIN_IDS, 
-  getChainDisplayName 
+  EndpointId,
+  CommonChains,
+  getChainDisplayName,
+  encodeBridgeWildCard
 } from "../../utils/layerzero-chains";
 import { ethAddress, etherUnits } from "viem";
 
@@ -75,12 +76,16 @@ const BridgeButton: React.FC<BridgeButtonProps> = ({
 
   const [shareBalance, setShareBalance] = React.useState<number>(0.0);
   const [shareAmount, setShareAmount] = React.useState<string>("");
-  const [destinationChain, setDestinationChain] = React.useState<LayerZeroChain>("ethereum");
+  const [destinationChain, setDestinationChain] = React.useState<number>(CommonChains.ETHEREUM);
   const [maxFee, setMaxFee] = React.useState<string>("0.003"); // Default max fee in ETH
   const signer = useEthersSigner();
 
-  // Available destination chains (excluding current chain)
-  const availableChains = Object.keys(LAYERZERO_CHAIN_IDS) as LayerZeroChain[];
+  // Available destination chains - use common chains for UI
+  const availableChains = Object.entries(CommonChains).map(([name, id]) => ({
+    name,
+    id,
+    displayName: getChainDisplayName(id)
+  }));
 
   useEffect(() => {
     async function fetchShareBalance() {
@@ -113,10 +118,13 @@ const BridgeButton: React.FC<BridgeButtonProps> = ({
       displayName: "ETH"
     };
 
+    // Convert chain ID to bridgeWildCard bytes
+    const bridgeWildCard = encodeBridgeWildCard(destinationChain);
+
     await bridge(
       signer,
       shareAmount,
-      destinationChain,
+      bridgeWildCard, // Pass the encoded chain ID
       maxFee,
       feeToken
     );
@@ -206,11 +214,11 @@ const BridgeButton: React.FC<BridgeButtonProps> = ({
                 <FormLabel>Destination Chain</FormLabel>
                 <Select
                   value={destinationChain}
-                  onChange={(e) => setDestinationChain(e.target.value as LayerZeroChain)}
+                  onChange={(e) => setDestinationChain(Number(e.target.value))}
                 >
                   {availableChains.map((chain) => (
-                    <option key={chain} value={chain}>
-                      {getChainDisplayName(chain)}
+                    <option key={chain.id} value={chain.id}>
+                      {chain.displayName}
                     </option>
                   ))}
                 </Select>
