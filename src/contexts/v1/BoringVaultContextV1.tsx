@@ -2575,11 +2575,11 @@ export const BoringVaultV1Provider: React.FC<{
           }
           
           const bridgeTx = await layerZeroTellerContractWithSigner.bridge(
-            shareAmountBN,
+            shareAmountBN.toString(),
             recipientAddress,
             bridgeWildCard,
             feeToken.address,
-            actualFee,
+            actualFee.toString(),
             { value: actualFee.toString() }
           );
 
@@ -2628,7 +2628,7 @@ export const BoringVaultV1Provider: React.FC<{
         maxFee: string,
         feeToken: Token
       ): Promise<DepositAndBridgeStatus> => {
-        if (!layerZeroTellerEthersContract || !layerZeroTellerContract || !isBoringV1ContextReady || !signer) {
+        if (!layerZeroTellerEthersContract || !layerZeroTellerContract || !isBoringV1ContextReady || !signer || !lensEthersContract) {
           const error = "LayerZero teller contract not initialized";
           const errorStatus = {
             initiated: false,
@@ -2653,20 +2653,31 @@ export const BoringVaultV1Provider: React.FC<{
           // Convert human readable amounts to wei/base units
           const depositAmountWei = parseUnits(depositAmount, token.decimals);
           const minimumMintWei = parseUnits(minimumMint, vaultDecimals);
+
           // Convert maxFee (human readable) to base units using feeToken decimals
           const maxFeeWei = parseUnits(maxFee, feeToken.decimals);
           
           // First check if the token is approved for at least the amount
           const erc20Contract = new Contract(tokenAddress, erc20Abi, signer);
+          const userAddress = await signer.getAddress();
+          
+          // Check user's token balance
+          const userBalance = await erc20Contract.balanceOf(userAddress);
+          
+          if (BigInt(userBalance) < depositAmountWei) {
+            throw new Error(`Insufficient token balance. Have: ${userBalance.toString()}, Need: ${depositAmountWei.toString()}`);
+          }
+          
+          // Check allowance 
           const allowance = await erc20Contract.allowance(
-            await signer.getAddress(),
-            layerZeroTellerContract
+            userAddress,
+            vaultContract
           );
-
+          
+          // Always approve max to avoid issues
           if (BigInt(allowance) < depositAmountWei) {
-            console.log("Approving token for LayerZero teller...");
             const approveTx = await erc20Contract.approve(
-              layerZeroTellerContract,
+              vaultContract,
               depositAmountWei.toString()
             );
 
@@ -2698,42 +2709,50 @@ export const BoringVaultV1Provider: React.FC<{
             signer
           );
           
-          // For depositAndBridge, we need to estimate the shares that will be minted
-          // Use minimumMint as approximation for fee preview
+          // Preview the deposit to get expected shares
+          const expectedShares = await lensEthersContract.previewDeposit(
+            tokenAddress,
+            depositAmountWei.toString(),
+            outputTokenContract ? outputTokenContract : vaultContract,
+            accountantContract
+          );
+                    
+          // Use the expected shares for fee preview
           const actualFee = await layerZeroTellerContractWithSigner.previewFee(
-            minimumMintWei,
+            expectedShares,
             recipientAddress,
             bridgeWildCard,
             feeToken.address
           );
-          
-          console.log("DepositAndBridge params:", {
-            tokenAddress,
-            depositAmount: depositAmountWei.toString(),
-            minimumMint: minimumMintWei.toString(),
-            recipient: recipientAddress,
-            bridgeWildCard,
-            feeToken: feeToken.address,
-            actualFee: actualFee.toString(),
-            maxFee: maxFeeWei.toString(),
-            usingFee: actualFee.toString()
-          });
           
           // Check if actual fee exceeds max fee
           if (actualFee > maxFeeWei) {
             throw new Error(`Required fee (${actualFee.toString()} wei) exceeds maximum fee (${maxFeeWei.toString()} wei)`);
           }
           
-          const depositAndBridgeTx = await layerZeroTellerContractWithSigner.depositAndBridge(
-            tokenAddress,
-            depositAmountWei,
-            minimumMintWei,
-            recipientAddress,
-            bridgeWildCard,
-            feeToken.address,
-            actualFee,
-            { value: actualFee.toString() }
-          );
+          // Try the transaction and catch detailed error
+          let depositAndBridgeTx;
+          try {
+            depositAndBridgeTx = await layerZeroTellerContractWithSigner.depositAndBridge(
+              tokenAddress,
+              depositAmountWei.toString(),
+              minimumMintWei.toString(),
+              recipientAddress,
+              bridgeWildCard,
+              feeToken.address,
+              actualFee.toString(),
+              { value: actualFee.toString() }
+            );
+          } catch (txError: any) {
+            console.error("Transaction failed with error:", txError);
+            console.error("Error details:", {
+              reason: txError.reason,
+              code: txError.code,
+              data: txError.data,
+              transaction: txError.transaction
+            });
+            throw txError;
+          }
 
           const receipt: ContractTransactionReceipt = await depositAndBridgeTx.wait();
           
@@ -2748,13 +2767,11 @@ export const BoringVaultV1Provider: React.FC<{
             return errorStatus;
           }
 
-          // Extract sharesBridged from logs if needed
           const successStatus = {
             initiated: true,
             loading: false,
             success: true,
             tx_hash: receipt.hash,
-            sharesBridged: "0", // Could extract from receipt logs
           };
           setDepositAndBridgeStatus(successStatus);
           return successStatus;
@@ -2769,7 +2786,7 @@ export const BoringVaultV1Provider: React.FC<{
           return errorStatus;
         }
       },
-      [layerZeroTellerEthersContract, layerZeroTellerContract, isBoringV1ContextReady, depositTokens, vaultDecimals]
+      [layerZeroTellerEthersContract, layerZeroTellerContract, lensEthersContract, outputTokenContract, vaultContract, accountantContract, isBoringV1ContextReady, depositTokens, vaultDecimals]
     );
 
     return (
