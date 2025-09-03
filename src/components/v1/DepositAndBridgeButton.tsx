@@ -286,7 +286,7 @@ const DepositAndBridgeButton: React.FC<DepositAndBridgeButtonProps> = ({
                   {...inputProps}
                 />
                 <FormHelperText>
-                  Maximum fee willing to pay for bridging. Note: You'll also need native tokens on the destination chain to pay for gas.
+                  Maximum fee willing to pay for bridging.
                 </FormHelperText>
               </FormControl>
 
