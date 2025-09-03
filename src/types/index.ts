@@ -81,3 +81,20 @@ export interface BoringQueueAssetParams {
   maxDiscount: number,
   minimumShares: number
 }
+
+export interface BridgeStatus {
+  initiated: boolean;
+  loading: boolean;
+  success?: boolean;
+  error?: string;
+  tx_hash?: string;
+}
+
+export interface DepositAndBridgeStatus {
+  initiated: boolean;
+  loading: boolean;
+  success?: boolean;
+  error?: string;
+  tx_hash?: string;
+  sharesBridged?: string;
+}

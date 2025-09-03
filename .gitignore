@@ -136,3 +136,5 @@ bun.lock
 # sui client gen
 **/gen/*
 !**/gen/gen.toml
+
+CLAUDE.md
