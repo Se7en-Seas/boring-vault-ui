@@ -137,7 +137,9 @@ import { ethAddress, etherUnits } from "viem";
         duration: 5000,
         isClosable: true,
       });
-    } else if (bridgeStatus.success) {
+    }
+    
+     if (bridgeStatus.success) {
       toast({
         title: "Bridge successful",
         description: `Transaction hash: ${bridgeStatus.tx_hash}`,
@@ -146,7 +148,9 @@ import { ethAddress, etherUnits } from "viem";
         isClosable: true,
       });
       onClose(); // Close modal on success
-    } else if (bridgeStatus.error) {
+    }
+    
+      if (bridgeStatus.error) {
       toast({
         title: "Failed to bridge",
         description: bridgeStatus.error,
