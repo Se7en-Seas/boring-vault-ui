@@ -102,7 +102,7 @@ const VaultWidget = () => {
         const signerAddress = await signer.getAddress();
         const [totalAssets, userSharesResult, shareValueResult] = await Promise.all([
           fetchTotalAssets(),
-          fetchUserShares(signerAddress)
+          fetchUserShares(signerAddress),
           fetchShareValue()
         ]);
         

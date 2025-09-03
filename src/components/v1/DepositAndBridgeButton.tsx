@@ -17,16 +17,13 @@ import {
   Text,
   HStack,
   VStack,
-  Box,
   Select,
   InputGroup,
   Input,
   InputRightElement,
   FormControl,
-  Flex,
   FormHelperText,
   FormLabel,
-  InputProps,
   ModalHeader,
   ModalFooter,
   Avatar,
@@ -35,7 +32,7 @@ import {
 import { useBoringVaultV1 } from "../../contexts/v1/BoringVaultContextV1";
 import { Token } from "../../types";
 import { Contract, formatUnits } from "ethers";
-import { erc20Abi } from "viem";
+import { erc20Abi, ethAddress, etherUnits } from "viem";
 import { useEthersSigner } from "../../hooks/ethers";
 import { useAccount } from "wagmi";
 import { 
@@ -83,11 +80,11 @@ const DepositAndBridgeButton: React.FC<DepositAndBridgeButtonProps> = ({
   const [selectedToken, setSelectedToken] = React.useState<Token>(
     depositTokens[0]
   );
-  const [balance, setBalance] = React.useState(0.0);
-  const [depositAmount, setDepositAmount] = React.useState("");
-  const [minimumMint, setMinimumMint] = React.useState("");
+  const [balance, setBalance] = React.useState<number>(0.0);
+  const [depositAmount, setDepositAmount] = React.useState<string>("");
+  const [minimumMint, setMinimumMint] = React.useState<string>("");
   const [destinationChain, setDestinationChain] = React.useState<LayerZeroChain>("ethereum");
-  const [maxFee, setMaxFee] = React.useState("0.01"); // Default max fee in ETH
+  const [maxFee, setMaxFee] = React.useState<string>("0.01"); // Default max fee in ETH
   const signer = useEthersSigner();
 
   // Available destination chains
@@ -132,10 +129,11 @@ const DepositAndBridgeButton: React.FC<DepositAndBridgeButtonProps> = ({
 
     // ETH as fee token with 18 decimals
     const feeToken: Token = {
-      address: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
-      decimals: 18,
+      address: ethAddress,
+      decimals: etherUnits.wei,
       displayName: "ETH"
     };
+
 
     await depositAndBridge(
       signer,
@@ -181,6 +179,7 @@ const DepositAndBridgeButton: React.FC<DepositAndBridgeButtonProps> = ({
   const isValidMinimumMint = parseFloat(minimumMint || "0") >= 0;
   // Recipient is always the connected wallet, so no validation needed
   const isValidFee = parseFloat(maxFee || "0") > 0;
+  const isButtonDisabled = !isValidAmount || !isValidMinimumMint || !isValidFee || depositAndBridgeStatus.loading
 
   return (
     <>
@@ -303,7 +302,6 @@ const DepositAndBridgeButton: React.FC<DepositAndBridgeButtonProps> = ({
             <Button
               colorScheme="blue"
               onClick={handleDepositAndBridge}
-  const isButtonDisabled = !isValidAmount || !isValidMinimumMint || !isValidFee || depositAndBridgeStatus.loading
               isDisabled={isButtonDisabled}
               isLoading={depositAndBridgeStatus.loading}
               loadingText="Processing..."

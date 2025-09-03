@@ -15,32 +15,28 @@ import {
   ModalBodyProps,
   ModalCloseButtonProps,
   Text,
-  HStack,
   VStack,
-  Box,
   Select,
   InputGroup,
   Input,
   InputRightElement,
   FormControl,
-  Flex,
   FormHelperText,
   FormLabel,
-  InputProps,
   ModalHeader,
   ModalFooter,
   useToast,
 } from "@chakra-ui/react";
 import { useBoringVaultV1 } from "../../contexts/v1/BoringVaultContextV1";
 import { Token } from "../../types";
-import { Contract, formatUnits } from "ethers";
-import { erc20Abi } from "viem";
+import { formatUnits } from "ethers";
 import { useEthersSigner } from "../../hooks/ethers";
 import { 
   LayerZeroChain, 
   LAYERZERO_CHAIN_IDS, 
   getChainDisplayName 
 } from "../../utils/layerzero-chains";
+import { ethAddress, etherUnits } from "viem";
 
 interface BridgeButtonProps {
   buttonText: string;
@@ -94,7 +90,7 @@ const BridgeButton: React.FC<BridgeButtonProps> = ({
         const userAddress = await signer.getAddress();
         const [balance, decimals] = await Promise.all([
           vaultEthersContract.balanceOf(userAddress), 
-          vaultEthersContract.decimals();
+          vaultEthersContract.decimals()
         ]);
         const formattedBalance = parseFloat(formatUnits(balance, decimals));
         setShareBalance(formattedBalance);
@@ -109,8 +105,6 @@ const BridgeButton: React.FC<BridgeButtonProps> = ({
 
   const handleBridge = async () => {
     if (!signer || !shareAmount || !destinationChain) return;
-
-import { ethAddress, etherUnits } from "viem";
 
     // ETH as fee token with 18 decimals
     const feeToken: Token = {
