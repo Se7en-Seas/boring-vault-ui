@@ -1,0 +1,165 @@
+---
+title: LayerZero Bridge
+description: Bridge vault shares across chains using LayerZero V2. Learn how to use bridge functions and components.
+---
+
+## Introduction
+
+Functionalities for cross-chain bridging of vault shares using LayerZero V2. Comprehensive examples may be found in [BridgeButton.tsx](https://github.com/Se7en-Seas/boring-vault-ui/blob/main/src/components/v1/BridgeButton.tsx) and [DepositAndBridgeButton.tsx](https://github.com/Se7en-Seas/boring-vault-ui/blob/main/src/components/v1/DepositAndBridgeButton.tsx).
+
+To enable LayerZero bridging, provide the LayerZero teller contract address when initializing the provider:
+
+```tsx
+<BoringVaultV1Provider
+  // ... other props
+  layerZeroTellerContract="0x..." // LayerZero-enabled teller contract
+>
+```
+
+## bridge
+
+This function bridges existing vault shares to another chain via LayerZero V2.
+
+### Inputs
+
+- **signer**: an ethers `JsonRPCSigner`. If you are using viem, you may use this example to create an ethers signer out of a viem wallet client: [ethers.tsx](https://github.com/Se7en-Seas/boring-vault-ui/blob/main/src/hooks/ethers.tsx)
+- **shareAmount**: a decimal adjusted (human readable) `string` that represents the amount of vault shares to bridge
+- **destinationChain**: an encoded `string` representing the destination chain (use `encodeBridgeWildCard` from `layerzero-chains` utils)
+- **maxFee**: a decimal adjusted (human readable) `string` representing the maximum fee willing to pay for bridging
+- **feeToken**: the token to pay fees in, in the format:
+    - **address**: fee token contract address
+    - **decimals**: decimal precision of the fee token
+    - **displayName**: display name of the fee token
+
+### Outputs
+
+- A promise that returns a `BridgeStatus` object
+    - **initiated**: boolean representing if the bridge function has been called and is in progress
+    - **loading**: boolean representing if there is a bridge transaction ongoing
+    - **success** (optional): boolean representing if the bridge action succeeded
+    - **error** (optional): string representing why a bridge failed
+    - **tx_hash** (optional): the string of a successful bridge transaction hash
+
+### Example
+
+```tsx
+import { useBoringVaultV1 } from 'boring-vault-ui';
+import { encodeBridgeWildCard, CommonChains } from 'boring-vault-ui/utils/layerzero-chains';
+
+const { bridge } = useBoringVaultV1();
+
+// Encode the destination chain
+const destinationChain = encodeBridgeWildCard(CommonChains.ARBITRUM);
+
+// Define fee token (ETH)
+const feeToken = {
+  address: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
+  decimals: 18,
+  displayName: "ETH"
+};
+
+bridge(signer, shareAmount, destinationChain, maxFee, feeToken);
+```
+
+---
+
+## depositAndBridge
+
+This function deposits tokens and immediately bridges the minted shares to another chain in a single transaction.
+
+### Inputs
+
+- **signer**: an ethers `JsonRPCSigner`
+- **tokenAddress**: the contract address of the token to deposit
+- **depositAmount**: a decimal adjusted (human readable) `string` that represents the amount of tokens to deposit
+- **minimumMint**: a decimal adjusted (human readable) `string` representing minimum shares to mint (slippage protection)
+- **destinationChain**: an encoded `string` representing the destination chain
+- **maxFee**: a decimal adjusted (human readable) `string` representing the maximum fee willing to pay
+- **feeToken**: the token to pay fees in
+
+### Outputs
+
+- A promise that returns a `DepositAndBridgeStatus` object with the same structure as `BridgeStatus`
+
+### Example
+
+```tsx
+import { useBoringVaultV1 } from 'boring-vault-ui';
+import { encodeBridgeWildCard, CommonChains } from 'boring-vault-ui/utils/layerzero-chains';
+
+const { depositAndBridge } = useBoringVaultV1();
+
+const destinationChain = encodeBridgeWildCard(CommonChains.OPTIMISM);
+const feeToken = {
+  address: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
+  decimals: 18,
+  displayName: "ETH"
+};
+
+depositAndBridge(
+  signer,
+  tokenAddress,
+  depositAmount,
+  minimumMint,
+  destinationChain,
+  maxFee,
+  feeToken
+);
+```
+
+---
+
+## bridgeStatus
+
+Returns the current status of a bridge operation.
+
+### Inputs
+
+- None
+
+### Outputs
+
+- A `BridgeStatus` object containing the current bridge transaction state
+
+### Example
+
+```tsx
+import { useBoringVaultV1 } from 'boring-vault-ui';
+
+const { bridgeStatus } = useBoringVaultV1();
+
+if (bridgeStatus.loading) {
+  console.log("Bridge in progress...");
+}
+if (bridgeStatus.success) {
+  console.log("Bridge successful! TX:", bridgeStatus.tx_hash);
+}
+```
+
+---
+
+## depositAndBridgeStatus
+
+Returns the current status of a deposit and bridge operation.
+
+### Inputs
+
+- None
+
+### Outputs
+
+- A `DepositAndBridgeStatus` object containing the current transaction state
+
+### Example
+
+```tsx
+import { useBoringVaultV1 } from 'boring-vault-ui';
+
+const { depositAndBridgeStatus } = useBoringVaultV1();
+
+if (depositAndBridgeStatus.loading) {
+  console.log("Deposit and bridge in progress...");
+}
+if (depositAndBridgeStatus.success) {
+  console.log("Success! TX:", depositAndBridgeStatus.tx_hash);
+}
