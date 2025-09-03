@@ -303,7 +303,8 @@ const DepositAndBridgeButton: React.FC<DepositAndBridgeButtonProps> = ({
             <Button
               colorScheme="blue"
               onClick={handleDepositAndBridge}
-              isDisabled={!isValidAmount || !isValidMinimumMint || !isValidFee || depositAndBridgeStatus.loading}
+  const isButtonDisabled = !isValidAmount || !isValidMinimumMint || !isValidFee || depositAndBridgeStatus.loading
+              isDisabled={isButtonDisabled}
               isLoading={depositAndBridgeStatus.loading}
               loadingText="Processing..."
               mr={3}
