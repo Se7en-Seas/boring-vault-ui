@@ -11,6 +11,8 @@
     "solana-vault-integration",
     "---Deposits---",
     "deposits",
+    "---Cross-Chain---",
+    "layerzero-bridge",
     "---Withdrawals---",
     "boring-queue",
     "merkle-distributions",
