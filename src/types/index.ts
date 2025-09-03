@@ -96,5 +96,4 @@ export interface DepositAndBridgeStatus {
   success?: boolean;
   error?: string;
   tx_hash?: string;
-  sharesBridged?: string;
 }

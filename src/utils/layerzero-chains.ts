@@ -24,14 +24,11 @@ export type LayerZeroChain = keyof typeof LAYERZERO_CHAIN_IDS;
 export function encodeBridgeWildCard(chain: LayerZeroChain): string {
   const chainId = LAYERZERO_CHAIN_IDS[chain];
   // Encode as uint32 - just the value, no padding to 32 bytes
-  // The Python code uses encode(['uint32'], [destination_wildcard])
+  // Use encode(['uint32'], [destination_wildcard])
   // which creates a 32-byte encoding with the uint32 at the beginning
   const hex = chainId.toString(16).padStart(8, '0');
   return `0x${hex.padStart(64, '0')}`;
 }
-
-// Native fee token address (used for ETH payments)
-export const NATIVE_FEE_TOKEN = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 
 // Get chain display name
 export function getChainDisplayName(chain: LayerZeroChain): string {
