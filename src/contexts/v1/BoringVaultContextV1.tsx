@@ -40,7 +40,7 @@ import BoringTellerLayerZeroEnabledABI from "../../abis/v1/BoringTellerLayerZero
 import { ethers } from 'ethers';
 import { splitSignature } from "@ethersproject/bytes";
 import { checkContractForPermit } from "../../utils/permit/check-contract-for-pemit";
-import { LayerZeroChain, encodeBridgeWildCard } from "../../utils/layerzero-chains";
+// encodeBridgeWildCard is now handled by the components
 
 const SEVEN_SEAS_BASE_API_URL = "https://api.sevenseas.capital";
 
@@ -160,7 +160,7 @@ interface BoringVaultV1ContextProps {
   bridge: (
     signer: JsonRpcSigner,
     shareAmount: string,
-    destinationChain: LayerZeroChain,
+    destinationChain: string, // Encoded bridgeWildCard bytes
     maxFee: string,
     feeToken: Token
   ) => Promise<BridgeStatus>;
@@ -169,7 +169,7 @@ interface BoringVaultV1ContextProps {
     tokenAddress: string,
     depositAmount: string,
     minimumMint: string,
-    destinationChain: LayerZeroChain,
+    destinationChain: string, // Encoded bridgeWildCard bytes
     maxFee: string,
     feeToken: Token
   ) => Promise<DepositAndBridgeStatus>;
@@ -2493,7 +2493,7 @@ export const BoringVaultV1Provider: React.FC<{
       async (
         signer: JsonRpcSigner,
         shareAmount: string,
-        destinationChain: LayerZeroChain,
+        destinationChain: string, // Already encoded bridgeWildCard bytes
         maxFee: string,
         feeToken: Token
       ): Promise<BridgeStatus> => {
@@ -2513,7 +2513,7 @@ export const BoringVaultV1Provider: React.FC<{
         setBridgeStatus(loadingStatus);
 
         try {
-          const bridgeWildCard = encodeBridgeWildCard(destinationChain);
+          const bridgeWildCard = destinationChain; // Already encoded
           // Recipient is always the signer's address for bridge
           const recipientAddress = await signer.getAddress();
           
@@ -2624,7 +2624,7 @@ export const BoringVaultV1Provider: React.FC<{
         tokenAddress: string,
         depositAmount: string,
         minimumMint: string,
-        destinationChain: LayerZeroChain,
+        destinationChain: string, // Already encoded bridgeWildCard bytes
         maxFee: string,
         feeToken: Token
       ): Promise<DepositAndBridgeStatus> => {
@@ -2698,7 +2698,7 @@ export const BoringVaultV1Provider: React.FC<{
             console.log("Approved hash: ", approvedReceipt.hash);
           }
 
-          const bridgeWildCard = encodeBridgeWildCard(destinationChain);
+          const bridgeWildCard = destinationChain; // Already encoded
           // Recipient is always the signer's address for deposit and bridge
           const recipientAddress = await signer.getAddress();
           
