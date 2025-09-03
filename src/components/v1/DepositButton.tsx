@@ -216,13 +216,13 @@ const DepositButton: React.FC<DepositButtonProps> = ({
               <Button
                 mt={4}
                 onClick={() => deposit(signer!, depositAmount, selectedToken)}
-                isDisabled={
-                  !signer || 
+ const isButtonDisabled = !signer || 
                   !depositAmount || 
                   parseFloat(depositAmount || "0") <= 0 || 
                   parseFloat(depositAmount || "0") > balance ||
-                  depositStatus.loading
-                }
+                  depositStatus.loading;
+                  
+                isDisabled={isButtonDisabled}
                 isLoading={depositStatus.loading}
                 loadingText="Depositing..."
                 colorScheme="blue"
