@@ -92,8 +92,10 @@ const BridgeButton: React.FC<BridgeButtonProps> = ({
 
       try {
         const userAddress = await signer.getAddress();
-        const balance = await vaultEthersContract.balanceOf(userAddress);
-        const decimals = await vaultEthersContract.decimals();
+        const [balance, decimals] = await Promise.all([
+          vaultEthersContract.balanceOf(userAddress), 
+          vaultEthersContract.decimals();
+        ]);
         const formattedBalance = parseFloat(formatUnits(balance, decimals));
         setShareBalance(formattedBalance);
       } catch (error) {
