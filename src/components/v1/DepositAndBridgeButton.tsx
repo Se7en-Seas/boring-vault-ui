@@ -104,7 +104,8 @@ const DepositAndBridgeButton: React.FC<DepositAndBridgeButtonProps> = ({
           ethersProvider
         );
 
-        const tokenBalance = await tokenContract.balanceOf(await signer.getAddress());
+       const signerAddress = await signer.getAddress();
+        const tokenBalance = await tokenContract.balanceOf(signerAddress);
         const formattedBalance = parseFloat(
           formatUnits(tokenBalance, selectedToken.decimals)
         );
