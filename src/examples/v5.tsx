@@ -99,9 +99,10 @@ const VaultWidget = () => {
     
     const fetchData = async () => {
       try {
+        const signerAddress = await signer.getAddress();
         const [totalAssets, userSharesResult, shareValueResult] = await Promise.all([
           fetchTotalAssets(),
-          fetchUserShares(await signer.getAddress()),
+          fetchUserShares(signerAddress)
           fetchShareValue()
         ]);
         
