@@ -15,7 +15,9 @@ import {
   Token,
   BoringQueueStatus,
   MerkleClaimStatus,
-  BoringQueueAssetParams
+  BoringQueueAssetParams,
+  BridgeStatus,
+  DepositAndBridgeStatus
 } from "../../types";
 import BoringVaultABI from "../../abis/v1/BoringVaultABI";
 import BoringTellerABI from "../../abis/v1/BoringTellerABI";
@@ -34,9 +36,11 @@ import {
 import { erc20Abi, parseUnits, type TypedDataDomain } from "viem";
 import BigNumber from "bignumber.js";
 import BoringDelayWithdrawContractABI from "../../abis/v1/BoringDelayWithdrawContractABI";
+import BoringTellerLayerZeroEnabledABI from "../../abis/v1/BoringTellerLayerZeroEnabled";
 import { ethers } from 'ethers';
 import { splitSignature } from "@ethersproject/bytes";
 import { checkContractForPermit } from "../../utils/permit/check-contract-for-pemit";
+import { LayerZeroChain, encodeBridgeWildCard } from "../../utils/layerzero-chains";
 
 const SEVEN_SEAS_BASE_API_URL = "https://api.sevenseas.capital";
 
@@ -51,6 +55,7 @@ interface BoringVaultV1ContextProps {
   withdrawQueueEthersContract: Contract | null;
   boringQueueEthersContract: Contract | null;
   incentiveDistributorEthersContract: Contract | null;
+  layerZeroTellerEthersContract: Contract | null;
   depositTokens: Token[];
   withdrawTokens: Token[];
   // Any ethers provider
@@ -151,6 +156,25 @@ interface BoringVaultV1ContextProps {
     rootHashes: string[],
     balances: string[]
   ) => Promise<Array<{ rootHash: string; claimed: boolean; balance: string }>>;
+  /* LayerZero Bridge Functions */
+  bridge: (
+    signer: JsonRpcSigner,
+    shareAmount: string,
+    destinationChain: LayerZeroChain,
+    maxFee: string,
+    feeToken: Token
+  ) => Promise<BridgeStatus>;
+  depositAndBridge: (
+    signer: JsonRpcSigner,
+    tokenAddress: string,
+    depositAmount: string,
+    minimumMint: string,
+    destinationChain: LayerZeroChain,
+    maxFee: string,
+    feeToken: Token
+  ) => Promise<DepositAndBridgeStatus>;
+  bridgeStatus: BridgeStatus;
+  depositAndBridgeStatus: DepositAndBridgeStatus;
 }
 
 const BoringVaultV1Context = createContext<BoringVaultV1ContextProps | null>(
@@ -162,6 +186,7 @@ export const BoringVaultV1Provider: React.FC<{
   outputTokenContract?: string;
   vaultContract: string;
   tellerContract: string;
+  layerZeroTellerContract?: string; // Optional LayerZero-enabled teller
   accountantContract: string;
   lensContract: string;
   delayWithdrawContract?: string;
@@ -182,6 +207,7 @@ export const BoringVaultV1Provider: React.FC<{
   withdrawTokens,
   vaultContract,
   tellerContract,
+  layerZeroTellerContract,
   accountantContract,
   lensContract,
   delayWithdrawContract,
@@ -212,6 +238,8 @@ export const BoringVaultV1Provider: React.FC<{
       useState<Contract | null>(null);
     const [incentiveDistributorEthersContract, setIncentiveDistributorEthersContract] =
       useState<Contract | null>(null);
+    const [layerZeroTellerEthersContract, setLayerZeroTellerEthersContract] =
+      useState<Contract | null>(null);
 
     const [baseToken, setBaseToken] = useState<Token | null>(null);
 
@@ -234,6 +262,17 @@ export const BoringVaultV1Provider: React.FC<{
 
     // Add new state for merkle claim status
     const [merkleClaimStatus, setMerkleClaimStatus] = useState<MerkleClaimStatus>({
+      initiated: false,
+      loading: false,
+    });
+
+    // Add bridge status states
+    const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus>({
+      initiated: false,
+      loading: false,
+    });
+
+    const [depositAndBridgeStatus, setDepositAndBridgeStatus] = useState<DepositAndBridgeStatus>({
       initiated: false,
       loading: false,
     });
@@ -306,6 +345,15 @@ export const BoringVaultV1Provider: React.FC<{
             ethersProvider
           );
           setBoringQueueEthersContract(boringQueueEthersContract);
+        }
+
+        if (layerZeroTellerContract) {
+          const layerZeroTellerEthersContract = new Contract(
+            layerZeroTellerContract,
+            BoringTellerLayerZeroEnabledABI,
+            ethersProvider
+          );
+          setLayerZeroTellerEthersContract(layerZeroTellerEthersContract);
         }
 
         if (outputTokenContract) {
@@ -2440,6 +2488,290 @@ export const BoringVaultV1Provider: React.FC<{
       [incentiveDistributorEthersContract]
     );
 
+    // LayerZero Bridge Methods
+    const bridge = useCallback(
+      async (
+        signer: JsonRpcSigner,
+        shareAmount: string,
+        destinationChain: LayerZeroChain,
+        maxFee: string,
+        feeToken: Token
+      ): Promise<BridgeStatus> => {
+        if (!layerZeroTellerEthersContract || !layerZeroTellerContract || !isBoringV1ContextReady || !signer) {
+          const error = "LayerZero teller contract not initialized";
+          const errorStatus = {
+            initiated: false,
+            loading: false,
+            success: false,
+            error,
+          };
+          setBridgeStatus(errorStatus);
+          return errorStatus;
+        }
+
+        const loadingStatus = { initiated: true, loading: true };
+        setBridgeStatus(loadingStatus);
+
+        try {
+          const bridgeWildCard = encodeBridgeWildCard(destinationChain);
+          // Recipient is always the signer's address for bridge
+          const recipientAddress = await signer.getAddress();
+          
+          // Get LayerZero teller contract ready
+          const layerZeroTellerContractWithSigner = new Contract(
+            layerZeroTellerContract,
+            BoringTellerLayerZeroEnabledABI,
+            signer
+          );
+          
+          // Convert shareAmount (human readable) to BigInt with vault decimals
+          const shareAmountBN = parseUnits(shareAmount, vaultDecimals);
+          
+          // Convert maxFee (human readable) to base units using feeToken decimals
+          const maxFeeWei = parseUnits(maxFee, feeToken.decimals);
+          
+          // First, we need to approve the teller to spend our shares
+          const vaultContractWithSigner = new Contract(
+            vaultContract,
+            BoringVaultABI,
+            signer
+          );
+          
+          const shareAllowance = await vaultContractWithSigner.allowance(
+            recipientAddress,
+            layerZeroTellerContract
+          );
+          
+          if (BigInt(shareAllowance) < shareAmountBN) {
+            console.log("Approving shares for LayerZero teller...");
+            const approveTx = await vaultContractWithSigner.approve(
+              layerZeroTellerContract,
+              shareAmountBN.toString()
+            );
+            await approveTx.wait();
+          }
+          
+          // Get the actual fee required from the contract
+          const actualFee = await layerZeroTellerContractWithSigner.previewFee(
+            shareAmountBN,
+            recipientAddress,
+            bridgeWildCard,
+            feeToken.address
+          );
+          
+          console.log("Bridge params:", {
+            shareAmount: shareAmountBN.toString(),
+            recipient: recipientAddress,
+            bridgeWildCard,
+            feeToken: feeToken.address,
+            actualFee: actualFee.toString(),
+            maxFee: maxFeeWei.toString(),
+            usingFee: actualFee.toString()
+          });
+          
+          // Check if actual fee exceeds max fee
+          if (actualFee > maxFeeWei) {
+            throw new Error(`Required fee (${actualFee.toString()} wei) exceeds maximum fee (${maxFeeWei.toString()} wei)`);
+          }
+          
+          const bridgeTx = await layerZeroTellerContractWithSigner.bridge(
+            shareAmountBN,
+            recipientAddress,
+            bridgeWildCard,
+            feeToken.address,
+            actualFee,
+            { value: actualFee.toString() }
+          );
+
+          const receipt: ContractTransactionReceipt = await bridgeTx.wait();
+          
+          if (!receipt.hash) {
+            const errorStatus = {
+              initiated: false,
+              loading: false,
+              success: false,
+              error: "Bridge transaction reverted",
+            };
+            setBridgeStatus(errorStatus);
+            return errorStatus;
+          }
+
+          const successStatus = {
+            initiated: true,
+            loading: false,
+            success: true,
+            tx_hash: receipt.hash,
+          };
+          setBridgeStatus(successStatus);
+          return successStatus;
+        } catch (error: any) {
+          const errorStatus = {
+            initiated: false,
+            loading: false,
+            success: false,
+            error: error.message || "Bridge transaction failed",
+          };
+          setBridgeStatus(errorStatus);
+          return errorStatus;
+        }
+      },
+      [layerZeroTellerEthersContract, layerZeroTellerContract, vaultContract, isBoringV1ContextReady, vaultDecimals]
+    );
+
+    const depositAndBridge = useCallback(
+      async (
+        signer: JsonRpcSigner,
+        tokenAddress: string,
+        depositAmount: string,
+        minimumMint: string,
+        destinationChain: LayerZeroChain,
+        maxFee: string,
+        feeToken: Token
+      ): Promise<DepositAndBridgeStatus> => {
+        if (!layerZeroTellerEthersContract || !layerZeroTellerContract || !isBoringV1ContextReady || !signer) {
+          const error = "LayerZero teller contract not initialized";
+          const errorStatus = {
+            initiated: false,
+            loading: false,
+            success: false,
+            error,
+          };
+          setDepositAndBridgeStatus(errorStatus);
+          return errorStatus;
+        }
+
+        const loadingStatus = { initiated: true, loading: true };
+        setDepositAndBridgeStatus(loadingStatus);
+
+        try {
+          // Find the token to get its decimals
+          const token = depositTokens.find(t => t.address === tokenAddress);
+          if (!token) {
+            throw new Error("Token not found in deposit tokens");
+          }
+          
+          // Convert human readable amounts to wei/base units
+          const depositAmountWei = parseUnits(depositAmount, token.decimals);
+          const minimumMintWei = parseUnits(minimumMint, vaultDecimals);
+          // Convert maxFee (human readable) to base units using feeToken decimals
+          const maxFeeWei = parseUnits(maxFee, feeToken.decimals);
+          
+          // First check if the token is approved for at least the amount
+          const erc20Contract = new Contract(tokenAddress, erc20Abi, signer);
+          const allowance = await erc20Contract.allowance(
+            await signer.getAddress(),
+            layerZeroTellerContract
+          );
+
+          if (BigInt(allowance) < depositAmountWei) {
+            console.log("Approving token for LayerZero teller...");
+            const approveTx = await erc20Contract.approve(
+              layerZeroTellerContract,
+              depositAmountWei.toString()
+            );
+
+            // Wait for confirmation
+            const approvedReceipt: ContractTransactionReceipt = await approveTx.wait();
+            
+            if (!approvedReceipt.hash) {
+              console.error("Token approval failed");
+              const errorStatus = {
+                initiated: false,
+                loading: false,
+                success: false,
+                error: "Token approval reverted",
+              };
+              setDepositAndBridgeStatus(errorStatus);
+              return errorStatus;
+            }
+            console.log("Approved hash: ", approvedReceipt.hash);
+          }
+
+          const bridgeWildCard = encodeBridgeWildCard(destinationChain);
+          // Recipient is always the signer's address for deposit and bridge
+          const recipientAddress = await signer.getAddress();
+          
+          // Get LayerZero teller contract ready
+          const layerZeroTellerContractWithSigner = new Contract(
+            layerZeroTellerContract,
+            BoringTellerLayerZeroEnabledABI,
+            signer
+          );
+          
+          // For depositAndBridge, we need to estimate the shares that will be minted
+          // Use minimumMint as approximation for fee preview
+          const actualFee = await layerZeroTellerContractWithSigner.previewFee(
+            minimumMintWei,
+            recipientAddress,
+            bridgeWildCard,
+            feeToken.address
+          );
+          
+          console.log("DepositAndBridge params:", {
+            tokenAddress,
+            depositAmount: depositAmountWei.toString(),
+            minimumMint: minimumMintWei.toString(),
+            recipient: recipientAddress,
+            bridgeWildCard,
+            feeToken: feeToken.address,
+            actualFee: actualFee.toString(),
+            maxFee: maxFeeWei.toString(),
+            usingFee: actualFee.toString()
+          });
+          
+          // Check if actual fee exceeds max fee
+          if (actualFee > maxFeeWei) {
+            throw new Error(`Required fee (${actualFee.toString()} wei) exceeds maximum fee (${maxFeeWei.toString()} wei)`);
+          }
+          
+          const depositAndBridgeTx = await layerZeroTellerContractWithSigner.depositAndBridge(
+            tokenAddress,
+            depositAmountWei,
+            minimumMintWei,
+            recipientAddress,
+            bridgeWildCard,
+            feeToken.address,
+            actualFee,
+            { value: actualFee.toString() }
+          );
+
+          const receipt: ContractTransactionReceipt = await depositAndBridgeTx.wait();
+          
+          if (!receipt.hash) {
+            const errorStatus = {
+              initiated: false,
+              loading: false,
+              success: false,
+              error: "Deposit and bridge transaction reverted",
+            };
+            setDepositAndBridgeStatus(errorStatus);
+            return errorStatus;
+          }
+
+          // Extract sharesBridged from logs if needed
+          const successStatus = {
+            initiated: true,
+            loading: false,
+            success: true,
+            tx_hash: receipt.hash,
+            sharesBridged: "0", // Could extract from receipt logs
+          };
+          setDepositAndBridgeStatus(successStatus);
+          return successStatus;
+        } catch (error: any) {
+          const errorStatus = {
+            initiated: false,
+            loading: false,
+            success: false,
+            error: error.message || "Deposit and bridge transaction failed",
+          };
+          setDepositAndBridgeStatus(errorStatus);
+          return errorStatus;
+        }
+      },
+      [layerZeroTellerEthersContract, layerZeroTellerContract, isBoringV1ContextReady, depositTokens, vaultDecimals]
+    );
+
     return (
       <BoringVaultV1Context.Provider
         value={{
@@ -2453,6 +2785,7 @@ export const BoringVaultV1Provider: React.FC<{
           withdrawQueueEthersContract,
           boringQueueEthersContract,
           incentiveDistributorEthersContract,
+          layerZeroTellerEthersContract,
           depositTokens: depositTokens,
           withdrawTokens: withdrawTokens,
           ethersProvider: ethersProvider,
@@ -2483,6 +2816,10 @@ export const BoringVaultV1Provider: React.FC<{
           merkleClaim,
           merkleClaimStatus,
           checkClaimStatuses,
+          bridge,
+          depositAndBridge,
+          bridgeStatus,
+          depositAndBridgeStatus,
         }}
       >
         {children}

@@ -191,11 +191,22 @@ const DepositButton: React.FC<DepositButtonProps> = ({
                 {/* TODO: Sterilize input to only allow positive numbers */}
                 <Input
                   placeholder="0.00"
+                  value={depositAmount}
                   onChange={(e) => setDepositAmount(e.target.value)}
+                  type="number"
+                  min="0"
+                  step="any"
                   {...inputProps}
                 />
                 <FormHelperText textAlign="right">
-                  Balance: {balance} <Button size="xs">MAX</Button>
+                  Balance: {balance.toFixed(6)} {selectedToken.displayName} 
+                  <Button 
+                    size="xs" 
+                    ml={2}
+                    onClick={() => setDepositAmount(balance.toString())}
+                  >
+                    MAX
+                  </Button>
                 </FormHelperText>
               </FormControl>
             </Flex>
@@ -205,7 +216,16 @@ const DepositButton: React.FC<DepositButtonProps> = ({
               <Button
                 mt={4}
                 onClick={() => deposit(signer!, depositAmount, selectedToken)}
-                isDisabled={!depositAmount || parseFloat(depositAmount) > balance}
+                isDisabled={
+                  !signer || 
+                  !depositAmount || 
+                  parseFloat(depositAmount || "0") <= 0 || 
+                  parseFloat(depositAmount || "0") > balance ||
+                  depositStatus.loading
+                }
+                isLoading={depositStatus.loading}
+                loadingText="Depositing..."
+                colorScheme="blue"
                 {...depositButtonProps}
               >
                 Deposit
@@ -214,9 +234,17 @@ const DepositButton: React.FC<DepositButtonProps> = ({
               <Button
                 mt={4}
                 onClick={() => depositWithPermit(signer!, depositAmount, selectedToken)}
-                isDisabled={!depositAmount || parseFloat(depositAmount) > balance}
+                isDisabled={
+                  !signer || 
+                  !depositAmount || 
+                  parseFloat(depositAmount || "0") <= 0 || 
+                  parseFloat(depositAmount || "0") > balance ||
+                  depositStatus.loading
+                }
+                isLoading={depositStatus.loading}
+                loadingText="Depositing..."
+                colorScheme="green"
                 {...depositButtonProps}
-
               >
                 Deposit with Permit
               </Button>
