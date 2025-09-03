@@ -110,10 +110,12 @@ const BridgeButton: React.FC<BridgeButtonProps> = ({
   const handleBridge = async () => {
     if (!signer || !shareAmount || !destinationChain) return;
 
+import { ethAddress, etherUnits } from "viem";
+
     // ETH as fee token with 18 decimals
     const feeToken: Token = {
-      address: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
-      decimals: 18,
+      address: ethAddress,
+      decimals: etherUnits.wei,
       displayName: "ETH"
     };
 
