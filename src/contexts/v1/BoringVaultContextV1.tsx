@@ -1866,11 +1866,11 @@ export const BoringVaultV1Provider: React.FC<{
           new BigNumber(100) // 1% = 100
         )
 
-        // Disct must be a min of 1 bps
-        if (formattedDiscountPercent.lt(1)) {
-          // Set discount to 1 bps, and warn it was too low
-          console.warn("Discount percent was too low, setting to 1 bps");
-          formattedDiscountPercent = new BigNumber(1);
+        // Disct must be a min of 0 bps
+        if (formattedDiscountPercent.lt(0)) {
+          // Set discount to 0 bps, and warn it was too low
+          console.warn("Discount percent was too low, setting to 0 bps");
+          formattedDiscountPercent = new BigNumber(0);
         }
 
         // Verify min and max otherwise
