@@ -698,20 +698,39 @@ export const BoringVaultV1Provider: React.FC<{
           // TODO: Set the other fields as well (payableAmount -- relevant for vanilla ETH deposits, and minimumMint)
           // TODO: Allow for custom gas limits
 
-          // Branching logic for if teller is isTellerReferralEnabled 
+          // Branching logic for if teller is isTellerReferralEnabled
           let depositTx;
           if (isTellerReferralEnabled) {
-            depositTx = await tellerContractWithSigner.deposit(
+            // Estimate gas and add 50% buffer
+            const estimatedGas = await tellerContractWithSigner.deposit.estimateGas(
               token.address,
               amountDepositBaseDenom.toFixed(0),
               0,
               referralAddress
             );
-          } else {
+            const gasLimit = (estimatedGas * BigInt(150)) / BigInt(100);
+
             depositTx = await tellerContractWithSigner.deposit(
               token.address,
               amountDepositBaseDenom.toFixed(0),
+              0,
+              referralAddress,
+              { gasLimit }
+            );
+          } else {
+            // Estimate gas and add 50% buffer
+            const estimatedGas = await tellerContractWithSigner.deposit.estimateGas(
+              token.address,
+              amountDepositBaseDenom.toFixed(0),
               0
+            );
+            const gasLimit = (estimatedGas * BigInt(150)) / BigInt(100);
+
+            depositTx = await tellerContractWithSigner.deposit(
+              token.address,
+              amountDepositBaseDenom.toFixed(0),
+              0,
+              { gasLimit }
             );
           }
 
@@ -964,7 +983,8 @@ export const BoringVaultV1Provider: React.FC<{
 
           let depositWithPermitTx;
           if (isTellerReferralEnabled) {
-            depositWithPermitTx = await tellerContractWithSigner.depositWithPermit(
+            // Estimate gas and add 50% buffer
+            const estimatedGas = await tellerContractWithSigner.depositWithPermit.estimateGas(
               token.address,
               value,
               minimumMint,
@@ -974,8 +994,8 @@ export const BoringVaultV1Provider: React.FC<{
               s,
               referralAddress
             );
-          }
-          else {
+            const gasLimit = (estimatedGas * BigInt(150)) / BigInt(100);
+
             depositWithPermitTx = await tellerContractWithSigner.depositWithPermit(
               token.address,
               value,
@@ -983,7 +1003,33 @@ export const BoringVaultV1Provider: React.FC<{
               deadline,
               v,
               r,
+              s,
+              referralAddress,
+              { gasLimit }
+            );
+          }
+          else {
+            // Estimate gas and add 50% buffer
+            const estimatedGas = await tellerContractWithSigner.depositWithPermit.estimateGas(
+              token.address,
+              value,
+              minimumMint,
+              deadline,
+              v,
+              r,
               s
+            );
+            const gasLimit = (estimatedGas * BigInt(150)) / BigInt(100);
+
+            depositWithPermitTx = await tellerContractWithSigner.depositWithPermit(
+              token.address,
+              value,
+              minimumMint,
+              deadline,
+              v,
+              r,
+              s,
+              { gasLimit }
             );
           }
 
@@ -2960,12 +3006,22 @@ export const BoringVaultV1Provider: React.FC<{
           amountWithdrawBaseDenom.toNumber()
         );
 
+        // Estimate gas and add 50% buffer
+        const estimatedGas = await tellerContractWithSigner.withdraw.estimateGas(
+          token.address,//withdraw asset addr
+          amountWithdrawBaseDenom.toFixed(0),//shares withdarwing
+          0, // min assets out // TODO: Should we allow consumers to configure this?
+          signer.getAddress() // to address, always signer address
+        );
+        const gasLimit = (estimatedGas * BigInt(150)) / BigInt(100);
+
         const queueTx =
           await tellerContractWithSigner.withdraw(
             token.address,//withdraw asset addr
             amountWithdrawBaseDenom.toFixed(0),//shares withdarwing
             0, // min assets out // TODO: Should we allow consumers to configure this?
-            signer.getAddress() // to address, always signer address
+            signer.getAddress(), // to address, always signer address
+            { gasLimit }
           );
 
         // Wait for confirmation
