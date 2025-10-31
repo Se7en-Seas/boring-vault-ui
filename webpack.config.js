@@ -164,7 +164,7 @@ module.exports = {
 };
 */
 
-/* Uncomment for ethereum example with merkle claim
+/* Uncomment for ethereum example with merkle claim 
 module.exports = {
   entry: "./src/examples/merkleClaimExample.tsx", // Entry point for your React app
   output: {
@@ -203,7 +203,8 @@ module.exports = {
 };
 */
 
-/* Uncomment for LayerZero bridge example with Sonic vault */
+
+/* Uncomment for LayerZero bridge example with Sonic vault 
 module.exports = {
   entry: "./src/examples/v5.tsx", // Entry point for your React app
   output: {
@@ -240,3 +241,43 @@ module.exports = {
     children: true, // Display information about child compilations
   },
 };
+*/
+
+ /* Uncomment for Deposit Referral/Instant Withdraw example with USD vault */
+ module.exports = {
+  entry: "./src/examples/v6.tsx", // Entry point for your React app
+  output: {
+    path: path.resolve(__dirname, "dist"), // Output directory
+    filename: "v6.js", // Output file
+  },
+  plugins: [
+    new HtmlWebpackPlugin({
+      template: "./src/examples/v6.html", // Path to your HTML template
+    }),
+    new webpack.DefinePlugin({
+      "process.env": JSON.stringify(process.env), // Defines it on process.env
+    }),
+  ],
+  module: {
+    rules: [
+      {
+        test: /\.tsx?$/,
+        use: "babel-loader",
+        exclude: /node_modules/,
+      },
+    ],
+  },
+  resolve: {
+    extensions: [".tsx", ".ts", ".js"], // Resolve these extensions
+  },
+  devServer: {
+    static: path.resolve(__dirname, "dist"), // Serve files from 'dist' directory
+    compress: true,
+    port: 9000, // Port to run the dev server
+  },
+  stats: {
+    errorDetails: true, // Display the details of errors
+    children: true, // Display information about child compilations
+  },
+};
+

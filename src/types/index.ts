@@ -97,3 +97,11 @@ export interface DepositAndBridgeStatus {
   error?: string;
   tx_hash?: string;
 }
+
+export interface InstantWithdrawStatus {
+  initiated: boolean;
+  loading: boolean;
+  success?: boolean;
+  error?: string;
+  tx_hash?: string;
+}

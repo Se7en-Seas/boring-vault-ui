@@ -17,10 +17,12 @@ import {
   MerkleClaimStatus,
   BoringQueueAssetParams,
   BridgeStatus,
-  DepositAndBridgeStatus
+  DepositAndBridgeStatus,
+  InstantWithdrawStatus,
 } from "../../types";
 import BoringVaultABI from "../../abis/v1/BoringVaultABI";
 import BoringTellerABI from "../../abis/v1/BoringTellerABI";
+import BoringTellerV2ABI from "../../abis/v2/BoringTellerV2ABI";
 import BoringAccountantABI from "../../abis/v1/BoringAccountantABI";
 import BoringLensABI from "../../abis/v1/BoringLensABI";
 import BoringWithdrawQueueContractABI from "../../abis/v1/BoringWithdrawQueueContractABI";
@@ -71,13 +73,15 @@ interface BoringVaultV1ContextProps {
   deposit: (
     signer: JsonRpcSigner,
     amount: string,
-    token: Token
+    token: Token,
+    referralAddress?: string
   ) => Promise<DepositStatus>;
   depositWithPermit: (
     signer: JsonRpcSigner,
     amountHumanReadable: string,
     token: Token,
-    deadline?: number
+    deadline?: number,
+    referralAddress?: string
   ) => Promise<DepositStatus>;
   previewDeposit: (
     amount: string,
@@ -175,6 +179,13 @@ interface BoringVaultV1ContextProps {
   ) => Promise<DepositAndBridgeStatus>;
   bridgeStatus: BridgeStatus;
   depositAndBridgeStatus: DepositAndBridgeStatus;
+  isTellerReferralEnabled?: boolean | null;
+  instantWithdraw: (
+    signer: JsonRpcSigner,
+    shareAmountHumanReadable: string,
+    token: Token
+  ) => Promise<InstantWithdrawStatus>;
+  instantWithdrawStatus: InstantWithdrawStatus;
 }
 
 const BoringVaultV1Context = createContext<BoringVaultV1ContextProps | null>(
@@ -198,6 +209,7 @@ export const BoringVaultV1Provider: React.FC<{
   ethersProvider: Provider;
   baseAsset: Token;
   vaultDecimals: number;
+  isTellerReferralEnabled?: boolean;
   children: ReactNode;
 }> = ({
   children,
@@ -217,6 +229,7 @@ export const BoringVaultV1Provider: React.FC<{
   ethersProvider,
   vaultDecimals,
   baseAsset,
+  isTellerReferralEnabled,
 }) => {
     const [vaultEthersContract, setVaultEthersContract] =
       useState<Contract | null>(null);
@@ -277,6 +290,11 @@ export const BoringVaultV1Provider: React.FC<{
       loading: false,
     });
 
+    const [instantWithdrawStatus, setInstantWithdrawStatus] = useState<InstantWithdrawStatus>({
+      initiated: false,
+      loading: false,
+    });
+
     useEffect(() => {
       if (
         chain &&
@@ -295,11 +313,22 @@ export const BoringVaultV1Provider: React.FC<{
           BoringVaultABI,
           ethersProvider
         );
-        const tellerEthersContract = new Contract(
-          tellerContract,
-          BoringTellerABI,
-          ethersProvider
-        );
+
+        let tellerEthersContract: Contract;
+        if (isTellerReferralEnabled) {
+          tellerEthersContract = new Contract(
+            tellerContract,
+            BoringTellerV2ABI,
+            ethersProvider
+          );
+        } else {
+          tellerEthersContract = new Contract(
+            tellerContract,
+            BoringTellerABI,
+            ethersProvider
+          );
+        }
+
         const accountantEthersContract = new Contract(
           accountantContract,
           BoringAccountantABI,
@@ -554,7 +583,8 @@ export const BoringVaultV1Provider: React.FC<{
       async (
         signer: JsonRpcSigner,
         amountHumanReadable: string,
-        token: Token
+        token: Token,
+        referralAddress?: string
       ) => {
         if (
           !vaultEthersContract ||
@@ -575,6 +605,22 @@ export const BoringVaultV1Provider: React.FC<{
           setDepositStatus(temp);
           return temp;
         }
+
+        if (isTellerReferralEnabled && !referralAddress) {
+          console.error("Referral address is required when isTellerReferralEnabled is true", {
+            isTellerReferralEnabled,
+            referralAddress,
+          });
+          return Promise.reject("Referral address is required");
+        }
+        if (!isTellerReferralEnabled && referralAddress) {
+          console.error("Referral address is not allowed when isTellerReferralEnabled is false", {
+            isTellerReferralEnabled,
+            referralAddress,
+          });
+          return Promise.reject("Referral address is not allowed");
+        }
+
         console.log("Depositing ...");
 
         const temp = {
@@ -633,20 +679,41 @@ export const BoringVaultV1Provider: React.FC<{
 
           console.log("Depositing token ...");
           // Get teller contract ready
-          const tellerContractWithSigner = new Contract(
-            tellerContract,
-            BoringTellerABI,
-            signer
-          );
+          let tellerContractWithSigner: Contract;
+          if (isTellerReferralEnabled) {
+            tellerContractWithSigner = new Contract(
+              tellerContract,
+              BoringTellerV2ABI,
+              signer
+            );
+          } else {
+            tellerContractWithSigner = new Contract(
+              tellerContract,
+              BoringTellerABI,
+              signer
+            );
+          }
 
           // Deposit, but specifically only set the fields depositAsset and depositAmount
           // TODO: Set the other fields as well (payableAmount -- relevant for vanilla ETH deposits, and minimumMint)
           // TODO: Allow for custom gas limits
-          const depositTx = await tellerContractWithSigner.deposit(
-            token.address,
-            amountDepositBaseDenom.toFixed(0),
-            0
-          );
+
+          // Branching logic for if teller is isTellerReferralEnabled 
+          let depositTx;
+          if (isTellerReferralEnabled) {
+            depositTx = await tellerContractWithSigner.deposit(
+              token.address,
+              amountDepositBaseDenom.toFixed(0),
+              0,
+              referralAddress
+            );
+          } else {
+            depositTx = await tellerContractWithSigner.deposit(
+              token.address,
+              amountDepositBaseDenom.toFixed(0),
+              0
+            );
+          }
 
           // Wait for confirmation
           const depositReceipt: ContractTransactionReceipt =
@@ -693,6 +760,7 @@ export const BoringVaultV1Provider: React.FC<{
         decimals,
         ethersProvider,
         isBoringV1ContextReady,
+        isTellerReferralEnabled,
       ]
     );
 
@@ -787,8 +855,26 @@ export const BoringVaultV1Provider: React.FC<{
         signer: JsonRpcSigner,
         amountHumanReadable: string,
         token: Token,
-        initialDeadline?: number
+        initialDeadline?: number,
+        referralAddress?: string
       ): Promise<DepositStatus> => {
+
+        if (isTellerReferralEnabled && !referralAddress) {
+          console.error("Referral address is required when isTellerReferralEnabled is true", {
+            isTellerReferralEnabled,
+            referralAddress,
+          });
+          return Promise.reject("Referral address is required");
+        }
+        if (!isTellerReferralEnabled && referralAddress) {
+          console.error("Referral address is not allowed when isTellerReferralEnabled is false", {
+            isTellerReferralEnabled,
+            referralAddress,
+          });
+          return Promise.reject("Referral address is not allowed");
+        }
+
+
         // Check if the token is in our list of known EIP-2612 compatible tokens
         // and warn if it isn't, since the permit operation might fail
         const KNOWN_TOKENS_WITH_PERMITS = [
@@ -858,23 +944,48 @@ export const BoringVaultV1Provider: React.FC<{
           });
 
           // Set up Teller contract
-          const tellerContractWithSigner = new Contract(
-            tellerContract,
-            BoringTellerABI,
-            signer
-          );
+          let tellerContractWithSigner: Contract;
+          if (isTellerReferralEnabled) {
+            tellerContractWithSigner = new Contract(
+              tellerContract,
+              BoringTellerV2ABI,
+              signer
+            );
+          } else {
+            tellerContractWithSigner = new Contract(
+              tellerContract,
+              BoringTellerABI,
+              signer
+            );
+          }
 
           // Deposit with permit
           const minimumMint = 0;
-          const depositWithPermitTx = await tellerContractWithSigner.depositWithPermit(
-            token.address,
-            value,
-            minimumMint,
-            deadline,
-            v,
-            r,
-            s
-          );
+
+          let depositWithPermitTx;
+          if (isTellerReferralEnabled) {
+            depositWithPermitTx = await tellerContractWithSigner.depositWithPermit(
+              token.address,
+              value,
+              minimumMint,
+              deadline,
+              v,
+              r,
+              s,
+              referralAddress
+            );
+          }
+          else {
+            depositWithPermitTx = await tellerContractWithSigner.depositWithPermit(
+              token.address,
+              value,
+              minimumMint,
+              deadline,
+              v,
+              r,
+              s
+            );
+          }
 
           // Wait for confirmation
           const receipt = await depositWithPermitTx.wait();
@@ -2789,6 +2900,122 @@ export const BoringVaultV1Provider: React.FC<{
       [layerZeroTellerEthersContract, layerZeroTellerContract, lensEthersContract, outputTokenContract, vaultContract, accountantContract, isBoringV1ContextReady, depositTokens, vaultDecimals]
     );
 
+  /* instantWithdraw */
+  const instantWithdraw = useCallback(
+    async (
+      signer: JsonRpcSigner,
+      shareAmountHumanReadable: string,
+      token: Token
+    ) => {
+      if (
+        !tellerEthersContract ||
+        !vaultEthersContract ||
+        !isBoringV1ContextReady ||
+        !lensEthersContract ||
+        !accountantContract ||
+        !decimals ||
+        !signer
+      ) {
+        console.error("Contracts or user not ready", {
+          tellerEthersContract,
+          isBoringV1ContextReady,
+          decimals,
+          signer,
+        });
+
+        const temp = {
+          initiated: false,
+          loading: false,
+          success: false,
+          error: "Contracts or user not ready",
+        };
+        setInstantWithdrawStatus(temp);
+        return temp;
+      }
+
+      console.log("Queueing withdraw ...");
+      const tellerContractWithSigner = new Contract(
+        tellerContract!,
+        BoringTellerV2ABI,
+        signer
+      );
+
+      const temp = {
+        initiated: true,
+        loading: true,
+      };
+      setInstantWithdrawStatus(temp);
+
+      // Get the amount in base denomination
+      const bigNumAmt = new BigNumber(shareAmountHumanReadable);
+      console.warn(shareAmountHumanReadable);
+      console.warn("Share amount to withdraw: ", bigNumAmt.toNumber());
+      const amountWithdrawBaseDenom = bigNumAmt
+        .multipliedBy(new BigNumber(10).pow(vaultDecimals))
+        .decimalPlaces(0, BigNumber.ROUND_DOWN);
+
+      try {
+        console.warn(
+          "Amount to withdraw: ",
+          amountWithdrawBaseDenom.toNumber()
+        );
+
+        const queueTx =
+          await tellerContractWithSigner.withdraw(
+            token.address,//withdraw asset addr
+            amountWithdrawBaseDenom.toFixed(0),//shares withdarwing
+            0, // min assets out // TODO: Should we allow consumers to configure this?
+            signer.getAddress() // to address, always signer address
+          );
+
+        // Wait for confirmation
+        const queueReceipt: ContractTransactionReceipt = await queueTx.wait();
+
+        console.log("Withdraw in tx: ", queueReceipt);
+        if (!queueReceipt.hash) {
+          console.error("Withdraw failed");
+          const tempError = {
+            initiated: false,
+            loading: false,
+            success: false,
+            error: "Withdraw reverted",
+          };
+          setInstantWithdrawStatus(tempError);
+          return tempError;
+        }
+        console.log("Withdraw hash: ", queueReceipt.hash);
+
+        // Set status
+        const tempSuccess = {
+          initiated: false,
+          loading: false,
+          success: true,
+          tx_hash: queueReceipt.hash,
+        };
+        setInstantWithdrawStatus(tempSuccess);
+        return tempSuccess;
+      } catch (error: any) {
+        console.error("Error withdrawing", error);
+        const tempError = {
+          initiated: false,
+          loading: false,
+          success: false,
+          error: (error as Error).message,
+        };
+        setInstantWithdrawStatus(tempError);
+        return tempError;
+      }
+    },
+    [
+      tellerEthersContract,
+      lensEthersContract,
+      decimals,
+      ethersProvider,
+      isBoringV1ContextReady,
+      accountantContract,
+    ]
+  );
+
     return (
       <BoringVaultV1Context.Provider
         value={{
@@ -2837,6 +3064,9 @@ export const BoringVaultV1Provider: React.FC<{
           depositAndBridge,
           bridgeStatus,
           depositAndBridgeStatus,
+          isTellerReferralEnabled,
+          instantWithdraw,
+          instantWithdrawStatus,
         }}
       >
         {children}
